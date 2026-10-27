@@ -38,6 +38,16 @@
 - Use `.agents/skills/architecture-review/SKILL.md` for an independent PR or diff review.
 - Use `.agents/skills/db-migration/SKILL.md` when changing Prisma schema or migrations.
 
+## Git Operations
+
+- NEVER run `git push`, `git push --force`, or any command
+  that uploads local changes to a remote repository.
+- NEVER create or merge GitHub Pull Requests.
+- Do not commit changes unless explicitly requested.
+- You may edit files and run lint, typecheck, tests, and builds.
+- After completing a task, report changed files and test results.
+- All remote Git operations are performed manually by the user.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

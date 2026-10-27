@@ -24,6 +24,7 @@
 - Keep changes issue-scoped and simple; use existing libraries and architecture before creating new abstractions.
 - Source formatting: Prettier. Correctness linting: ESLint. Type correctness: `tsc --noEmit`.
 - Add unit/contract tests for domain changes, integration tests for auth, sync and DB changes, and include negative-path / ownership cases.
+- For UI changes, use the semantic color and typography tokens and reusable styles in `src/app/globals.css`; follow `docs/design-tokens.md`. Keep the dark theme on first paint, use Manrope for headings and Inter for UI, and check contrast plus narrow/zoomed layouts.
 
 ## Definition of done
 

@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+build
+coverage
+pnpm-lock.yaml
+*.min.js
+*.generated.*
+next-env.d.ts

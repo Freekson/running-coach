@@ -137,6 +137,7 @@ The `/status` endpoint confirms application rendering only. It does not validate
 
 - [Codex / agent instructions](AGENTS.md)
 - [Architecture guardrails](docs/architecture-guardrails.md)
+- [Dark theme and design tokens](docs/design-tokens.md)
 - [Linear project and technical specifications](https://linear.app/fr-running-coach/project/running-coach-2730d3d0f69a)
 
 Implementation requirements and acceptance criteria are tracked in Linear. Repository architecture rules and coding standards are maintained alongside the source code.

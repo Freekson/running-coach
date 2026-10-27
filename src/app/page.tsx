@@ -13,17 +13,17 @@ export default function HomePage() {
         Check app status <span aria-hidden="true">→</span>
       </Link>
       <div className="feature-grid">
-        <article className="feature-card">
+        <article className="card feature-card">
           <span className="feature-number">01</span>
           <h2>Plan with purpose</h2>
           <p>Build toward a goal with sessions that fit real life.</p>
         </article>
-        <article className="feature-card">
+        <article className="card feature-card">
           <span className="feature-number">02</span>
           <h2>Stay in control</h2>
           <p>Review every plan before any workout is published.</p>
         </article>
-        <article className="feature-card">
+        <article className="card feature-card">
           <span className="feature-number">03</span>
           <h2>Keep it personal</h2>
           <p>Your training data belongs to you.</p>

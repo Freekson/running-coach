@@ -1,0 +1,28 @@
+import { defineConfig, globalIgnores } from 'eslint/config'
+import nextVitals from 'eslint-config-next/core-web-vitals'
+import nextTs from 'eslint-config-next/typescript'
+import prettier from 'eslint-config-prettier/flat'
+
+export default defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  {
+    files: ['src/components/**/*.{ts,tsx}', 'src/hooks/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/server', '@/server/**'],
+              message:
+                'UI components/hooks must not import server-only modules; use a server component or an authorized server action.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  prettier,
+  globalIgnores(['.next/**', 'out/**', 'build/**', 'coverage/**', 'next-env.d.ts']),
+])

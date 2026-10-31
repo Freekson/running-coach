@@ -1,0 +1,5 @@
+// Used only by prisma db execute; never generate a runtime client from this file.
+datasource db {
+  provider = "postgresql"
+  url      = env("DIRECT_URL")
+}

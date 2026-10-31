@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { bodyFont, headingFont } from './fonts'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${headingFont.variable} ${bodyFont.variable}`}>
       <body>
         <div className="site-shell">
           <header className="site-header">
@@ -19,7 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
               <span className="brand-mark" aria-hidden="true">
                 ↗
               </span>
-              Running Coach
+              <span className="brand-name">Running Coach</span>
             </Link>
             <nav aria-label="Main navigation">
               <Link href="/">Home</Link>

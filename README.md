@@ -103,8 +103,9 @@ Development process:
 7. Release tested changes from `development` into `main`.
 
 Changes should not be pushed or merged automatically by coding agents without explicit user authorization.
-Protect `main` in GitHub and require the `validate` job from **Quality checks**
-before merging a release pull request.
+Protect both `development` and `main` in GitHub and require the `validate` job
+from **Quality checks** before merging. Migration and deployment jobs run only
+after a merge to their trusted branch.
 
 ## Deployment
 
@@ -123,8 +124,11 @@ Configuration:
 | Install Command   | `pnpm install --frozen-lockfile` |
 | Build Command     | `pnpm build`                     |
 
-Vercel deploys `main` to Production and `development` to Preview. Deployments
-from feature branches are disabled in `vercel.json`.
+Native Vercel Git deployments are disabled in `vercel.json`. GitHub Actions
+deploys a merge to `development` only after CI and development migrations
+succeed, and deploys a merge to `main` only after CI and production migrations
+succeed. See [release operations](docs/release-operations.md) for required
+GitHub Environment settings, rollback, and secret rotation.
 
 ### Deployment Protection
 

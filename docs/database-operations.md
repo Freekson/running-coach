@@ -86,16 +86,19 @@ the marker does not replace them.
    that isolated database's pooled/direct URLs: `pnpm test:db`. It creates only
    synthetic users and activities and removes them afterward. Never run it
    with production credentials.
-6. After migration, deploy the corresponding application version. `postinstall`
-   generates Prisma Client for the pinned schema during install/build.
+6. After migration, deploy the corresponding application version using the
+   [release sequence](release-operations.md). `postinstall` generates Prisma
+   Client for the pinned schema during install/build.
 
 The identity migration adds an enum and one constrained metadata table; it does
 not change athlete tables or existing rows. It deliberately leaves the marker
 empty so a new deployment fails closed until the correct operator initializes
-it. Production migration/initialization is a **manual operator action**: verify
+it. **First-time production bootstrap** is a manual operator action: verify
 the production Neon project and backup/restore point, apply `pnpm db:migrate`
 using that project's direct URL, insert the marker in that project's SQL Editor,
-then run `pnpm db:grant:runtime` with its migration role:
+then run `pnpm db:grant:runtime` with its migration role. Later checked-in
+production migrations run in the trusted `main` workflow described in
+[release operations](release-operations.md):
 
 ```sql
 INSERT INTO "database_identity" ("id", "tier") VALUES (1, 'PRODUCTION');
@@ -157,9 +160,10 @@ database names, rows, or driver errors. There is no public mutation endpoint.
    privately, without pasting URLs or passwords into tickets or logs. Keep
    `DIRECT_URL` out of both deployed environments. Ensure Vercel system
    environment variables are available so the app receives `VERCEL_ENV`.
-3. In **Vercel → Deployments**, redeploy `development` (Preview) and `main`
-   (Production) after changing variables. Check each deployment's environment
-   and URL. Vercel variable changes do not affect existing deployments.
+3. After the [release workflow](release-operations.md) succeeds, inspect its
+   Vercel Preview or Production deployment. Check the source commit,
+   environment, and URL. Vercel variable changes do not affect existing
+   deployments; a new trusted branch run is needed after rotation.
 4. From a private HTTP client, send `HEAD` to each deployment's
    `/api/internal/db-verify` with its matching `x-db-verify-token`. Both must
    return `204` with an empty body. A missing/wrong token must return `404`.
@@ -186,12 +190,12 @@ include `VERCEL_ENV`.
 
 ## RUN-15 evidence and remaining gates
 
-| Acceptance criterion                                   | Status                         | Verified here                                                                                                                | Manual / remaining verification                                                                                                                                          |
-| ------------------------------------------------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Fresh environment applies repository migrations        | Partially verified             | Both checked-in migrations applied to development Neon; `db:status` reports current                                          | Applying the full history to a separate empty database is unverified; production migration requires backup review and operator action                                    |
-| Server read/write and transactions work in Vercel Node | Partially verified             | Local Neon integration test verifies synthetic reads, writes, rollback, and cross-user FK rejection                          | Deployed Vercel marker read is unverified; deployed transactions remain unverified until a private authenticated service path exists                                     |
-| Preview cannot mutate production athlete data          | Blocked on manual verification | A production-labeled runtime pointed at development Neon is rejected by the live marker test; a missing marker denies access | Verify distinct Neon project IDs, scoped Vercel variables, production marker, and both deployed HEAD results; no production connection or athlete data was accessed here |
+| Acceptance criterion                                   | Status             | Verified here                                                                                                                                                             | Manual / remaining verification                                                                                                                                                |
+| ------------------------------------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fresh environment applies repository migrations        | Partially verified | Both checked-in migrations applied to development Neon; `db:status` reports current                                                                                       | Applying the full history to a separate empty database is unverified; production migration requires backup review and operator action                                          |
+| Server read/write and transactions work in Vercel Node | Partially verified | Local Neon integration test verifies synthetic reads, writes, rollback, and cross-user FK rejection; user reports both deployed read-only marker checks passed            | Deployed transactions remain unverified until a private authenticated service path exists                                                                                      |
+| Preview cannot mutate production athlete data          | Partially verified | A production-labeled runtime pointed at development Neon is rejected by the live marker test; user reports separate Neon databases and both deployed marker checks passed | Independently confirm scoped Vercel values, distinct Neon project IDs, and that Preview holds no real athlete data; no production connection or athlete data was accessed here |
 
-**Blocked here:** direct inspection of Vercel settings/deployments and production
-Neon is unavailable without account access. Do not mark this criterion verified
-from local tests alone.
+**Unverified here:** direct inspection of Vercel settings/deployments and
+production Neon is unavailable without account access. The reported deployed
+checks prove read connectivity and marker separation, not deployed writes.

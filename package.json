@@ -22,6 +22,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:status": "prisma migrate status",
+    "db:assert:development": "prisma db execute --schema prisma/scripts/direct.prisma --file prisma/scripts/assert-development-target.sql",
+    "db:assert:production": "prisma db execute --schema prisma/scripts/direct.prisma --file prisma/scripts/assert-production-target.sql",
     "db:mark:nonproduction": "node prisma/scripts/mark-nonproduction.mjs",
     "db:grant:runtime": "prisma db execute --schema prisma/scripts/direct.prisma --file prisma/scripts/grant-runtime.sql",
     "prepare": "husky",

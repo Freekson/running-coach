@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -23,3 +27,104 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  migrate-development:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: development-migrations
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply checked-in development migrations
+        env:
+          APP_DATABASE_ENV: development
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$DIRECT_URL" ]; then
+            echo 'Development database secrets are not configured'
+            exit 1
+          fi
+          pnpm db:assert:development
+          pnpm db:migrate
+          pnpm db:grant:runtime
+          pnpm db:status
+
+  deploy-development:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+    needs: migrate-development
+    runs-on: ubuntu-latest
+    environment: development-deploy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global vercel@65.9.0
+      - name: Deploy checked commit to Vercel Preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo 'Vercel deployment settings are not configured'
+            exit 1
+          fi
+          vercel deploy --yes --target=preview --token "$VERCEL_TOKEN"
+
+  migrate-production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production-migrations
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply checked-in production migrations
+        env:
+          APP_DATABASE_ENV: production
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          if [ -z "$DIRECT_URL" ]; then
+            echo 'Production migration secret is not configured'
+            exit 1
+          fi
+          pnpm db:assert:production
+          pnpm db:migrate
+          pnpm db:grant:runtime
+          pnpm db:status
+
+  deploy-production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: migrate-production
+    runs-on: ubuntu-latest
+    environment: production-deploy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global vercel@65.9.0
+      - name: Deploy checked commit to Vercel Production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo 'Vercel deployment settings are not configured'
+            exit 1
+          fi
+          vercel deploy --yes --prod --token "$VERCEL_TOKEN"

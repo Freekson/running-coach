@@ -103,6 +103,8 @@ Development process:
 7. Release tested changes from `development` into `main`.
 
 Changes should not be pushed or merged automatically by coding agents without explicit user authorization.
+Protect `main` in GitHub and require the `validate` job from **Quality checks**
+before merging a release pull request.
 
 ## Deployment
 
@@ -126,7 +128,10 @@ from feature branches are disabled in `vercel.json`.
 
 ### Deployment Protection
 
-While the application is under development and before application-level authentication is implemented, Vercel Authentication with **All Deployments** protection is recommended.
+Before exposing any deployment while application-level authentication is not
+implemented, set **Security → Deployment Protection → Vercel Authentication →
+All Deployments**. Confirm the setting in the Vercel project dashboard and
+check `/status` on both a Preview and Production deployment.
 
 Once Running Coach has its own authenticated, invite-only access control, production access can be managed by the application while keeping Preview deployments protected.
 

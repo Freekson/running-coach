@@ -7,6 +7,7 @@
     "node": ">=20.9.0"
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -17,23 +18,36 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:db": "vitest run src/server/db/client.integration.test.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:mark:nonproduction": "node prisma/scripts/mark-nonproduction.mjs",
+    "db:grant:runtime": "prisma db execute --schema prisma/scripts/direct.prisma --file prisma/scripts/grant-runtime.sql",
     "prepare": "husky",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test"
   },
   "dependencies": {
+    "@neondatabase/serverless": "1.2.0",
+    "@prisma/adapter-neon": "6.19.0",
+    "@prisma/client": "6.19.0",
     "next": "16.4.3",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "ws": "8.18.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/ws": "8.18.1",
+    "dotenv": "16.6.1",
     "eslint": "^9.0.0",
     "eslint-config-next": "16.4.3",
     "eslint-config-prettier": "^10.0.0",
     "husky": "9.1.7",
     "prettier": "^3.0.0",
+    "prisma": "6.19.0",
     "typescript": "^5.0.0",
     "vitest": "3.2.4"
   }

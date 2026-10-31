@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETING
+}
+
+enum IntegrationProvider {
+  GARMIN
+  INTERVALS
+}
+
+enum IntegrationAuthMethod {
+  OAUTH
+  API_KEY
+  FILE
+}
+
+enum IntegrationStatus {
+  PENDING
+  CONNECTED
+  EXPIRED
+  REVOKED
+  ERROR
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum ActivitySource {
+  GARMIN
+  INTERVALS
+  MANUAL
+  FILE
+}
+
+enum DatabaseTier {
+  NON_PRODUCTION
+  PRODUCTION
+}
+
+// One private row per database; application code reads it before data access.
+model DatabaseIdentity {
+  id   Int          @id @db.SmallInt
+  tier DatabaseTier
+
+  @@map("database_identity")
+}
+
+model User {
+  id          String     @id @default(uuid()) @db.Uuid
+  authSubject String     @unique @map("auth_subject")
+  email       String?    @db.VarChar(320)
+  role        UserRole   @default(USER)
+  status      UserStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  profile                AthleteProfile?
+  integrationConnections IntegrationConnection[]
+  activities             Activity[]
+  dailyHealthMetrics     DailyHealthMetric[]
+  syncRuns               SyncRun[]
+
+  @@index([status])
+  @@map("users")
+}
+
+model AthleteProfile {
+  userId                     String    @id @map("user_id") @db.Uuid
+  displayName                String?   @map("display_name")
+  birthDate                  DateTime? @map("birth_date") @db.Date
+  heightCm                   Decimal?  @map("height_cm") @db.Decimal(5, 2)
+  experienceLevel            String?   @map("experience_level")
+  preferredTimezone          String?   @map("preferred_timezone")
+  distanceUnit               String?   @map("distance_unit")
+  weightUnit                 String?   @map("weight_unit")
+  defaultTrainingDaysPerWeek Int?      @map("default_training_days_per_week") @db.SmallInt
+  defaultAvailableWeekdays   Json?     @map("default_available_weekdays")
+  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("athlete_profiles")
+}
+
+model IntegrationConnection {
+  id                   String                @id @default(uuid()) @db.Uuid
+  userId               String                @map("user_id") @db.Uuid
+  provider             IntegrationProvider
+  externalAccountId    String?               @map("external_account_id")
+  authMethod           IntegrationAuthMethod @map("auth_method")
+  status               IntegrationStatus     @default(PENDING)
+  grantedScopes        Json?                 @map("granted_scopes")
+  credentialsExpiresAt DateTime?             @map("credentials_expires_at") @db.Timestamptz(6)
+  lastSuccessAt        DateTime?             @map("last_success_at") @db.Timestamptz(6)
+  lastFailureAt        DateTime?             @map("last_failure_at") @db.Timestamptz(6)
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credential IntegrationCredential?
+  cursors    SyncCursor[]
+  syncRuns   SyncRun[]
+
+  @@unique([userId, id])
+  @@unique([userId, provider, externalAccountId])
+  @@index([userId, provider, status])
+  @@map("integration_connections")
+}
+
+model IntegrationCredential {
+  connectionId         String   @id @map("connection_id") @db.Uuid
+  userId               String   @map("user_id") @db.Uuid
+  ciphertext           Bytes
+  nonce                Bytes
+  authTag              Bytes    @map("auth_tag")
+  encryptionKeyVersion Int      @map("encryption_key_version")
+  rotatedAt            DateTime @default(now()) @map("rotated_at") @db.Timestamptz(6)
+
+  connection IntegrationConnection @relation(fields: [userId, connectionId], references: [userId, id], onDelete: Cascade)
+
+  @@unique([userId, connectionId])
+  @@index([userId])
+  @@map("integration_credentials")
+}
+
+model SyncCursor {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  connectionId       String    @map("connection_id") @db.Uuid
+  dataType           String    @map("data_type")
+  cursorOrCheckpoint Json      @map("cursor_or_checkpoint")
+  lastSyncedAt       DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  connection IntegrationConnection @relation(fields: [userId, connectionId], references: [userId, id], onDelete: Cascade)
+
+  @@unique([connectionId, dataType])
+  @@index([userId, connectionId])
+  @@map("sync_cursors")
+}
+
+model SyncRun {
+  id                String     @id @default(uuid()) @db.Uuid
+  userId            String     @map("user_id") @db.Uuid
+  connectionId      String     @map("connection_id") @db.Uuid
+  jobType           String     @map("job_type")
+  status            SyncStatus @default(RUNNING)
+  startedAt         DateTime   @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt        DateTime?  @map("finished_at") @db.Timestamptz(6)
+  recordsSeen       Int        @default(0) @map("records_seen")
+  recordsWritten    Int        @default(0) @map("records_written")
+  retryCount        Int        @default(0) @map("retry_count")
+  checkpointSummary Json?      @map("checkpoint_summary")
+  errorCode         String?    @map("error_code")
+  errorSafeMessage  String?    @map("error_safe_message")
+
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection IntegrationConnection @relation(fields: [userId, connectionId], references: [userId, id], onDelete: Cascade)
+
+  @@index([connectionId, startedAt(sort: Desc)])
+  @@index([status, startedAt])
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("sync_runs")
+}
+
+model Activity {
+  id                  String         @id @default(uuid()) @db.Uuid
+  userId              String         @map("user_id") @db.Uuid
+  sourceProvider      ActivitySource @map("source_provider")
+  externalActivityId  String?        @map("external_activity_id")
+  sportType           String         @map("sport_type")
+  surfaceType         String?        @map("surface_type")
+  startedAt           DateTime       @map("started_at") @db.Timestamptz(6)
+  sourceTimezone      String?        @map("source_timezone")
+  distanceMeters      Int?           @map("distance_meters")
+  elapsedMs           BigInt?        @map("elapsed_ms")
+  movingMs            BigInt?        @map("moving_ms")
+  avgHrBpm            Int?           @map("avg_hr_bpm")
+  maxHrBpm            Int?           @map("max_hr_bpm")
+  cadence             Decimal?       @db.Decimal(7, 2)
+  elevationGainMeters Decimal?       @map("elevation_gain_meters") @db.Decimal(9, 2)
+  elevationLossMeters Decimal?       @map("elevation_loss_meters") @db.Decimal(9, 2)
+  calories            Int?
+  activityTitle       String?        @map("activity_title")
+  rawObjectRef        String?        @map("raw_object_ref")
+  externalModifiedAt  DateTime?      @map("external_modified_at") @db.Timestamptz(6)
+  importedAt          DateTime       @default(now()) @map("imported_at") @db.Timestamptz(6)
+  updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceProvider, externalActivityId])
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("activities")
+}
+
+model DailyHealthMetric {
+  id              String         @id @default(uuid()) @db.Uuid
+  userId          String         @map("user_id") @db.Uuid
+  sourceProvider  ActivitySource @map("source_provider")
+  localDate       DateTime       @map("local_date") @db.Date
+  sourceTimezone  String         @map("source_timezone")
+  restingHrBpm    Int?           @map("resting_hr_bpm")
+  hrvMs           Decimal?       @map("hrv_ms") @db.Decimal(9, 2)
+  sleepDurationMs BigInt?        @map("sleep_duration_ms")
+  sleepScore      Int?           @map("sleep_score")
+  steps           Int?
+  stress          Int?
+  bodyBattery     Int?           @map("body_battery")
+  rawMetadata     Json?          @map("raw_metadata")
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceProvider, localDate])
+  @@index([userId, localDate(sort: Desc)])
+  @@map("daily_health_metrics")
+}

@@ -36,7 +36,11 @@ See the [Linear roadmap](https://linear.app/fr-running-coach/project/running-coa
 - GitHub Actions
 - Vercel
 
-**Planned:** Neon PostgreSQL, Prisma, authentication provider, Garmin and Intervals.icu integrations.
+**Planned:** authentication provider, Garmin and Intervals.icu integrations.
+
+**Database foundation:** Neon PostgreSQL and Prisma 6.19.0. See
+[database operations](docs/database-operations.md) for isolated environments,
+direct migrations, pooled runtime connectivity, and the test procedure.
 
 ## Local Development
 
@@ -52,7 +56,8 @@ Open http://localhost:3000.
 
 The `/status` route provides a deployment smoke test.
 
-The current application shell does not require environment variables or a database connection.
+The current public application shell does not query the database. Database-backed
+server features require the environment variables in `.env.example`.
 
 ## Code Quality
 
@@ -116,7 +121,8 @@ Configuration:
 | Install Command   | `pnpm install --frozen-lockfile` |
 | Build Command     | `pnpm build`                     |
 
-Vercel automatically creates Preview deployments for non-production branches and Production deployments from `main`.
+Vercel deploys `main` to Production and `development` to Preview. Deployments
+from feature branches are disabled in `vercel.json`.
 
 ### Deployment Protection
 
@@ -137,6 +143,9 @@ The `/status` endpoint confirms application rendering only. It does not validate
 
 - [Codex / agent instructions](AGENTS.md)
 - [Architecture guardrails](docs/architecture-guardrails.md)
+- [Database design](docs/database-design.md)
+- [System architecture](docs/system-architecture.md)
+- [Database operations](docs/database-operations.md)
 - [Dark theme and design tokens](docs/design-tokens.md)
 - [Linear project and technical specifications](https://linear.app/fr-running-coach/project/running-coach-2730d3d0f69a)
 

@@ -25,6 +25,8 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
             <nav aria-label="Main navigation">
               <Link href="/">Home</Link>
               <Link href="/status">Status</Link>
+              <Link href="/sign-in">Sign in</Link>
+              <Link href="/app">My space</Link>
             </nav>
           </header>
           <main id="main-content">{children}</main>

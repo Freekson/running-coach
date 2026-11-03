@@ -18,7 +18,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:db": "vitest run src/server/db/client.integration.test.ts",
+    "test:db": "vitest run src/server/db/client.integration.test.ts src/server/auth/auth.integration.test.ts",
+    "auth:invite": "node scripts/auth-operator.mjs invite",
+    "auth:bootstrap-admin": "node scripts/auth-operator.mjs bootstrap-admin",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:status": "prisma migrate status",
@@ -33,10 +35,12 @@
     "@neondatabase/serverless": "1.2.0",
     "@prisma/adapter-neon": "6.19.0",
     "@prisma/client": "6.19.0",
+    "better-auth": "1.7.14",
     "next": "16.4.3",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "ws": "8.18.3"
+    "ws": "8.18.3",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

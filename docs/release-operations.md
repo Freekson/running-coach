@@ -38,6 +38,8 @@ guard and separate Neon projects; it does not replace environment scoping.
 | `DATABASE_URL`                       | Vercel Production Secret: production pooled runtime role. Vercel Preview Secret: development pooled runtime role. Local `.env`: development only.     | Application reads, writes, transactions. Never use All Environments.                                                       |
 | `APP_DATABASE_ENV`                   | Vercel Production: `production`; Preview: `preview`. Local development: `development`.                                                                | Runtime checks the Vercel label and private database marker.                                                               |
 | `DB_VERIFY_TOKEN`                    | Distinct Vercel Production and Preview Secrets, at least 32 random bytes each.                                                                        | Authenticates read-only `HEAD /api/internal/db-verify`.                                                                    |
+| `BETTER_AUTH_SECRET`                 | Distinct Vercel Preview and Production Secrets; local development uses a separate gitignored value.                                                   | Signs Better Auth sessions. At least 32 random bytes; never place in GitHub Actions or browser variables.                  |
+| `BETTER_AUTH_URL`                    | Stable environment-specific `*.vercel.app` origin in Vercel Preview and Production; `http://localhost:3000` locally.                                  | Better Auth base URL. Exact current `VERCEL_URL` and branch URL are also trusted at runtime.                               |
 | `DATABASE_URL`, `DIRECT_URL`         | GitHub Environment **`development-migrations`** secrets; both point to development Neon, with pooled runtime and direct migration roles respectively. | Used only by the development migration job.                                                                                |
 | `DIRECT_URL`                         | GitHub Environment **`production-migrations`** secret; production Neon direct migration role only.                                                    | Used only by the production migration job. The production pooled runtime URL is not copied to GitHub.                      |
 | `VERCEL_TOKEN`                       | GitHub Environment **`development-deploy`** and **`production-deploy`** secrets. Use separate limited tokens if available.                            | Permits CLI deployments. No database URL is passed to deploy jobs; Vercel applies its own scoped runtime secrets remotely. |
@@ -50,6 +52,10 @@ operator-only secret plan: automation needs its direct URL in the protected
 or encryption key. Never put production URLs in repository-level Actions
 secrets, source control, `.env.example`, `NEXT_PUBLIC_*`, logs, or issue comments.
 Provider credentials added by later issues need inventory entries before use.
+RUN-17 uses manually shared invitation links. No email delivery provider or
+outbound invitation secret is required. Keep raw links private; only their
+hashes are stored in Neon. See [authentication operations](authentication-operations.md)
+for CLI issuance, ADMIN bootstrap, and legacy Clerk identity remapping.
 
 ## One-time GitHub and Vercel setup
 

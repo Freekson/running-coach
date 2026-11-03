@@ -95,7 +95,8 @@ new links, but cannot reconstruct an old raw link from the hash.
 
 1. Generate a link through the trusted CLI and privately share it with the
    initial operator. Register normally. The new account starts `USER`.
-2. Sign in once at `/app` so the local `users` row is created. Verify the
+2. Sign in once at `/app` (which opens `/app/dashboard`) so the local `users`
+   row is created. Verify the
    Better Auth user ID in the **matching** database's `auth_users` table and
    confirm its `users.auth_subject` maps to the intended internal user. For
    example, with the direct role in the matching Neon SQL editor:
@@ -124,7 +125,9 @@ passwords are not migrated.
 
 In both Preview and Production, use separate test identities and no real
 athlete data in Preview. Confirm unauthenticated `/api/me` returns 401 and
-`/app` redirects to `/sign-in`. Try direct signup without a token, with an
+both `/app` and `/app/dashboard` redirect to `/sign-in` with a safe `next`
+destination. After signing in, `/app` should open `/app/dashboard`. Try direct
+signup without a token, with an
 expired/revoked link, then with a valid link; the first cases must return 403.
 Confirm a used link cannot create a second account. Sign in/out and repeat
 `/api/me`; expired or revoked sessions must return 401. The repo tests cover

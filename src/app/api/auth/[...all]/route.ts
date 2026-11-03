@@ -53,7 +53,13 @@ export async function POST(request: Request) {
     // The invitation token is never forwarded to Better Auth or stored there.
     const { invitationToken: _token, ...signupBody } = body
     void _token
-    const forwarded = new Request(request, { body: JSON.stringify(signupBody) })
+    const headers = new Headers(request.headers)
+    headers.delete('content-length')
+    const forwarded = new Request(request.url, {
+      method: request.method,
+      headers,
+      body: JSON.stringify(signupBody),
+    })
     const response = await toNextJsHandler(auth).POST(forwarded)
     if (response.status >= 400 && response.status < 500) await releaseInvitation(claim)
     return response

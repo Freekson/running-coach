@@ -76,6 +76,34 @@ describe('direct signup API protection', () => {
     })
   })
 
+  it('constructs the forwarded request from its URL for the Vercel runtime', async () => {
+    const incoming = signup({ invitationToken: 'a'.repeat(64) })
+    incoming.headers.set('content-length', '999')
+    const NativeRequest = Request
+    vi.stubGlobal(
+      'Request',
+      class UrlOnlyRequest extends NativeRequest {
+        constructor(input: RequestInfo | URL, init?: RequestInit) {
+          if (typeof input !== 'string' && !(input instanceof URL)) {
+            throw new TypeError('Request input must be a URL')
+          }
+          super(input, init)
+        }
+      },
+    )
+
+    try {
+      expect((await POST(incoming)).status).toBe(200)
+      const forwarded = handlerPost.mock.calls[0][0]
+      expect(forwarded.url).toBe(incoming.url)
+      expect(forwarded.headers.get('origin')).toBe('http://localhost:3000')
+      expect(forwarded.headers.get('content-length')).toBeNull()
+      expect(await forwarded.json()).not.toHaveProperty('invitationToken')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('keeps the link available for invalid fields and a Better Auth 4xx response', async () => {
     const token = 'a'.repeat(64)
     expect((await POST(signup({ invitationToken: token, password: 'short' }))).status).toBe(400)

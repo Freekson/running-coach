@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
+import { safeAppDestination } from '@/lib/app-destination'
 
 export default function SignInPage() {
   const router = useRouter()
@@ -19,7 +20,8 @@ export default function SignInPage() {
     })
     if (result.error) setError('Sign in failed. Check your email and password.')
     else {
-      router.replace('/app')
+      const next = new URLSearchParams(window.location.search).get('next')
+      router.replace(safeAppDestination(next))
       router.refresh()
     }
   }

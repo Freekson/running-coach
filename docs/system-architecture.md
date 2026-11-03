@@ -63,8 +63,11 @@ Organize by business domains within one repository (avoid a giant shared `servic
 ```text
 src/
   app/
-    (auth)/                         # sign-in / invite acceptance
-    (app)/                          # dashboard, activities, calendar, goals, settings
+    (auth)/                         # public sign-in / invite acceptance
+      app/
+        layout.tsx                   # shared server-side session check for /app/*
+        page.tsx                     # /app -> /app/dashboard
+        dashboard/page.tsx           # authenticated placeholder until RUN-43
     api/
       integrations/                 # connection and status endpoints
       sync/                         # manually-triggered bounded sync
@@ -98,6 +101,30 @@ docs/
 ```
 
 **Boundary rule:** route handlers authenticate and authorize, call domain services; domain services own transactions, invariant checks, provider orchestration, and error mapping. React components never directly call third-party services with credentials.
+
+### Authenticated route ownership (RUN-64)
+
+`/app` is the permanent prefix for athlete and admin pages. Its nested layout
+checks the Better Auth session on the server, and each page verifies access
+before rendering private content because Next.js can reuse layouts during
+client navigation or render a child into a redirect response. Signed-in
+`/app` redirects to `/app/dashboard`; signed-out requests to `/app` or a nested
+page go to `/sign-in` with `/app/dashboard` as the safe return destination.
+Sign-in accepts only simple relative `/app` paths as return destinations.
+Individual pages and server services must still authorize data and role-specific
+actions; the layout does not replace owner checks or ADMIN checks.
+
+| Path             | Owner / status                                        |
+| ---------------- | ----------------------------------------------------- |
+| `/app/dashboard` | RUN-43; RUN-17 placeholder lives here until then      |
+| `/app/training`  | Future workout/training work; no page yet             |
+| `/app/calendar`  | RUN-31; no page yet                                   |
+| `/app/goals`     | RUN-32; no page yet                                   |
+| `/app/settings`  | RUN-19; no page yet                                   |
+| `/app/admin`     | RUN-18; no page yet; requires an explicit ADMIN check |
+
+Public `/` and `/sign-in` stay outside the protected layout. `/api/me` keeps
+its separate session check and 401 response for unauthenticated requests.
 
 ## 4. Authentication & user lifecycle
 

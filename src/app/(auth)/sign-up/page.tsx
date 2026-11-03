@@ -79,7 +79,7 @@ function SignUpForm() {
       })
       if (response.ok) {
         discardInvitation()
-        router.replace('/app')
+        router.replace('/app/dashboard')
         router.refresh()
       } else if (response.status === 403) {
         if (response.headers.get('x-running-coach-error') === 'invalid-invitation') {

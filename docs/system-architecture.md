@@ -17,7 +17,7 @@
 | Application              | Single Next.js TypeScript app (App Router, server-only modules, Route Handlers/Server Actions)                        | No need for a separate NestJS service initially                     |
 | Persistence              | Neon managed PostgreSQL                                                                                               | Transactions, relational integrity, managed operations              |
 | ORM                      | Prisma, version pinned at implementation                                                                              | Typed data access/migrations                                        |
-| Authentication           | **Clerk, preferred; final choice pending**                                                                            | Ready-made invite-only sign-up and session flows                    |
+| Authentication           | **Better Auth, accepted in [ADR-001](adr/001-authentication-provider.md)**                                            | Self-hosted email/password and one-time link registration           |
 | Authorization            | Server-side owner checks for every personal resource                                                                  | Multi-user isolation is an MVP requirement                          |
 | Integration architecture | Provider adapters, per-user connections                                                                               | No vendor-specific assumptions in business logic                    |
 | Outgoing training plans  | [Intervals.icu](http://Intervals.icu) REST/OAuth where available                                                      | Creates calendar workouts; delegates device sync to linked provider |
@@ -101,11 +101,11 @@ docs/
 
 ## 4. Authentication & user lifecycle
 
-**Recommended starting point: Clerk Invite-only**; evaluate pricing/limits before implementation. Clerk can restrict sign-up to invitations. Alternatives: Auth.js with a custom invite implementation.
+**Chosen for RUN-17: Better Auth with one-time links**; see [ADR-001](adr/001-authentication-provider.md). A trusted CLI creates manually shared links. The application checks and atomically consumes the hashed token before Better Auth's signup endpoint runs. No email sender or external identity provider is required.
 
 Lifecycle:
 
-1. Admin issues single-use or expiring invitation through the auth provider (avoid inventing a second invitation system if provider handles it).
+1. A trusted operator issues a seven-day single-use invitation link through the CLI; RUN-18 adds an ADMIN-only UI for this.
 2. User signs up, verifies contact as required, and receives an internal `User` row keyed by the verified external auth subject.
 3. User completes optional Athlete Profile; chooses units, timezone, default weekly training availability.
 4. User explicitly connects each external provider.
@@ -258,7 +258,8 @@ Cron:
 
 ## 12. Open technical decisions / ADR backlog
 
-- **ADR-001:** Clerk vs Auth.js; estimate pricing, complexity and invite UX. Preference: Clerk unless costs/requirements say otherwise.
+**ADR-001** is accepted: [Better Auth for private registration](adr/001-authentication-provider.md).
+
 - **ADR-002:** Garmin Personal API usage in small shared apps; get clarity before enabling for multiple accounts.
 - **ADR-003:** Garmin vs [Intervals.icu](http://Intervals.icu) vs manual import precedence; establish exact supported health metrics.
 - **ADR-004:** JSON Schema v1, canonical Workout schema, provider mapping, units and version upgrade strategy.
@@ -274,16 +275,16 @@ Cron:
 - [Intervals.icu](http://Intervals.icu) → Garmin planned workouts: [https://forum.intervals.icu/t/upload-planned-workouts-to-garmin-connect/1521](https://forum.intervals.icu/t/upload-planned-workouts-to-garmin-connect/1521)
 - Vercel Cron limits: [https://vercel.com/docs/cron-jobs/usage-and-pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing)
 - Neon database connectivity: [https://neon.com/docs/connect/connect-from-any-app](https://neon.com/docs/connect/connect-from-any-app)
-- Clerk invite-only: [https://clerk.com/docs/guides/secure/restricting-access](https://clerk.com/docs/guides/secure/restricting-access)
+- Better Auth: [https://www.better-auth.com/docs/installation](https://www.better-auth.com/docs/installation)
 
 ## 14. ADR-008: Administrator-only invitations (confirmed)
 
 **Decision:** invite-only is governed exclusively by the `ADMIN` role; ordinary users may not invite other users. Even invite-management read endpoints are administrative.
 
 - Enforce server-side authorization with a trusted authenticated subject resolved to internal `User`, then `role === ADMIN`; UI visibility is convenience only.
-- Prefer the chosen identity provider's restricted sign-up/invitation facilities if they support single-use/expiry/revocation. Create invitations through an admin-authorized server action or Route Handler; never expose privileged provider API credentials to the browser.
+- RUN-17 uses a trusted operator CLI to create hashed one-time links. RUN-18 adds ADMIN-authorized server endpoints for creation/list/revocation; never return an existing raw token from storage.
 - New accounts created from a valid invitation become `USER` by default; no signup setting may request `ADMIN`.
-- First admin must be bootstrapped securely using an explicit deployment/provider administrative procedure; do not implement a public 'become admin' endpoint.
-- Invitation state and audit trail: who invited whom, created time, expiration, acceptance, revocation. If invitations are fully provider-managed, maintain only an optional local audit reference rather than duplicating provider state.
-- Test unauthorized access to all invite endpoints; enforce email and invitation state validation at acceptance and avoid account enumeration.
+- First admin must be bootstrapped through the trusted operator procedure; do not implement a public 'become admin' endpoint.
+- The link is not email-bound; email ownership is unverified without a separate verification flow. RUN-18 adds issuer/audit metadata.
+- Test unauthorized access to future invite management endpoints and token validity at acceptance.
 - This decision does not alter the tenant privacy boundary: ADMIN is **not** an automatic cross-user health-data reader.

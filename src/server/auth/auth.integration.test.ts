@@ -99,9 +99,12 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
     requestHeaders.cookie = `${cookie.split('=')[0]}=invalid`
     expect((await getMe()).status).toBe(401)
     requestHeaders.cookie = cookie
-    const me = await getMe()
-    expect(me.status).toBe(200)
-    expect(await me.json()).toMatchObject({ role: 'USER' })
+    const firstRequests = await Promise.all([getMe(), getMe(), getMe()])
+    for (const me of firstRequests) {
+      expect(me.status).toBe(200)
+      expect(await me.json()).toMatchObject({ role: 'USER' })
+    }
+    expect(await prisma.user.count({ where: { authSubject: authUserId } })).toBe(1)
   }, 30_000)
 
   it('releases a token after Better Auth rejects an already registered email', async () => {

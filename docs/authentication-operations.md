@@ -58,15 +58,19 @@ pnpm auth:invite
 The CLI checks the database tier and prints one registration URL. It stores
 **only SHA-256 of the random 32-byte token** in `auth_invitations`; the raw link
 is never stored server-side. The token sits in the URL fragment (`#token=...`),
-which is not sent in the initial HTTP request; the page removes it from the
-address bar after loading. Copy it privately to the intended person via
+which is not sent in the initial HTTP request. The page keeps a temporary copy
+in that browser tab's session storage so a remount does not lose it, then
+removes the fragment from the address bar. Successful registration or an
+invalid/used-link response clears the tab copy. Copy the link privately via
 Telegram, Discord or another trusted channel. Do not place it in source,
 issues, logs, screenshots or public chat. The holder can choose an email and
 password once within seven days. The link does not prove email ownership;
 `emailVerified` remains false. Invalid form fields and Better Auth 4xx responses
-leave the link available for retry; an unknown server failure can still consume
-the link conservatively, so issue a new one if sign-in also fails. Public
-`POST /api/auth/sign-up/email` without a valid token returns 403.
+leave the link available for retry. A 403 caused by origin validation also
+preserves the tab copy; only an explicitly invalid invitation clears it. An
+unknown server failure can still consume the link conservatively, so issue a
+new one if sign-in also fails. Public `POST /api/auth/sign-up/email` without a
+valid token returns 403.
 
 For production, run from a controlled terminal with the production direct
 role URL and `APP_DATABASE_ENV=production`, after independently checking the

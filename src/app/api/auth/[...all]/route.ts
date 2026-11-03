@@ -15,6 +15,13 @@ const signupFields = z
   })
   .passthrough()
 
+function invalidInvitation() {
+  return new Response(null, {
+    status: 403,
+    headers: { 'X-Running-Coach-Error': 'invalid-invitation' },
+  })
+}
+
 export async function GET(request: Request) {
   return toNextJsHandler(await getAuth()).GET(request)
 }
@@ -38,8 +45,8 @@ export async function POST(request: Request) {
       return new Response(null, { status: 400 })
     }
     if (!body || typeof body !== 'object' || !('invitationToken' in body))
-      return new Response(null, { status: 403 })
-    if (typeof body.invitationToken !== 'string') return new Response(null, { status: 403 })
+      return invalidInvitation()
+    if (typeof body.invitationToken !== 'string') return invalidInvitation()
     const parsed = signupFields.safeParse(body)
     if (!parsed.success) return new Response(null, { status: 400 })
     // Check the request origin before touching the token. Better Auth checks it
@@ -49,11 +56,17 @@ export async function POST(request: Request) {
     const allowed = getTrustedOrigins(process.env.BETTER_AUTH_URL ?? '')
     if (!origin || !allowed.includes(origin)) return new Response(null, { status: 403 })
     const claim = await consumeInvitation(body.invitationToken)
-    if (!claim) return new Response(null, { status: 403 })
+    if (!claim) return invalidInvitation()
     // The invitation token is never forwarded to Better Auth or stored there.
     const { invitationToken: _token, ...signupBody } = body
     void _token
-    const forwarded = new Request(request, { body: JSON.stringify(signupBody) })
+    const headers = new Headers(request.headers)
+    headers.delete('content-length')
+    const forwarded = new Request(request.url, {
+      method: request.method,
+      headers,
+      body: JSON.stringify(signupBody),
+    })
     const response = await toNextJsHandler(auth).POST(forwarded)
     if (response.status >= 400 && response.status < 500) await releaseInvitation(claim)
     return response

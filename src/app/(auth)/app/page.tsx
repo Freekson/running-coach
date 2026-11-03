@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { AccountUnavailableError, getCurrentUser } from '@/server/auth/current-user'
 import { SignOutButton } from '../sign-out-button'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AppPage() {
   let user
   try {

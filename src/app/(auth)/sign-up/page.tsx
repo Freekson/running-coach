@@ -82,8 +82,12 @@ function SignUpForm() {
         router.replace('/app')
         router.refresh()
       } else if (response.status === 403) {
-        discardInvitation()
-        setError('Invitation is invalid or already used. Ask the operator for a new link.')
+        if (response.headers.get('x-running-coach-error') === 'invalid-invitation') {
+          discardInvitation()
+          setError('Invitation is invalid or already used. Ask the operator for a new link.')
+        } else {
+          setError('Registration was blocked. Check the app URL and retry with this link.')
+        }
       } else if (response.status === 429) {
         setError('Too many attempts. Wait and retry with this link.')
       } else if (response.status < 500) {

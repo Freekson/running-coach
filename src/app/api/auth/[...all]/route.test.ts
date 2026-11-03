@@ -39,9 +39,13 @@ beforeEach(() => {
 
 describe('direct signup API protection', () => {
   it('rejects missing and invalid invitation tokens without calling Better Auth', async () => {
-    expect((await POST(signup({ email: 'a@example.test', password: 'secret' }))).status).toBe(403)
+    const missing = await POST(signup({ email: 'a@example.test', password: 'secret' }))
+    expect(missing.status).toBe(403)
+    expect(missing.headers.get('x-running-coach-error')).toBe('invalid-invitation')
     consumeInvitation.mockResolvedValue(null)
-    expect((await POST(signup({ invitationToken: 'x' }))).status).toBe(403)
+    const invalid = await POST(signup({ invitationToken: 'x' }))
+    expect(invalid.status).toBe(403)
+    expect(invalid.headers.get('x-running-coach-error')).toBe('invalid-invitation')
     expect(handlerPost).not.toHaveBeenCalled()
   })
 
@@ -56,10 +60,18 @@ describe('direct signup API protection', () => {
   })
 
   it('does not consume a token from an untrusted origin', async () => {
-    expect(
-      (await POST(signup({ invitationToken: 'a'.repeat(64) }, 'https://other.test'))).status,
-    ).toBe(403)
+    const blocked = await POST(signup({ invitationToken: 'a'.repeat(64) }, 'https://other.test'))
+    expect(blocked.status).toBe(403)
+    expect(blocked.headers.get('x-running-coach-error')).toBeNull()
     expect(consumeInvitation).not.toHaveBeenCalled()
+  })
+
+  it('does not mark a Better Auth 403 as an invalid invitation', async () => {
+    handlerPost.mockResolvedValueOnce(new Response(null, { status: 403 }))
+    const blocked = await POST(signup({ invitationToken: 'a'.repeat(64) }))
+    expect(blocked.status).toBe(403)
+    expect(blocked.headers.get('x-running-coach-error')).toBeNull()
+    expect(releaseInvitation).toHaveBeenCalledOnce()
   })
 
   it('forwards only a claimed signup and removes the token', async () => {

@@ -3,15 +3,14 @@
 import { useState } from 'react'
 import { authClient } from '@/lib/auth-client'
 import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/Button'
 
 export function SignOutButton() {
   const router = useRouter()
   const [error, setError] = useState('')
   return (
     <div>
-      <button
-        className="button"
-        type="button"
+      <Button
         onClick={async () => {
           setError('')
           const result = await authClient.signOut()
@@ -24,7 +23,7 @@ export function SignOutButton() {
         }}
       >
         Sign out
-      </button>
+      </Button>
       {error && <p role="alert">{error}</p>}
     </div>
   )

@@ -1,4 +1,5 @@
 import { getDeploymentKind } from '@/lib/deployment'
+import { Badge } from '@/components/ui/Badge'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,9 @@ export default function StatusPage() {
       <dl className="status-list">
         <div>
           <dt>App</dt>
-          <dd>Ready</dd>
+          <dd>
+            <Badge tone="success">Ready</Badge>
+          </dd>
         </div>
         <div>
           <dt>Environment</dt>

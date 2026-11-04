@@ -20,7 +20,7 @@ Use the role that matches the element, rather than copying a hex value. Add a ne
 
 ## Typography
 
-The root layout loads variable Manrope and Inter through `next/font/google` with `display: 'swap'`, Latin and Cyrillic subsets, and metric-adjusted system fallbacks. Next.js self-hosts the generated font files, so browsers do not contact a third-party font server. Ukrainian uses the Cyrillic subset; add `cyrillic-ext` only if content requires glyphs outside it. Keep to these two custom families in the MVP.
+The root layout loads variable Manrope and Inter through `next/font/google` with `display: 'swap'`, Latin and Cyrillic subsets, and metric-adjusted system fallbacks. Next.js self-hosts the generated font files, so browsers do not contact a third-party font server. Keep to these two custom families in the MVP; the Cyrillic subset is available if localization is requested later.
 
 | Token                                                                                           | Use                                                         |
 | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -35,11 +35,15 @@ The root layout loads variable Manrope and Inter through `next/font/google` with
 
 Use the heading family for headings and the body family for UI text. Keep headings at semibold or bold, body text at regular or medium, and compact UI at medium or semibold. Use `.metric-value` or `font-variant-numeric: tabular-nums` for pace, distance, counters, and aligned columns; right-align comparable values when their labels are separate. Use the body font for units. Let long values wrap instead of clipping them.
 
-Check English and Ukrainian copy in actual headings and controls, including `І`, `Ї`, `Є`, `Ґ`, apostrophes, en/em dashes, and values such as `1 234,56 км` and `12:34 /км`. Give Ukrainian content `lang="uk"`; add a CJK font or fallback plan before introducing Japanese UI. Review 320–375px widths and 200% zoom with realistic labels and metric values.
+Keep source copy and Storybook examples in English unless an issue explicitly requests localization. Check actual headings and controls, including apostrophes, en/em dashes, and values such as `1,234.56 km` and `12:34 /km`. Review 320–375px widths and 200% zoom with realistic labels and metric values.
 
 ## Reusable patterns
 
-- Primary action: `.button`; secondary action: `.button.button--secondary`. These work on buttons and links. Use the native `disabled` attribute on buttons. For a disabled link, remove its `href` and click handler as well as adding `aria-disabled="true"`.
+Shared primitives live in `src/components/ui/`: `Button`/`ButtonLink`, `Input`/`FormField`, `Card`, `Badge`, and `EmptyState`/`LoadingState`. Import these in application pages; their stories are co-located as `*.stories.tsx` and show the same implementations. Run `pnpm storybook` for the local workbench at port 6006 and `pnpm build-storybook` for a static verification build. Storybook imports `src/app/globals.css` and local Manrope/Inter font files, so it needs no database, session, or secrets. The static output is ignored by Git.
+
+Before adding UI, search this catalog and feature components. Compose existing primitives and tokens. Extend the shared library only for a missing pattern with clear reuse, keep variants narrow and typed, and update its stories when behavior changes. Feature-specific compositions can remain local. Check focus, labels, error text, contrast, 320–375px widths, and 200% zoom.
+
+- Primary action: `.button`; secondary action: `.button.button--secondary`. These work on buttons and links. Use the native `disabled` attribute on buttons. `ButtonLink disabled` renders an inert link-like element without an `href` or click handler and adds `aria-disabled="true"`.
 - Text links use the global link colors. Navigation links use the header's navigation styling. Do not remove the global `:focus-visible` outline.
 - Text inputs, textareas, and selects use `.field` with a visible label. `aria-invalid="true"` adds an error border; pair it with an error message, since color alone does not explain a problem.
 - Cards use `.card`; badges use `.badge` with `.badge--success`, `.badge--warning`, or `.badge--error` when appropriate. Include status text so meaning does not depend on color.

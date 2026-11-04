@@ -1,0 +1,19 @@
+.fieldGroup {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+
+  label {
+    font-weight: var(--type-weight-medium);
+  }
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font-size: var(--type-size-caption);
+}
+
+.error {
+  color: var(--color-error);
+  font-size: var(--type-size-caption);
+}

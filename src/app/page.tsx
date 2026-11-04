@@ -1,4 +1,5 @@
-import Link from 'next/link'
+import { ButtonLink } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
 
 export default function HomePage() {
   return (
@@ -9,25 +10,25 @@ export default function HomePage() {
         Running Coach is taking shape as a private space to plan endurance training, review your
         progress, and keep your next session in view.
       </p>
-      <Link className="button" href="/status">
+      <ButtonLink href="/status">
         Check app status <span aria-hidden="true">→</span>
-      </Link>
+      </ButtonLink>
       <div className="feature-grid">
-        <article className="card feature-card">
+        <Card as="article" className="feature-card">
           <span className="feature-number">01</span>
           <h2>Plan with purpose</h2>
           <p>Build toward a goal with sessions that fit real life.</p>
-        </article>
-        <article className="card feature-card">
+        </Card>
+        <Card as="article" className="feature-card">
           <span className="feature-number">02</span>
           <h2>Stay in control</h2>
           <p>Review every plan before any workout is published.</p>
-        </article>
-        <article className="card feature-card">
+        </Card>
+        <Card as="article" className="feature-card">
           <span className="feature-number">03</span>
           <h2>Keep it personal</h2>
           <p>Your training data belongs to you.</p>
-        </article>
+        </Card>
       </div>
     </section>
   )

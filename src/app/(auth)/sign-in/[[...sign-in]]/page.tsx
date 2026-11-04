@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
 import { safeAppDestination } from '@/lib/app-destination'
+import { Button } from '@/components/ui/Button'
+import { FormField } from '@/components/ui/FormField'
 
 export default function SignInPage() {
   const router = useRouter()
@@ -31,20 +33,24 @@ export default function SignInPage() {
       <h1 id="sign-in-heading">Sign in</h1>
       <p>Running Coach is available to invited athletes only.</p>
       <form className="auth-form" onSubmit={signIn}>
-        <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" autoComplete="email" required />
-        <label htmlFor="password">Password</label>
-        <input
+        <FormField
+          id="email"
+          label="Email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+        />
+        <FormField
           id="password"
+          label="Password"
           name="password"
           type="password"
           autoComplete="current-password"
           required
         />
         {error && <p role="alert">{error}</p>}
-        <button className="button" type="submit">
-          Sign in
-        </button>
+        <Button type="submit">Sign in</Button>
       </form>
       <p>
         Have an invitation? <Link href="/sign-up">Create your account</Link>.

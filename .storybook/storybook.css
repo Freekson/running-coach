@@ -1,0 +1,8 @@
+:root {
+  --font-body: 'Inter Variable';
+  --font-heading: 'Manrope Variable';
+}
+
+#storybook-root {
+  min-height: 100vh;
+}

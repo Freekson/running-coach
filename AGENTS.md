@@ -25,6 +25,10 @@
 - Source formatting: Prettier. Correctness linting: ESLint. Type correctness: `tsc --noEmit`.
 - Add unit/contract tests for domain changes, integration tests for auth, sync and DB changes, and include negative-path / ownership cases.
 - For UI changes, use the semantic color and typography tokens and reusable styles in `src/app/globals.css`; follow `docs/design-tokens.md`. Keep the dark theme on first paint, use Manrope for headings and Inter for UI, and check contrast plus narrow/zoomed layouts.
+- Keep UI copy, Storybook examples, and source comments in English unless an issue explicitly requests localization.
+- Before building UI, search `src/components/ui/` and existing feature components for a matching component or pattern. Import and compose shared components and their established variants instead of adding lookalikes or hard-coded colors.
+- If a primitive has clear reuse across screens, add or extend it in `src/components/ui/` with minimal typed variants and a co-located Storybook story. Keep unique feature compositions local until reuse is real or strongly expected. Update stories whenever public behavior, variants, or states change.
+- Review labels, keyboard focus, disabled/error/loading states, dark contrast, and mobile layouts. Run `pnpm build-storybook` alongside the standard checks for shared UI changes; keep Storybook and story mocks out of production imports.
 
 ## Definition of done
 

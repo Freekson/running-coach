@@ -27,6 +27,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm build-storybook
 
   migrate-development:
     if: github.event_name == 'push' && github.ref == 'refs/heads/development'

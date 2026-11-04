@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { retainInvitationToken } from '@/lib/invitation-link'
+import { Button } from '@/components/ui/Button'
+import { FormField } from '@/components/ui/FormField'
 
 const invitationStorageKey = 'running-coach:signup-invitation'
 
@@ -108,13 +110,18 @@ function SignUpForm() {
       <h1>Create your account</h1>
       <p>A valid, unused invitation link is required.</p>
       <form className="auth-form" onSubmit={signUp}>
-        <label htmlFor="name">Name</label>
-        <input id="name" name="name" autoComplete="name" required />
-        <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" autoComplete="email" required />
-        <label htmlFor="password">Password (at least 12 characters)</label>
-        <input
+        <FormField id="name" label="Name" name="name" autoComplete="name" required />
+        <FormField
+          id="email"
+          label="Email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+        />
+        <FormField
           id="password"
+          label="Password (at least 12 characters)"
           name="password"
           type="password"
           autoComplete="new-password"
@@ -122,9 +129,9 @@ function SignUpForm() {
           required
         />
         {error && <p role="alert">{error}</p>}
-        <button className="button" type="submit" disabled={pending || !hasInvitation}>
+        <Button type="submit" disabled={!hasInvitation} loading={pending}>
           {pending ? 'Creating account…' : 'Create account'}
-        </button>
+        </Button>
       </form>
     </section>
   )

@@ -38,6 +38,10 @@ rate-limit table. Neither deletes `users` or athlete data. RUN-16 branch
 pipelines apply it through `prisma migrate deploy` **before** deploying the
 corresponding Vercel version, then run the runtime grants. Do not run
 `prisma db push`, production `migrate dev`, or a migration during build.
+RUN-18 adds `20261105_run18_invitation_label`, a nullable 120-character label
+column on `auth_invitations`. Apply it before deploying the admin UI; existing
+invitations remain valid and simply have no label. The migration has no backfill
+or destructive step.
 Better Auth's login limits use the shared `auth_rate_limits` table, so all
 Vercel instances count the same attempts. Vercel supplies the client IP in
 `x-forwarded-for`; no separate rate-limit service is needed.
@@ -77,15 +81,25 @@ role URL and `APP_DATABASE_ENV=production`, after independently checking the
 Neon project, then `pnpm auth:invite --production`. The explicit flag and
 `database_identity=PRODUCTION` check guard the command. Codex does not run it.
 
-Until RUN-18 adds the ADMIN-only UI, revoke a link using the migration role in
-the **selected** Neon database, identifying the invitation row by its `id`:
+ADMIN users can now open `/app/admin` to generate, copy, list, and revoke
+invitations. New links appear once after generation; the list only shows their
+description, dates, and status. A replacement requires generating a new link.
+The same page lists registered users and their roles, including accounts that
+have registered but have not yet signed in to create a local app row. The
+description is only a private note and does not verify recipient identity.
+Direct `/api/admin/invitations` and `/api/admin/users` requests require an
+active ADMIN session; non-ADMIN users cannot read or change them.
+
+For an emergency operator revocation, use the migration role in the
+**selected** Neon database, identifying the invitation row by its `id`:
 
 ```sql
 UPDATE auth_invitations
 SET revoked_at = now()
 WHERE id = '<verified-invitation-uuid>'
   AND consumed_at IS NULL
-  AND revoked_at IS NULL;
+  AND revoked_at IS NULL
+  AND expires_at > now();
 ```
 
 The app never reveals the token again. RUN-18 may list metadata and generate

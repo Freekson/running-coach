@@ -25,6 +25,7 @@ if (databaseTestRequested && !runDatabaseTest)
 
 import { getPrismaClient } from '@/server/db/client'
 import { getAuth } from './better-auth'
+import { createInvitation, listInvitations, revokeInvitation } from './invitation-management'
 import { POST } from '@/app/api/auth/[...all]/route'
 import { GET as getMe } from '@/app/api/me/route'
 
@@ -38,6 +39,7 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
   let authUserId = ''
   let secondAuthUserId = ''
   let retryAuthUserId = ''
+  let replacementAuthUserId = ''
   let ipCounter = 20
 
   beforeAll(async () => {
@@ -50,7 +52,9 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
 
   afterAll(async () => {
     if (!prisma) return
-    const ids = [authUserId, secondAuthUserId, retryAuthUserId].filter(Boolean)
+    const ids = [authUserId, secondAuthUserId, retryAuthUserId, replacementAuthUserId].filter(
+      Boolean,
+    )
     await prisma.user.deleteMany({ where: { authSubject: { in: ids } } })
     await prisma.authUser.deleteMany({ where: { id: { in: ids } } })
     await prisma.authInvitation.deleteMany({ where: { tokenHash } })
@@ -134,16 +138,46 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
     })
     try {
       const raceEmail = `race-${email}`
+      const alternateEmail = `race-alt-${email}`
       const [first, second] = await Promise.all([
         signup(raceToken, raceEmail),
-        signup(raceToken, raceEmail),
+        signup(raceToken, alternateEmail),
       ])
       expect([first.status, second.status].sort()).toEqual([200, 403])
       const accepted = first.status === 200 ? first : second
       secondAuthUserId = (await accepted.json()).user.id
-      expect(await prisma.authUser.count({ where: { email: raceEmail } })).toBe(1)
+      expect(
+        await prisma.authUser.count({ where: { email: { in: [raceEmail, alternateEmail] } } }),
+      ).toBe(1)
     } finally {
       await prisma.authInvitation.deleteMany({ where: { tokenHash: raceHash } })
+    }
+  }, 30_000)
+
+  it('creates a hashed invite, revokes it, and registers with a new replacement link', async () => {
+    const first = await createInvitation('Integration friend')
+    const firstToken = new URL(first.url).hash.slice('#token='.length)
+    const replacement = await createInvitation('Replacement')
+    const replacementToken = new URL(replacement.url).hash.slice('#token='.length)
+    try {
+      const stored = await prisma.authInvitation.findUnique({ where: { id: first.id } })
+      expect(stored).not.toBeNull()
+      if (!stored) throw new Error('Expected a stored invitation')
+      expect(stored.tokenHash).toBe(createHash('sha256').update(firstToken).digest('hex'))
+      expect(stored.expiresAt.getTime() - Date.now()).toBeGreaterThan(6 * 24 * 60 * 60 * 1000)
+      expect((await listInvitations()).find((invite) => invite.id === first.id)).toMatchObject({
+        label: 'Integration friend',
+        status: 'pending',
+      })
+      expect(await revokeInvitation(first.id)).toBe(true)
+      expect(await revokeInvitation(first.id)).toBe(false)
+      expect((await signup(firstToken, `revoked-${email}`)).status).toBe(403)
+      const accepted = await signup(replacementToken, `replacement-${email}`)
+      expect(accepted.status).toBe(200)
+      replacementAuthUserId = (await accepted.json()).user.id
+      expect((await signup(replacementToken, `replay-replacement-${email}`)).status).toBe(403)
+    } finally {
+      await prisma.authInvitation.deleteMany({ where: { id: { in: [first.id, replacement.id] } } })
     }
   }, 30_000)
 

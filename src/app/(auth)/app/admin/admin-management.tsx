@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { FormField } from '@/components/ui/FormField'
+import { CopyableField } from '@/components/ui/CopyableField'
+import { useToast } from '@/components/ui/Toast'
 import styles from './admin-management.module.scss'
 
 type Invitation = {
@@ -42,16 +44,15 @@ export function AdminManagement({
   users: RegisteredUser[]
 }) {
   const router = useRouter()
+  const toast = useToast()
   const [label, setLabel] = useState('')
   const [newLink, setNewLink] = useState<{ url: string; expiresAt: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [revoking, setRevoking] = useState<string | null>(null)
-  const [message, setMessage] = useState('')
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setBusy(true)
-    setMessage('')
     setNewLink(null)
     try {
       const response = await fetch('/api/admin/invitations', {
@@ -65,7 +66,8 @@ export function AdminManagement({
       setLabel('')
       router.refresh()
     } catch {
-      setMessage(
+      toast(
+        'error',
         'Could not show the invite link. Check the list for a new pending invite before trying again; revoke it if the link was lost.',
       )
       router.refresh()
@@ -74,26 +76,15 @@ export function AdminManagement({
     }
   }
 
-  async function copyLink() {
-    if (!newLink) return
-    try {
-      await navigator.clipboard.writeText(newLink.url)
-      setMessage('Invite link copied.')
-    } catch {
-      setMessage('Copy failed. Select and copy the link manually.')
-    }
-  }
-
   async function revoke(id: string) {
     setRevoking(id)
-    setMessage('')
     try {
       const response = await fetch(`/api/admin/invitations/${id}`, { method: 'DELETE' })
       if (!response.ok) throw new Error('Revoke failed')
-      setMessage('Invite revoked. Generate a new link if you need a replacement.')
+      toast('success', 'Invite revoked. Generate a new link if you need a replacement.')
       router.refresh()
     } catch {
-      setMessage('Could not revoke the invite. Refresh and try again.')
+      toast('error', 'Could not revoke the invite. Refresh and try again.')
     } finally {
       setRevoking(null)
     }
@@ -125,20 +116,15 @@ export function AdminManagement({
           <div className={styles.created} role="status">
             <strong>New invite link</strong>
             <p>Copy this link now. It cannot be shown again after you leave this page.</p>
-            <input
-              className="field"
-              aria-label="New invite link"
-              readOnly
+            <CopyableField
+              id="new-invite-link"
+              label="New invite link"
               value={newLink.url}
-              onFocus={(event) => event.target.select()}
+              onCopyError={() => toast('error', 'Copy failed. Select and copy the link manually.')}
             />
-            <Button variant="secondary" onClick={copyLink}>
-              Copy invite link
-            </Button>
             <p>Expires {displayDate(newLink.expiresAt)}</p>
           </div>
         )}
-        {message && <p role="status">{message}</p>}
       </Card>
       <Card as="section" className={styles.section} aria-labelledby="invitations-title">
         <h2 id="invitations-title">Invitations</h2>

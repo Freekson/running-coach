@@ -1,5 +1,6 @@
 import { ButtonLink } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { ArrowRight } from 'lucide-react'
 
 export default function HomePage() {
   return (
@@ -11,7 +12,8 @@ export default function HomePage() {
         progress, and keep your next session in view.
       </p>
       <ButtonLink href="/status">
-        Check app status <span aria-hidden="true">→</span>
+        Check app status{' '}
+        <ArrowRight size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
       </ButtonLink>
       <div className="feature-grid">
         <Card as="article" className="feature-card">

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getPrismaClient, create, findMany, updateMany, userFindMany, authUserFindMany } =
   vi.hoisted(() => ({
@@ -31,6 +31,8 @@ beforeEach(() => {
   })
 })
 
+afterEach(() => vi.unstubAllEnvs())
+
 describe('invitation management', () => {
   it('creates a seven-day link and stores only its hash', async () => {
     const now = new Date()
@@ -54,6 +56,31 @@ describe('invitation management', () => {
     expect(create.mock.calls[0][0].data.expiresAt.getTime() - Date.now()).toBeGreaterThan(
       6 * 24 * 60 * 60 * 1000,
     )
+  })
+
+  it('uses the configured Preview alias instead of the deployment host', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('APP_DATABASE_ENV', 'preview')
+    vi.stubEnv('BETTER_AUTH_URL', 'https://coach-git-development-team.vercel.app')
+    vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', 'coach.vercel.app')
+    vi.stubEnv('VERCEL_URL', 'coach-commit-team.vercel.app')
+    create.mockResolvedValue({ id: 'invite-id' })
+
+    const result = await createInvitation(null)
+    const link = new URL(result.url)
+    expect(link.origin).toBe('https://coach-git-development-team.vercel.app')
+    expect(link.pathname).toBe('/sign-up')
+    expect(link.hash).toMatch(/^#token=[a-f0-9]{64}$/)
+  })
+
+  it('refuses to store a link when Preview points to the Production domain', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('APP_DATABASE_ENV', 'preview')
+    vi.stubEnv('BETTER_AUTH_URL', 'https://coach.vercel.app')
+    vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', 'coach.vercel.app')
+
+    await expect(createInvitation(null)).rejects.toThrow('Preview BETTER_AUTH_URL')
+    expect(getPrismaClient).not.toHaveBeenCalled()
   })
 
   it('lists metadata and computes pending, used, expired, and revoked statuses', async () => {

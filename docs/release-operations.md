@@ -33,18 +33,20 @@ guard and separate Neon projects; it does not replace environment scoping.
 
 ## Secret and environment inventory
 
-| Value                                | Secure location                                                                                                                                       | Purpose                                                                                                                    |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                       | Vercel Production Secret: production pooled runtime role. Vercel Preview Secret: development pooled runtime role. Local `.env`: development only.     | Application reads, writes, transactions. Never use All Environments.                                                       |
-| `APP_DATABASE_ENV`                   | Vercel Production: `production`; Preview: `preview`. Local development: `development`.                                                                | Runtime checks the Vercel label and private database marker.                                                               |
-| `DB_VERIFY_TOKEN`                    | Distinct Vercel Production and Preview Secrets, at least 32 random bytes each.                                                                        | Authenticates read-only `HEAD /api/internal/db-verify`.                                                                    |
-| `BETTER_AUTH_SECRET`                 | Distinct Vercel Preview and Production Secrets; local development uses a separate gitignored value.                                                   | Signs Better Auth sessions. At least 32 random bytes; never place in GitHub Actions or browser variables.                  |
-| `BETTER_AUTH_URL`                    | Stable environment-specific `*.vercel.app` origin in Vercel Preview and Production; `http://localhost:3000` locally.                                  | Better Auth base URL. Exact current `VERCEL_URL` and branch URL are also trusted at runtime.                               |
-| `DATABASE_URL`, `DIRECT_URL`         | GitHub Environment **`development-migrations`** secrets; both point to development Neon, with pooled runtime and direct migration roles respectively. | Used only by the development migration job.                                                                                |
-| `DIRECT_URL`                         | GitHub Environment **`production-migrations`** secret; production Neon direct migration role only.                                                    | Used only by the production migration job. The production pooled runtime URL is not copied to GitHub.                      |
-| `VERCEL_TOKEN`                       | GitHub Environment **`development-deploy`** and **`production-deploy`** secrets. Use separate limited tokens if available.                            | Permits CLI deployments. No database URL is passed to deploy jobs; Vercel applies its own scoped runtime secrets remotely. |
-| `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | Variables in each deploy GitHub Environment.                                                                                                          | Bind the CLI to the existing Vercel project. Verify IDs privately before enabling the pipeline.                            |
-| Credential encryption master key     | Future RUN-21 Vercel Production Secret and a separately generated Preview Secret, with versioned key management.                                      | No key is wired into current code. This acceptance item remains unverified until RUN-21. Never add it to GitHub or source. |
+| Value                                | Secure location                                                                                                                                       | Purpose                                                                                                                                                                                                |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                       | Vercel Production Secret: production pooled runtime role. Vercel Preview Secret: development pooled runtime role. Local `.env`: development only.     | Application reads, writes, transactions. Never use All Environments.                                                                                                                                   |
+| `APP_DATABASE_ENV`                   | Vercel Production: `production`; Preview: `preview`. Local development: `development`.                                                                | Runtime checks the Vercel label and private database marker.                                                                                                                                           |
+| `DB_VERIFY_TOKEN`                    | Distinct Vercel Production and Preview Secrets, at least 32 random bytes each.                                                                        | Authenticates read-only `HEAD /api/internal/db-verify`.                                                                                                                                                |
+| `BETTER_AUTH_SECRET`                 | Distinct Vercel Preview and Production Secrets; local development uses a separate gitignored value.                                                   | Signs Better Auth sessions. At least 32 random bytes; never place in GitHub Actions or browser variables.                                                                                              |
+| `BETTER_AUTH_URL`                    | Preview: the development alias in `VERCEL_PREVIEW_ALIAS`; Production: the project's Production `*.vercel.app` domain; local: `http://localhost:3000`. | Better Auth base URL and canonical invite origin. Set a bare origin with no trailing slash, path, query, or fragment. Exact current Vercel deployment origins are also trusted for signup CSRF checks. |
+| `DATABASE_URL`, `DIRECT_URL`         | GitHub Environment **`development-migrations`** secrets; both point to development Neon, with pooled runtime and direct migration roles respectively. | Used only by the development migration job.                                                                                                                                                            |
+| `DIRECT_URL`                         | GitHub Environment **`production-migrations`** secret; production Neon direct migration role only.                                                    | Used only by the production migration job. The production pooled runtime URL is not copied to GitHub.                                                                                                  |
+| `VERCEL_TOKEN`                       | GitHub Environment **`development-deploy`** and **`production-deploy`** secrets. Use separate limited tokens if available.                            | Permits CLI deployments. No database URL is passed to deploy jobs; Vercel applies its own scoped runtime secrets remotely.                                                                             |
+| `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | Variables in each deploy GitHub Environment.                                                                                                          | Bind the CLI to the existing Vercel project. Verify IDs privately before enabling the pipeline.                                                                                                        |
+| `VERCEL_PREVIEW_ALIAS`               | Variable in GitHub **`development-deploy`** only, containing the Preview hostname without `https://`.                                                 | After a successful CLI Preview deployment, assign this stable `*.vercel.app` alias to that deployment. Must match Preview `BETTER_AUTH_URL` host.                                                      |
+| `VERCEL_PRODUCTION_HOST`             | Variable in GitHub **`development-deploy`** only, containing the Production hostname without `https://`.                                              | Refuse to assign the Preview alias if it equals the Production host. Set it from the Vercel Production domain, matching `VERCEL_PROJECT_PRODUCTION_URL`.                                               |
+| Credential encryption master key     | Future RUN-21 Vercel Production Secret and a separately generated Preview Secret, with versioned key management.                                      | No key is wired into current code. This acceptance item remains unverified until RUN-21. Never add it to GitHub or source.                                                                             |
 
 The production migration role is the **one approved exception** to the earlier
 operator-only secret plan: automation needs its direct URL in the protected
@@ -86,6 +88,20 @@ for CLI issuance, ADMIN bootstrap, and legacy Clerk identity remapping.
    `git.deploymentEnabled: false` is effective when this change lands; there
    must be no separate native Vercel deployment for the merge commit before
    the Actions migration completes. Vercel CLI deployments remain enabled.
+   Set Preview `BETTER_AUTH_URL` to `https://` plus the hostname in
+   `VERCEL_PREVIEW_ALIAS`, and Production `BETTER_AUTH_URL` to the project's
+   Production `*.vercel.app` domain. Set `VERCEL_PRODUCTION_HOST` in the
+   development-deploy GitHub Environment to that same Production hostname.
+   Enable system environment variables so `VERCEL_PROJECT_PRODUCTION_URL` is
+   available; invitation creation requires it on deployed apps and rejects
+   Preview and Production URL mismatches. Confirm the alias belongs to this Vercel
+   project; if a generated branch alias cannot be reassigned by the CLI, use
+   an unclaimed, stable `*.vercel.app` alias for development and update both
+   settings before issuing new invitations. Never use a per-deployment URL,
+   `VERCEL_URL`, or `VERCEL_PROJECT_PRODUCTION_URL` for Preview invites.
+   Vercel documents [Git-generated branch URLs](https://vercel.com/docs/deployments/generated-urls)
+   separately from [CLI deployments](https://vercel.com/docs/cli/deploy), and
+   recommends [explicit aliases for CLI branch routing](https://vercel.com/docs/cli/alias).
 5. After merging RUN-16 into `development`, inspect the first complete
    `validate → migrate-development → deploy-development` run and its Vercel
    target. Merge the RUN-16 release into `main` only after the protected
@@ -111,12 +127,25 @@ and [branch protection](https://docs.github.com/en/repositories/configuring-bran
    job fails, no new Preview deployment starts. Inspect the successful Vercel
    deployment's source SHA and Preview target, then check `/status` and the
    [private read-only database check](database-operations.md#verify-deployed-environments-manually).
+   The deploy job captures the CLI deployment URL and runs `vercel alias set`
+   only after `vercel deploy` succeeds. It does not enable native Git deploys.
+   In the Vercel deployment's Domains view, verify `VERCEL_PREVIEW_ALIAS`
+   resolves to this deployment, then open
+   `https://<VERCEL_PREVIEW_ALIAS>/sign-up` and confirm the current signup page
+   loads. Generate one Preview invitation through `/app/admin`; privately
+   inspect only its origin and `/sign-up` path, and confirm it uses that same
+   alias. Do not paste or log the fragment token. On a later successful
+   development deployment, repeat the Domains check to confirm the alias moved
+   to the new deployment. A failed build or alias command must leave the prior
+   working alias in place and fail the workflow.
 3. After Preview is healthy, merge the release PR into `main`. The production
    migration job uses only the production direct role and marker. If it fails,
    no new Production deployment starts; the old version stays live. If it
    succeeds, inspect the Vercel deployment's source SHA, Production target,
    domain assignment, `/status`, private database check, and a normal
-   authenticated application path.
+   authenticated application path. Generate one Production invitation and
+   privately confirm its origin is the Production domain and its `/sign-up`
+   page loads there; never expose its fragment token in logs or screenshots.
 
 The private endpoint proves read connectivity and the environment marker. It
 does **not** prove deployed writes or transactions. That remains a RUN-15

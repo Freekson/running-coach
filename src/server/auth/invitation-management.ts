@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createHash, randomBytes } from 'node:crypto'
 import { getPrismaClient } from '@/server/db/client'
+import { getCanonicalAppOrigin } from './public-origin'
 
 const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -21,14 +22,7 @@ export function invitationStatus(
 }
 
 export async function createInvitation(label: string | null) {
-  const baseURL = process.env.BETTER_AUTH_URL
-  if (!baseURL) throw new Error('BETTER_AUTH_URL is required')
-  const origin = new URL(baseURL)
-  if (
-    !['https:', 'http:'].includes(origin.protocol) ||
-    (origin.protocol === 'http:' && origin.hostname !== 'localhost')
-  )
-    throw new Error('A secure BETTER_AUTH_URL is required')
+  const origin = getCanonicalAppOrigin(process.env)
 
   const token = randomBytes(32).toString('hex')
   const tokenHash = createHash('sha256').update(token).digest('hex')

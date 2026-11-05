@@ -73,12 +73,23 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_PREVIEW_ALIAS: ${{ vars.VERCEL_PREVIEW_ALIAS }}
+          VERCEL_PRODUCTION_HOST: ${{ vars.VERCEL_PRODUCTION_HOST }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ] || [ -z "$VERCEL_PREVIEW_ALIAS" ] || [ -z "$VERCEL_PRODUCTION_HOST" ]; then
             echo 'Vercel deployment settings are not configured'
             exit 1
           fi
-          vercel deploy --yes --target=preview --token "$VERCEL_TOKEN"
+          if [[ ! "$VERCEL_PREVIEW_ALIAS" =~ ^[a-z0-9-]+\.vercel\.app$ ]] || [[ ! "$VERCEL_PRODUCTION_HOST" =~ ^[a-z0-9-]+\.vercel\.app$ ]] || [ "$VERCEL_PREVIEW_ALIAS" = "$VERCEL_PRODUCTION_HOST" ]; then
+            echo 'Preview alias and Production host must be distinct vercel.app hostnames'
+            exit 1
+          fi
+          deployment_url="$(vercel deploy --yes --target=preview --token "$VERCEL_TOKEN")"
+          if [[ ! "$deployment_url" =~ ^https://[a-z0-9-]+\.vercel\.app$ ]]; then
+            echo 'Vercel did not return a valid Preview deployment URL'
+            exit 1
+          fi
+          vercel alias set "$deployment_url" "$VERCEL_PREVIEW_ALIAS" --token "$VERCEL_TOKEN"
 
   migrate-production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

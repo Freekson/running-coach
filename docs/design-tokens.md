@@ -18,6 +18,12 @@ The app uses a dark theme from first paint. `src/app/globals.css` is the source 
 
 Use the role that matches the element, rather than copying a hex value. Add a new semantic token to the root palette when a genuinely new role is needed.
 
+## Icons
+
+Use `lucide-react` as the default icon library. Use 20px icons for toast status, 18px for actions, and 16px where space is tight, all with `strokeWidth={2}`. Icon and label spacing uses `--icon-gap` (8px); icons inherit text color or use the semantic success, warning, error, or primary token. Avoid hard-coded icon colors and glyph substitutes for UI actions.
+
+Icons next to visible text are decorative: set `aria-hidden="true"` and `focusable="false"`. Give every icon-only button an accessible `aria-label` describing its action. Use the existing `Button` or native button pattern; no separate icon wrapper is needed. Toast success, error, warning, and info icons accompany readable message text, and the close control is labeled.
+
 ## Typography
 
 The root layout loads variable Manrope and Inter through `next/font/google` with `display: 'swap'`, Latin and Cyrillic subsets, and metric-adjusted system fallbacks. Next.js self-hosts the generated font files, so browsers do not contact a third-party font server. Keep to these two custom families in the MVP; the Cyrillic subset is available if localization is requested later.
@@ -39,7 +45,13 @@ Keep source copy and Storybook examples in English unless an issue explicitly re
 
 ## Reusable patterns
 
-Shared primitives live in `src/components/ui/`: `Button`/`ButtonLink`, `Input`/`FormField`, `Card`, `Badge`, and `EmptyState`/`LoadingState`. Import these in application pages; their stories are co-located as `*.stories.tsx` and show the same implementations. Run `pnpm storybook` for the local workbench at port 6006 and `pnpm build-storybook` for a static verification build. Storybook imports `src/app/globals.css` and local Manrope/Inter font files, so it needs no database, session, or secrets. The static output is ignored by Git.
+### Notifications and copy fields
+
+Mount `ToastProvider` once in the root layout. Client components call `useToast()(tone, message)` with `tone` set to `success`, `error`, `warning`, or `info`; messages dismiss automatically or through their keyboard-accessible close button. Server and client redirects can import `toastRedirectPath('/destination', 'missing-invite')` from `src/components/ui/toast-redirect.ts`. The provider consumes the `notice` query parameter once, removes it from the URL, and displays only allowlisted copy. Never put free-form or private content into a redirect notice code.
+
+Use `CopyableField` with `id`, `label`, and the complete `value`. Its read-only input stays selectable and its embedded button copies the full value. `disabled` also disables the action; `onCopyError` and `onCopySuccess` can trigger a Toast where useful.
+
+Shared primitives live in `src/components/ui/`: `Button`/`ButtonLink`, `Input`/`FormField`, `Card`, `Badge`, `EmptyState`/`LoadingState`, `ToastProvider`/`ToastViewport`, and `CopyableField`. Import these in application pages; their stories are co-located as `*.stories.tsx` and show the same implementations. Run `pnpm storybook` for the local workbench at port 6006 and `pnpm build-storybook` for a static verification build. Storybook imports `src/app/globals.css` and local Manrope/Inter font files, so it needs no database, session, or secrets. The static output is ignored by Git.
 
 Before adding UI, search this catalog and feature components. Compose existing primitives and tokens. Extend the shared library only for a missing pattern with clear reuse, keep variants narrow and typed, and update its stories when behavior changes. Feature-specific compositions can remain local. Check focus, labels, error text, contrast, 320–375px widths, and 200% zoom.
 

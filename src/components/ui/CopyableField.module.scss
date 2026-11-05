@@ -1,0 +1,71 @@
+.group {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+.group label {
+  font-weight: var(--type-weight-medium);
+}
+.control {
+  position: relative;
+  min-width: 0;
+}
+.control input {
+  padding-right: 54px;
+  font-family: var(--font-mono);
+  font-size: var(--type-size-label);
+  text-overflow: ellipsis;
+}
+.copy {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+.copy:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-surface-hover);
+}
+.copied {
+  color: var(--color-success);
+}
+.failed {
+  color: var(--color-error);
+}
+.copy:disabled,
+.copy[aria-disabled='true'] {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+.feedback {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.feedbackError {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  color: var(--color-error);
+  font-size: var(--type-size-caption);
+}

@@ -16,6 +16,7 @@
   --color-success: #80cdb0;
   --color-warning: #f5cb82;
   --color-error: #f4a8a1;
+  --icon-gap: 8px;
   --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
   --type-size-hero: clamp(2.25rem, 4vw, 4rem);
   --type-size-page: clamp(1.75rem, 3vw, 2.25rem);
@@ -78,7 +79,7 @@ a:active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: var(--icon-gap);
   min-height: 44px;
   padding: 16px 22px;
   border: 1px solid transparent;

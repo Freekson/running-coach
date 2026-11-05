@@ -42,10 +42,10 @@ guard and separate Neon projects; it does not replace environment scoping.
 | `BETTER_AUTH_URL`                    | Preview: the development alias in `VERCEL_PREVIEW_ALIAS`; Production: the project's Production `*.vercel.app` domain; local: `http://localhost:3000`. | Better Auth base URL and canonical invite origin. Set a bare origin with no trailing slash, path, query, or fragment. Exact current Vercel deployment origins are also trusted for signup CSRF checks. |
 | `DATABASE_URL`, `DIRECT_URL`         | GitHub Environment **`development-migrations`** secrets; both point to development Neon, with pooled runtime and direct migration roles respectively. | Used only by the development migration job.                                                                                                                                                            |
 | `DIRECT_URL`                         | GitHub Environment **`production-migrations`** secret; production Neon direct migration role only.                                                    | Used only by the production migration job. The production pooled runtime URL is not copied to GitHub.                                                                                                  |
-| `VERCEL_TOKEN`                       | GitHub Environment **`development-deploy`** and **`production-deploy`** secrets. Use separate limited tokens if available.                            | Permits CLI deployments. No database URL is passed to deploy jobs; Vercel applies its own scoped runtime secrets remotely.                                                                             |
+| `VERCEL_TOKEN`                       | GitHub Environment **`development-deploy`** and **`production-deploy`** secrets. Use separate limited tokens if available.                            | Permits CLI deployments and reading project domains through the Vercel API. No database URL is passed to deploy jobs; Vercel applies its own scoped runtime secrets remotely.                          |
 | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | Variables in each deploy GitHub Environment.                                                                                                          | Bind the CLI to the existing Vercel project. Verify IDs privately before enabling the pipeline.                                                                                                        |
-| `VERCEL_PREVIEW_ALIAS`               | Variable in GitHub **`development-deploy`** only, containing the Preview hostname without `https://`.                                                 | After a successful CLI Preview deployment, assign this stable `*.vercel.app` alias to that deployment. Must match Preview `BETTER_AUTH_URL` host.                                                      |
-| `VERCEL_PRODUCTION_HOST`             | Variable in GitHub **`development-deploy`** only, containing the Production hostname without `https://`.                                              | Refuse to assign the Preview alias if it equals the Production host. Set it from the Vercel Production domain, matching `VERCEL_PROJECT_PRODUCTION_URL`.                                               |
+| `VERCEL_PREVIEW_ALIAS`               | Variable in GitHub **`development-deploy`** only, containing the Preview hostname without `https://`.                                                 | Confirm it is not a project Production domain, then assign it after a successful CLI Preview deployment. Must match Preview `BETTER_AUTH_URL` host.                                                    |
+| `VERCEL_PRODUCTION_HOST`             | Variable in GitHub **`production-deploy`** only, containing the Production hostname without `https://`.                                               | Confirm it is a verified project Production domain without a redirect before deploying. Must match Production `BETTER_AUTH_URL` and `VERCEL_PROJECT_PRODUCTION_URL`.                                   |
 | Credential encryption master key     | Future RUN-21 Vercel Production Secret and a separately generated Preview Secret, with versioned key management.                                      | No key is wired into current code. This acceptance item remains unverified until RUN-21. Never add it to GitHub or source.                                                                             |
 
 The production migration role is the **one approved exception** to the earlier
@@ -91,7 +91,13 @@ for CLI issuance, ADMIN bootstrap, and legacy Clerk identity remapping.
    Set Preview `BETTER_AUTH_URL` to `https://` plus the hostname in
    `VERCEL_PREVIEW_ALIAS`, and Production `BETTER_AUTH_URL` to the project's
    Production `*.vercel.app` domain. Set `VERCEL_PRODUCTION_HOST` in the
-   development-deploy GitHub Environment to that same Production hostname.
+   production-deploy GitHub Environment to that same Production hostname.
+   Each deploy job reads the project's Production domains through the
+   [Vercel API](https://vercel.com/docs/rest-api/projects/retrieve-project-domains-by-project-by-id-or-name)
+   before deployment. The development job rejects a matching Preview alias;
+   the production job requires its configured host in that list, verified and
+   without a redirect. An API failure or incomplete list stops deployment.
+   Each job accesses only its own Environment's variables.
    Enable system environment variables so `VERCEL_PROJECT_PRODUCTION_URL` is
    available; invitation creation requires it on deployed apps and rejects
    Preview and Production URL mismatches. Confirm the alias belongs to this Vercel
@@ -127,8 +133,9 @@ and [branch protection](https://docs.github.com/en/repositories/configuring-bran
    job fails, no new Preview deployment starts. Inspect the successful Vercel
    deployment's source SHA and Preview target, then check `/status` and the
    [private read-only database check](database-operations.md#verify-deployed-environments-manually).
-   The deploy job captures the CLI deployment URL and runs `vercel alias set`
-   only after `vercel deploy` succeeds. It does not enable native Git deploys.
+   The deploy job checks that the Preview alias is not a Production domain,
+   captures the CLI deployment URL, and runs `vercel alias set` only after
+   `vercel deploy` succeeds. It does not enable native Git deploys.
    In the Vercel deployment's Domains view, verify `VERCEL_PREVIEW_ALIAS`
    resolves to this deployment, then open
    `https://<VERCEL_PREVIEW_ALIAS>/sign-up` and confirm the current signup page
@@ -140,8 +147,10 @@ and [branch protection](https://docs.github.com/en/repositories/configuring-bran
    working alias in place and fail the workflow.
 3. After Preview is healthy, merge the release PR into `main`. The production
    migration job uses only the production direct role and marker. If it fails,
-   no new Production deployment starts; the old version stays live. If it
-   succeeds, inspect the Vercel deployment's source SHA, Production target,
+   no new Production deployment starts; the old version stays live. The deploy
+   job also checks that `VERCEL_PRODUCTION_HOST` is a verified project
+   Production domain without a redirect.
+   If it succeeds, inspect the Vercel deployment's source SHA, Production target,
    domain assignment, `/status`, private database check, and a normal
    authenticated application path. Generate one Production invitation and
    privately confirm its origin is the Production domain and its `/sign-up`

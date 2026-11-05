@@ -15,6 +15,10 @@ vi.mock('@/server/auth/current-user', () => ({
   AccountUnavailableError: class AccountUnavailableError extends Error {},
   getCurrentUser,
 }))
+vi.mock('@/server/auth/invitation-management', () => ({
+  listInvitations: vi.fn(async () => []),
+  listRegisteredUsers: vi.fn(async () => []),
+}))
 const { notFound } = vi.hoisted(() => ({
   notFound: vi.fn(() => {
     throw new Error('Not found')
@@ -111,11 +115,12 @@ describe('authenticated /app routes', () => {
     expect(notFound).toHaveBeenCalledOnce()
   })
 
-  it('allows an admin to reach the admin placeholder', async () => {
+  it('allows an admin to reach the admin management page', async () => {
     getCurrentUser.mockResolvedValue({ id: 'admin-a', role: 'ADMIN', email: 'admin@example.test' })
     const result = await AdminPage()
     expect(result.type).toBe(AppShell)
-    expect(result.props.children.props.title).toBe('Admin')
+    expect(result.props.children.props.invitations).toEqual([])
+    expect(result.props.children.props.users).toEqual([])
   })
 
   it('rechecks the session when rendering the dashboard again', async () => {

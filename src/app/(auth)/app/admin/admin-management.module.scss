@@ -1,0 +1,90 @@
+.page {
+  display: grid;
+  gap: 24px;
+}
+
+.page h1,
+.page h2,
+.page p {
+  margin: 0;
+}
+
+.page h1,
+.page h2 {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  line-height: var(--type-leading-tight);
+}
+
+.page h1 {
+  font-size: var(--type-size-page);
+}
+.page h2 {
+  font-size: var(--type-size-card);
+}
+
+.page header,
+.section,
+.form,
+.created {
+  display: grid;
+  gap: 12px;
+}
+
+.page p,
+.details span {
+  color: var(--color-text-muted);
+}
+
+.section {
+  padding: clamp(16px, 3vw, 24px);
+  min-width: 0;
+}
+
+.form {
+  justify-items: start;
+}
+.form > div {
+  width: min(100%, 480px);
+}
+
+.created {
+  justify-items: start;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.created input {
+  font-family: var(--font-mono);
+  font-size: var(--type-size-label);
+}
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+
+.details {
+  display: grid;
+  gap: 2px;
+  min-width: min(100%, 220px);
+  flex: 1 1 220px;
+}
+
+.details span {
+  font-size: var(--type-size-caption);
+}

@@ -23,7 +23,11 @@ describe('GET /api/me', () => {
   })
 
   it('returns only the active internal user identity without caching', async () => {
-    getCurrentUserMock.mockResolvedValue({ id: 'internal-a', role: 'USER' })
+    getCurrentUserMock.mockResolvedValue({
+      id: 'internal-a',
+      role: 'USER',
+      email: 'a@example.test',
+    })
 
     const response = await GET()
     expect(response.status).toBe(200)

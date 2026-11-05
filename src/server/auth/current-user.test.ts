@@ -37,11 +37,29 @@ describe('getCurrentUser', () => {
       .mockResolvedValueOnce({ session: { id: 's-a' }, user: { id: 'a', email: 'a@example.test' } })
       .mockResolvedValueOnce({ session: { id: 's-b' }, user: { id: 'b', email: 'b@example.test' } })
     upsert
-      .mockResolvedValueOnce({ id: 'internal-a', role: 'USER', status: 'ACTIVE' })
-      .mockResolvedValueOnce({ id: 'internal-b', role: 'USER', status: 'ACTIVE' })
+      .mockResolvedValueOnce({
+        id: 'internal-a',
+        role: 'USER',
+        email: 'a@example.test',
+        status: 'ACTIVE',
+      })
+      .mockResolvedValueOnce({
+        id: 'internal-b',
+        role: 'USER',
+        email: 'b@example.test',
+        status: 'ACTIVE',
+      })
 
-    expect(await getCurrentUser()).toEqual({ id: 'internal-a', role: 'USER' })
-    expect(await getCurrentUser()).toEqual({ id: 'internal-b', role: 'USER' })
+    expect(await getCurrentUser()).toEqual({
+      id: 'internal-a',
+      role: 'USER',
+      email: 'a@example.test',
+    })
+    expect(await getCurrentUser()).toEqual({
+      id: 'internal-b',
+      role: 'USER',
+      email: 'b@example.test',
+    })
     expect(upsert.mock.calls.map(([query]) => query.create)).toEqual([
       { authSubject: 'a', email: 'a@example.test', role: 'USER' },
       { authSubject: 'b', email: 'b@example.test', role: 'USER' },
@@ -53,8 +71,17 @@ describe('getCurrentUser', () => {
       session: { id: 's' },
       user: { id: 'a', email: 'a@example.test' },
     })
-    findUnique.mockResolvedValueOnce({ id: 'internal-a', role: 'ADMIN', status: 'ACTIVE' })
-    expect(await getCurrentUser()).toEqual({ id: 'internal-a', role: 'ADMIN' })
+    findUnique.mockResolvedValueOnce({
+      id: 'internal-a',
+      role: 'ADMIN',
+      email: 'a@example.test',
+      status: 'ACTIVE',
+    })
+    expect(await getCurrentUser()).toEqual({
+      id: 'internal-a',
+      role: 'ADMIN',
+      email: 'a@example.test',
+    })
     findUnique.mockResolvedValueOnce({ id: 'internal-a', role: 'ADMIN', status: 'SUSPENDED' })
     await expect(getCurrentUser()).rejects.toBeInstanceOf(AccountUnavailableError)
     expect(upsert).not.toHaveBeenCalled()
@@ -65,9 +92,12 @@ describe('getCurrentUser', () => {
       session: { id: 's' },
       user: { id: 'a', email: 'a@example.test' },
     })
-    findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'internal-a', role: 'ADMIN', status: 'ACTIVE' })
+    findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 'internal-a',
+      role: 'ADMIN',
+      email: 'a@example.test',
+      status: 'ACTIVE',
+    })
     upsert.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('duplicate auth subject', {
         code: 'P2002',
@@ -75,7 +105,11 @@ describe('getCurrentUser', () => {
       }),
     )
 
-    await expect(getCurrentUser()).resolves.toEqual({ id: 'internal-a', role: 'ADMIN' })
+    await expect(getCurrentUser()).resolves.toEqual({
+      id: 'internal-a',
+      role: 'ADMIN',
+      email: 'a@example.test',
+    })
     expect(findFirst).toHaveBeenCalledWith({
       where: {
         email: { equals: 'a@example.test', mode: 'insensitive' },

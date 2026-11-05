@@ -224,6 +224,16 @@ a:active {
   flex-direction: column;
 }
 
+.site-shell:has(> main > [data-app-shell]) > .site-header,
+.site-shell:has(> main > [data-app-shell]) > .site-footer {
+  display: none;
+}
+
+.site-shell > main:has(> [data-app-shell]) {
+  width: 100%;
+  max-width: none;
+}
+
 .auth-page {
   display: grid;
   justify-items: start;
@@ -236,6 +246,15 @@ a:active {
 .auth-page h1,
 .auth-page p {
   margin: 0;
+}
+.app-page {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.app-page h1 {
+  margin: 0;
+  font-size: var(--type-size-page);
 }
 .auth-form {
   display: grid;

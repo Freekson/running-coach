@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const user = await getCurrentUser()
     if (!user) return new Response(null, { status: 401, headers: privateHeaders })
-    return Response.json(user, { headers: privateHeaders })
+    return Response.json({ id: user.id, role: user.role }, { headers: privateHeaders })
   } catch (error) {
     if (error instanceof AccountUnavailableError)
       return new Response(null, { status: 403, headers: privateHeaders })

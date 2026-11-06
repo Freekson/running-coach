@@ -16,6 +16,8 @@
   --color-success: #80cdb0;
   --color-warning: #f5cb82;
   --color-error: #f4a8a1;
+  --color-admin: #d4b0f9;
+  --color-admin-surface: #342b48;
   --icon-gap: 8px;
   --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
   --type-size-hero: clamp(2.25rem, 4vw, 4rem);
@@ -23,8 +25,10 @@
   --type-size-card: 1.125rem;
   --type-size-body: 1rem;
   --type-size-body-large: clamp(1.125rem, 2vw, 1.375rem);
+  --type-size-table-primary: 0.875rem;
   --type-size-label: 0.8125rem;
   --type-size-caption: 0.8125rem;
+  --type-size-filter: 0.75rem;
   --type-weight-regular: 400;
   --type-weight-medium: 500;
   --type-weight-semibold: 600;
@@ -80,8 +84,8 @@ a:active {
   align-items: center;
   justify-content: center;
   gap: var(--icon-gap);
-  min-height: 44px;
-  padding: 16px 22px;
+  min-height: 40px;
+  padding: 9px 16px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: var(--color-primary);
@@ -166,8 +170,8 @@ a:active {
 
 .field {
   width: 100%;
-  min-height: 44px;
-  padding: 12px 14px;
+  min-height: 40px;
+  padding: 7px 12px;
   border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   background: var(--color-surface);
@@ -220,6 +224,12 @@ a:active {
 .badge--error {
   color: var(--color-error);
   background: color-mix(in srgb, var(--color-error) 12%, var(--color-surface-raised));
+}
+
+.badge--admin {
+  gap: 4px;
+  background: var(--color-admin-surface);
+  color: var(--color-admin);
 }
 
 .site-shell {

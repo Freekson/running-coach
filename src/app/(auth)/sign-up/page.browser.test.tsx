@@ -352,3 +352,32 @@ it('checks invitation status after a lost signup response before offering anothe
   expect(host.querySelector('a[href="/sign-in"]')).not.toBeNull()
   expect(fetchMock).toHaveBeenCalledTimes(3)
 })
+
+it('shows loading and prevents a second registration while the request is pending', async () => {
+  const fetchMock = await renderWithInvite()
+  let finish: ((response: Response) => void) | undefined
+  fetchMock.mockImplementationOnce(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve
+      }),
+  )
+  for (const [name, value] of Object.entries({
+    name: 'Runner',
+    email: 'new@example.test',
+    password: 'long-enough-password',
+  })) {
+    host.querySelector<HTMLInputElement>(`[name="${name}"]`)!.value = value
+  }
+  const form = host.querySelector('form')!
+  const submit = () => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  act(submit)
+  const button = host.querySelector<HTMLButtonElement>('button[type="submit"]')!
+  expect(button.disabled).toBe(true)
+  expect(button.getAttribute('aria-busy')).toBe('true')
+  expect(button.querySelector('.button__spinner')).not.toBeNull()
+  act(submit)
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  await act(async () => finish?.(new Response(null, { status: 429 })))
+  expect(button.disabled).toBe(false)
+})

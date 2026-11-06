@@ -29,6 +29,7 @@ import {
   consumeInvitation,
   invitationStatus,
   recoverInvitationAfterFailedSignup,
+  releaseInvitation,
 } from './invitations'
 import {
   allowInvitationStatusCheck,
@@ -39,9 +40,15 @@ import {
   createInvitation,
   listInvitations,
   revokeInvitation,
+  regenerateInvitation,
 } from './invitation-management'
 import { POST } from '@/app/api/auth/[...all]/route'
 import { GET as getMe } from '@/app/api/me/route'
+
+function revisionForToken(token: string) {
+  const hash = createHash('sha256').update(token).digest('hex')
+  return createHash('sha256').update(hash).digest('hex')
+}
 
 describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () => {
   let prisma: PrismaClient
@@ -294,7 +301,8 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
         data: { claimedAt: new Date(Date.now() - 3 * 60_000) },
       })
       expect(
-        (await listInvitations()).find((item) => item.id === claimedInvitation.id)?.status,
+        (await listInvitations()).invitations.find((item) => item.id === claimedInvitation.id)
+          ?.status,
       ).toBe('processing')
       expect(await checkInvitationStatus(claimedInvitation.id)).toBe('pending')
       expect(await invitationStatus(abandonedToken)).toBe('valid')
@@ -389,7 +397,9 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
       if (!stored) throw new Error('Expected a stored invitation')
       expect(stored.tokenHash).toBe(createHash('sha256').update(firstToken).digest('hex'))
       expect(stored.expiresAt.getTime() - Date.now()).toBeGreaterThan(6 * 24 * 60 * 60 * 1000)
-      expect((await listInvitations()).find((invite) => invite.id === first.id)).toMatchObject({
+      expect(
+        (await listInvitations()).invitations.find((invite) => invite.id === first.id),
+      ).toMatchObject({
         label: 'Integration friend',
         status: 'pending',
       })
@@ -402,6 +412,44 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
       expect((await signup(replacementToken, `replay-replacement-${email}`)).status).toBe(403)
     } finally {
       await prisma.authInvitation.deleteMany({ where: { id: { in: [first.id, replacement.id] } } })
+    }
+  }, 30_000)
+
+  it('rotates a pending token in place and rejects the previous token', async () => {
+    const original = await createInvitation('Rotation')
+    const oldToken = new URL(original.url).hash.slice('#token='.length)
+    try {
+      const revision = revisionForToken(oldToken)
+      const rotated = await regenerateInvitation(original.id, revision)
+      expect(rotated?.id).toBe(original.id)
+      expect(rotated?.expiresAt).toEqual(original.expiresAt)
+      if (!rotated) throw new Error('Expected a regenerated link')
+      const freshToken = new URL(rotated.url).hash.slice('#token='.length)
+      expect(await consumeInvitation(oldToken, `old-${email}`)).toBeNull()
+      const claim = await consumeInvitation(freshToken, `fresh-${email}`)
+      expect(claim).not.toBeNull()
+      expect(await regenerateInvitation(original.id, revision)).toBeNull()
+      if (claim) await releaseInvitation(claim)
+    } finally {
+      await prisma.authInvitation.deleteMany({ where: { id: original.id } })
+    }
+  }, 30_000)
+
+  it('lets only one concurrent regeneration replace a pending token', async () => {
+    const original = await createInvitation('Concurrent rotation')
+    const revision = revisionForToken(new URL(original.url).hash.slice('#token='.length))
+    try {
+      const results = await Promise.all([
+        regenerateInvitation(original.id, revision),
+        regenerateInvitation(original.id, revision),
+      ])
+      expect(results.filter(Boolean)).toHaveLength(1)
+      const winner = results.find(Boolean)
+      if (!winner) throw new Error('Expected one winning regeneration')
+      const token = new URL(winner.url).hash.slice('#token='.length)
+      expect(await invitationStatus(token)).toBe('valid')
+    } finally {
+      await prisma.authInvitation.deleteMany({ where: { id: original.id } })
     }
   }, 30_000)
 

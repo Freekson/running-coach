@@ -6,6 +6,7 @@ const {
   listInvitations,
   checkInvitationStatus,
   revokeInvitation,
+  regenerateInvitation,
   listRegisteredUsers,
 } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
@@ -13,6 +14,7 @@ const {
   listInvitations: vi.fn(),
   checkInvitationStatus: vi.fn(),
   revokeInvitation: vi.fn(),
+  regenerateInvitation: vi.fn(),
   listRegisteredUsers: vi.fn(),
 }))
 vi.mock('server-only', () => ({}))
@@ -25,12 +27,14 @@ vi.mock('@/server/auth/invitation-management', () => ({
   listInvitations,
   checkInvitationStatus,
   revokeInvitation,
+  regenerateInvitation,
   listRegisteredUsers,
 }))
 
 import { GET as getInvitations, POST as createInvite } from './invitations/route'
 import { DELETE as revokeInvite } from './invitations/[id]/route'
 import { POST as checkInvite } from './invitations/[id]/status/route'
+import { POST as regenerateInvite } from './invitations/[id]/regenerate/route'
 import { GET as getUsers } from './users/route'
 
 const id = '3b759a5a-6069-4f03-b17c-75111709f039'
@@ -50,9 +54,15 @@ const context = { params: Promise.resolve({ id }) } as Parameters<typeof revokeI
 beforeEach(() => {
   vi.clearAllMocks()
   getCurrentUser.mockResolvedValue({ id: 'admin-a', role: 'ADMIN' })
-  listInvitations.mockResolvedValue([])
-  listRegisteredUsers.mockResolvedValue([])
+  listInvitations.mockResolvedValue({
+    invitations: [],
+    page: 1,
+    total: 0,
+    counts: { all: 0, pending: 0, processing: 0, used: 0, revoked: 0, expired: 0 },
+  })
+  listRegisteredUsers.mockResolvedValue({ users: [], page: 1, total: 0 })
   revokeInvitation.mockResolvedValue(true)
+  regenerateInvitation.mockResolvedValue(null)
   checkInvitationStatus.mockResolvedValue('pending')
 })
 
@@ -63,11 +73,27 @@ describe('admin API authorization', () => {
   ] as const) {
     it(`rejects ${name} on every admin API`, async () => {
       getCurrentUser.mockResolvedValue(user)
-      expect((await getInvitations()).status).toBe(status)
+      expect(
+        (await getInvitations(new Request('https://coach.example.test/api/admin/invitations')))
+          .status,
+      ).toBe(status)
       expect((await createInvite(createRequest())).status).toBe(status)
       expect((await revokeInvite(deleteRequest(), context)).status).toBe(status)
+      expect(
+        (
+          await regenerateInvite(
+            new Request(`${url}/regenerate`, {
+              method: 'POST',
+              headers: { Origin: 'https://coach.example.test' },
+            }),
+            context,
+          )
+        ).status,
+      ).toBe(status)
       expect((await checkInvite(checkRequest(), context)).status).toBe(status)
-      expect((await getUsers()).status).toBe(status)
+      expect(
+        (await getUsers(new Request('https://coach.example.test/api/admin/users'))).status,
+      ).toBe(status)
       expect(createInvitation).not.toHaveBeenCalled()
       expect(listInvitations).not.toHaveBeenCalled()
       expect(revokeInvitation).not.toHaveBeenCalled()
@@ -82,12 +108,17 @@ describe('admin API authorization', () => {
       url: 'https://coach.example.test/sign-up#token=secret',
       expiresAt: new Date('2026-11-12T00:00:00Z'),
     })
-    listInvitations.mockResolvedValue([{ id, label: 'Friend', status: 'pending' }])
-    expect((await createInvite(createRequest())).status).toBe(201)
-    const listed = await getInvitations()
-    expect(await listed.json()).toEqual({
+    listInvitations.mockResolvedValue({
       invitations: [{ id, label: 'Friend', status: 'pending' }],
+      page: 1,
+      total: 1,
+      counts: { all: 1, pending: 1, processing: 0, used: 0, revoked: 0, expired: 0 },
     })
+    expect((await createInvite(createRequest())).status).toBe(201)
+    const listed = await getInvitations(
+      new Request('https://coach.example.test/api/admin/invitations'),
+    )
+    expect((await listed.json()).invitations).toEqual([{ id, label: 'Friend', status: 'pending' }])
     expect(listed.headers.get('cache-control')).toContain('no-store')
     expect(createInvitation).toHaveBeenCalledWith('Friend')
   })
@@ -127,6 +158,62 @@ describe('admin API authorization', () => {
   it('reports a revocation conflict when the link is no longer pending', async () => {
     revokeInvitation.mockResolvedValue(false)
     expect((await revokeInvite(deleteRequest(), context)).status).toBe(409)
+  })
+
+  it('validates pagination and applies filters server-side', async () => {
+    const inviteUrl = 'https://coach.example.test/api/admin/invitations'
+    const usersUrl = 'https://coach.example.test/api/admin/users'
+    expect((await getInvitations(new Request(`${inviteUrl}?page=0`))).status).toBe(400)
+    expect((await getInvitations(new Request(`${inviteUrl}?status=unknown`))).status).toBe(400)
+    expect((await getUsers(new Request(`${usersUrl}?page=NaN`))).status).toBe(400)
+    await getInvitations(new Request(`${inviteUrl}?page=3&status=expired`))
+    await getUsers(new Request(`${usersUrl}?page=2`))
+    expect(listInvitations).toHaveBeenCalledWith(3, 'expired')
+    expect(listRegisteredUsers).toHaveBeenCalledWith(2)
+  })
+
+  it('returns a rotated link only from the protected mutation', async () => {
+    const revision = 'a'.repeat(64)
+    const request = () =>
+      new Request(`${url}/regenerate`, {
+        method: 'POST',
+        headers: { Origin: 'https://coach.example.test', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revision }),
+      })
+    expect((await regenerateInvite(request(), context)).status).toBe(409)
+    regenerateInvitation.mockResolvedValue({
+      id,
+      url: 'https://coach.example.test/sign-up#token=fresh',
+      expiresAt: new Date(),
+    })
+    const result = await regenerateInvite(request(), context)
+    expect(result.status).toBe(200)
+    expect((await result.json()).url).toContain('#token=fresh')
+    expect(result.headers.get('cache-control')).toContain('no-store')
+    expect(regenerateInvitation).toHaveBeenCalledWith(id, revision)
+    expect(
+      (
+        await regenerateInvite(
+          new Request(`${url}/regenerate`, {
+            method: 'POST',
+            headers: { Origin: 'https://coach.example.test' },
+            body: '{}',
+          }),
+          context,
+        )
+      ).status,
+    ).toBe(400)
+    expect(
+      (
+        await regenerateInvite(
+          new Request(`${url}/regenerate`, {
+            method: 'POST',
+            headers: { Origin: 'https://evil.example' },
+          }),
+          context,
+        )
+      ).status,
+    ).toBe(403)
   })
 
   it('checks only a validated invitation ID and returns private status', async () => {

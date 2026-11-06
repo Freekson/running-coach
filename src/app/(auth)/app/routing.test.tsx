@@ -16,8 +16,13 @@ vi.mock('@/server/auth/current-user', () => ({
   getCurrentUser,
 }))
 vi.mock('@/server/auth/invitation-management', () => ({
-  listInvitations: vi.fn(async () => []),
-  listRegisteredUsers: vi.fn(async () => []),
+  listInvitations: vi.fn(async () => ({
+    invitations: [],
+    page: 1,
+    total: 0,
+    counts: { all: 0, pending: 0, processing: 0, used: 0, revoked: 0, expired: 0 },
+  })),
+  listRegisteredUsers: vi.fn(async () => ({ users: [], page: 1, total: 0 })),
 }))
 const { notFound } = vi.hoisted(() => ({
   notFound: vi.fn(() => {

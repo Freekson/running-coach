@@ -6,10 +6,23 @@ export const runtime = 'nodejs'
 
 const inputSchema = z.object({ label: z.string().trim().max(120).nullable().optional() }).strict()
 
-export async function GET() {
+const querySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  status: z.enum(['all', 'pending', 'processing', 'used', 'revoked', 'expired']).default('all'),
+})
+
+export async function GET(request: Request) {
   const denied = await requireAdmin()
   if (denied) return denied
-  return Response.json({ invitations: await listInvitations() }, { headers: privateHeaders })
+  const url = new URL(request.url)
+  const parsed = querySchema.safeParse({
+    page: url.searchParams.get('page') ?? undefined,
+    status: url.searchParams.get('status') ?? undefined,
+  })
+  if (!parsed.success) return new Response(null, { status: 400 })
+  return Response.json(await listInvitations(parsed.data.page, parsed.data.status), {
+    headers: privateHeaders,
+  })
 }
 
 export async function POST(request: Request) {

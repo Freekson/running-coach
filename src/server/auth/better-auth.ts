@@ -4,6 +4,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { betterAuth } from 'better-auth'
 import type { PrismaClient } from '@prisma/client'
 import { getPrismaClient } from '@/server/db/client'
+import { currentInvitationClaimNonce } from './invitation-claim-context'
 
 export function getTrustedOrigins(baseURL: string): string[] {
   const origins = [new URL(baseURL).origin]
@@ -21,7 +22,23 @@ function createAuth(prisma: PrismaClient, secret: string, baseURL: string) {
     trustedOrigins: getTrustedOrigins(baseURL),
     rateLimit: { enabled: true, storage: 'database', modelName: 'authRateLimit' },
     emailAndPassword: { enabled: true, minPasswordLength: 12 },
-    user: { modelName: 'authUser' },
+    user: {
+      modelName: 'authUser',
+      additionalFields: {
+        invitationClaimNonce: { type: 'string', required: false, input: false, returned: false },
+      },
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          async before(user, context) {
+            const nonce = currentInvitationClaimNonce()
+            if (nonce) return { data: { ...user, invitationClaimNonce: nonce } }
+            if (context?.path === '/sign-up/email') return false
+          },
+        },
+      },
+    },
     session: { modelName: 'authSession' },
     account: { modelName: 'authAccount' },
     verification: { modelName: 'authVerification' },

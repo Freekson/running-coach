@@ -11,13 +11,15 @@ vi.mock('@/components/ui/Toast', () => ({ useToast: () => mocks.notify }))
 
 const createdAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-const invitations = (['pending', 'used', 'revoked', 'expired'] as const).map((status) => ({
-  id: status,
-  label: `${status} invite`,
-  createdAt,
-  expiresAt: status === 'expired' ? createdAt : expiresAt,
-  status,
-}))
+const invitations = (['pending', 'processing', 'used', 'revoked', 'expired'] as const).map(
+  (status) => ({
+    id: status,
+    label: `${status} invite`,
+    createdAt,
+    expiresAt: status === 'expired' ? createdAt : expiresAt,
+    status,
+  }),
+)
 
 type Invitation = ComponentProps<typeof AdminManagement>['invitations'][number]
 
@@ -87,6 +89,10 @@ it('shows distinct invitation statuses, local dates, and revoke only for pending
         className: expect.stringContaining('badge--warning'),
       }),
       expect.objectContaining({
+        label: 'Processing',
+        className: expect.stringContaining('badge--warning'),
+      }),
+      expect.objectContaining({
         label: 'Used',
         className: expect.stringContaining('badge--success'),
       }),
@@ -110,19 +116,41 @@ it('shows distinct invitation statuses, local dates, and revoke only for pending
   expect(host.textContent).toContain('Active')
 })
 
+it('can recheck a processing invitation and revoke it after its claim is released', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ status: 'pending' }))
+  vi.stubGlobal('fetch', fetchMock)
+  renderAdmin([invitations[1]])
+  expect(host.querySelector('button[aria-label^="Revoke"]')).toBeNull()
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('button[aria-label^="Check status"]')?.click(),
+  )
+  expect(host.textContent).toContain('Pending')
+  expect(host.querySelector('button[aria-label^="Revoke"]')).not.toBeNull()
+  expect(fetchMock).toHaveBeenCalledWith('/api/admin/invitations/processing/status', {
+    method: 'POST',
+    cache: 'no-store',
+  })
+})
+
 it('filters the loaded invitations with effective statuses and useful empty states', async () => {
   renderAdmin([
     ...invitations,
     { ...invitations[0], id: 'expired-pending', label: 'late invite', expiresAt: createdAt },
   ])
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
-  expect(filterButton('All')?.textContent).toContain('5')
+  expect(filterButton('All')?.textContent).toContain('6')
   expect(filterButton('Pending')?.textContent).toContain('1')
+  expect(filterButton('Processing')?.textContent).toContain('1')
   expect(filterButton('Expired')?.textContent).toContain('2')
   act(() => filterButton('Expired')?.click())
   expect(filterButton('Expired')?.getAttribute('aria-pressed')).toBe('true')
   expect(invitationRows()).toHaveLength(2)
   expect(host.textContent).toContain('late invite')
+  expect(host.querySelector('button[aria-label^="Revoke"]')).toBeNull()
+
+  act(() => filterButton('Processing')?.click())
+  expect(invitationRows()).toHaveLength(1)
+  expect(invitationRows()[0].textContent).toContain('processing invite')
   expect(host.querySelector('button[aria-label^="Revoke"]')).toBeNull()
 
   act(() => filterButton('Used')?.click())
@@ -278,6 +306,24 @@ it('shows conflict feedback without claiming the invite was revoked', async () =
   expect(host.querySelector('button[aria-label^="Check status for"]')).not.toBeNull()
 })
 
+it('uses fresh server data after a claimed invite returns to pending', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(null, { status: 409 }))
+    .mockResolvedValueOnce(Response.json({ status: 'processing' }))
+  vi.stubGlobal('fetch', fetchMock)
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  renderAdmin([invitations[0]])
+
+  await act(async () => revokeButton()?.click())
+  expect(host.textContent).toContain('Processing')
+  expect(revokeButton()).toBeNull()
+
+  renderAdmin([{ ...invitations[0], status: 'pending' }])
+  expect(revokeButton()).not.toBeNull()
+  expect(filterButton('Pending')?.textContent).toContain('1')
+})
+
 it('preserves a filter selected while a status check is in flight', async () => {
   let finishStatusCheck: ((response: Response) => void) | undefined
   const statusCheck = new Promise<Response>((resolve) => {
@@ -289,7 +335,7 @@ it('preserves a filter selected while a status check is in flight', async () => 
     .mockReturnValueOnce(statusCheck)
   vi.stubGlobal('fetch', fetchMock)
   vi.spyOn(window, 'confirm').mockReturnValue(true)
-  renderAdmin([invitations[0], invitations[1]])
+  renderAdmin([invitations[0], invitations[2]])
   act(() => filterButton('Pending')?.click())
 
   await act(async () => {
@@ -313,7 +359,7 @@ it('hides a generated URL when revocation conflicts with a nonpending status', a
       Response.json({ id: 'pending', url: 'one-time-url', expiresAt }, { status: 201 }),
     )
     .mockResolvedValueOnce(new Response(null, { status: 409 }))
-    .mockResolvedValueOnce(Response.json({ invitations: [{ id: 'pending', status: 'used' }] }))
+    .mockResolvedValueOnce(Response.json({ status: 'used' }))
   vi.stubGlobal('fetch', fetchMock)
   vi.spyOn(window, 'confirm').mockReturnValue(true)
   renderAdmin([invitations[0]])
@@ -336,7 +382,7 @@ it('keeps the one-time URL but blocks copying until a retry verifies pending sta
     .mockResolvedValueOnce(Response.json({ id: 'pending', url, expiresAt }, { status: 201 }))
     .mockRejectedValueOnce(new Error('network unavailable'))
     .mockRejectedValueOnce(new Error('status check unavailable'))
-    .mockResolvedValueOnce(Response.json({ invitations: [{ id: 'pending', status: 'pending' }] }))
+    .mockResolvedValueOnce(Response.json({ status: 'pending' }))
   vi.stubGlobal('fetch', fetchMock)
   vi.spyOn(window, 'confirm').mockReturnValue(true)
   renderAdmin([invitations[0]])
@@ -385,6 +431,23 @@ it('marks a pending invite expired and removes revoke when its deadline passes',
   expect(revokeButton()).toBeNull()
 })
 
+it('expires a processing invite after a status check returns it to pending', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(Date.parse(expiresAt) - 1000))
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ status: 'pending' })))
+  renderAdmin([invitations[1]])
+  act(() => vi.advanceTimersByTime(0))
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[aria-label^="Check status for"]')?.click(),
+  )
+  expect(host.querySelector('.badge')?.textContent).toBe('Pending')
+  expect(host.querySelector('button[aria-label^="Revoke"]')).not.toBeNull()
+
+  act(() => vi.advanceTimersByTime(1000))
+  expect(host.querySelector('.badge')?.textContent).toBe('Expired')
+  expect(host.querySelector('button[aria-label^="Revoke"]')).toBeNull()
+})
+
 it.each(['used', 'revoked'] as const)(
   'keeps a confirmed %s status after stale pending props pass their deadline',
   async (status) => {
@@ -393,7 +456,7 @@ it.each(['used', 'revoked'] as const)(
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(null, { status: 409 }))
-      .mockResolvedValueOnce(Response.json({ invitations: [{ id: 'pending', status }] }))
+      .mockResolvedValueOnce(Response.json({ status }))
     vi.stubGlobal('fetch', fetchMock)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderAdmin([invitations[0]])

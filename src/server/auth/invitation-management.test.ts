@@ -1,19 +1,31 @@
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getPrismaClient, create, findMany, updateMany, userFindMany, authUserFindMany } =
-  vi.hoisted(() => ({
-    getPrismaClient: vi.fn(),
-    create: vi.fn(),
-    findMany: vi.fn(),
-    updateMany: vi.fn(),
-    userFindMany: vi.fn(),
-    authUserFindMany: vi.fn(),
-  }))
+const {
+  getPrismaClient,
+  create,
+  findMany,
+  findUnique,
+  updateMany,
+  userFindMany,
+  authUserFindMany,
+  reconcileStaleInvitationClaim,
+} = vi.hoisted(() => ({
+  getPrismaClient: vi.fn(),
+  create: vi.fn(),
+  findMany: vi.fn(),
+  findUnique: vi.fn(),
+  updateMany: vi.fn(),
+  userFindMany: vi.fn(),
+  authUserFindMany: vi.fn(),
+  reconcileStaleInvitationClaim: vi.fn(),
+}))
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/db/client', () => ({ getPrismaClient }))
+vi.mock('./invitations', () => ({ reconcileStaleInvitationClaim }))
 
 import {
+  checkInvitationStatus,
   createInvitation,
   invitationStatus,
   listInvitations,
@@ -25,7 +37,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   process.env.BETTER_AUTH_URL = 'https://coach.example.test'
   getPrismaClient.mockResolvedValue({
-    authInvitation: { create, findMany, updateMany },
+    authInvitation: { create, findMany, findUnique, updateMany },
     user: { findMany: userFindMany },
     authUser: { findMany: authUserFindMany },
   })
@@ -83,7 +95,7 @@ describe('invitation management', () => {
     expect(getPrismaClient).not.toHaveBeenCalled()
   })
 
-  it('lists metadata and computes pending, used, expired, and revoked statuses', async () => {
+  it('lists metadata and distinguishes claimed invitations from revocable pending ones', async () => {
     const future = new Date(Date.now() + 60_000)
     const past = new Date(Date.now() - 60_000)
     findMany.mockResolvedValue([
@@ -94,6 +106,16 @@ describe('invitation management', () => {
         expiresAt: future,
         consumedAt: null,
         revokedAt: null,
+        claimedAt: null,
+      },
+      {
+        id: 'processing',
+        label: null,
+        createdAt: past,
+        expiresAt: future,
+        consumedAt: null,
+        revokedAt: null,
+        claimedAt: past,
       },
       {
         id: 'used',
@@ -102,6 +124,7 @@ describe('invitation management', () => {
         expiresAt: future,
         consumedAt: past,
         revokedAt: null,
+        claimedAt: past,
       },
       {
         id: 'expired',
@@ -110,6 +133,7 @@ describe('invitation management', () => {
         expiresAt: past,
         consumedAt: null,
         revokedAt: null,
+        claimedAt: past,
       },
       {
         id: 'revoked',
@@ -118,25 +142,71 @@ describe('invitation management', () => {
         expiresAt: future,
         consumedAt: null,
         revokedAt: past,
+        claimedAt: null,
       },
     ])
-    expect((await listInvitations()).map((item) => item.status)).toEqual([
+    const listed = await listInvitations()
+    expect(listed.map((item) => item.status)).toEqual([
       'pending',
+      'processing',
       'used',
       'expired',
       'revoked',
     ])
+    expect(listed[1]).not.toHaveProperty('claimedAt')
     expect(findMany.mock.calls[0][0].select).not.toHaveProperty('tokenHash')
-    expect(invitationStatus({ consumedAt: null, revokedAt: null, expiresAt: past })).toBe('expired')
+    expect(
+      invitationStatus({ consumedAt: null, revokedAt: null, claimedAt: null, expiresAt: past }),
+    ).toBe('expired')
+  })
+
+  it('does not run unbounded claim recovery when listing invitations', async () => {
+    const staleAt = new Date(Date.now() - 121_000)
+    const future = new Date(Date.now() + 60_000)
+    const claimed = {
+      id: 'abandoned',
+      label: null,
+      createdAt: staleAt,
+      expiresAt: future,
+      consumedAt: null,
+      revokedAt: null,
+      claimedAt: staleAt,
+    }
+    findMany.mockResolvedValue([claimed])
+
+    expect((await listInvitations()).map((item) => item.status)).toEqual(['processing'])
+    expect(reconcileStaleInvitationClaim).not.toHaveBeenCalled()
+    expect(findMany).toHaveBeenCalledOnce()
+  })
+
+  it('reconciles only the requested invitation before returning its status', async () => {
+    const future = new Date(Date.now() + 60_000)
+    findUnique.mockResolvedValue({
+      claimedAt: null,
+      consumedAt: null,
+      revokedAt: null,
+      expiresAt: future,
+    })
+
+    expect(await checkInvitationStatus('abandoned')).toBe('pending')
+    expect(reconcileStaleInvitationClaim).toHaveBeenCalledWith('abandoned')
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 'abandoned' },
+      select: { consumedAt: true, revokedAt: true, claimedAt: true, expiresAt: true },
+    })
+    findUnique.mockResolvedValueOnce(null)
+    expect(await checkInvitationStatus('missing')).toBeNull()
   })
 
   it('revokes only a still-pending invitation with one conditional update', async () => {
     updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
     expect(await revokeInvitation('invite-id')).toBe(true)
     expect(await revokeInvitation('invite-id')).toBe(false)
+    expect(reconcileStaleInvitationClaim).toHaveBeenCalledWith('invite-id')
     expect(updateMany.mock.calls[0][0]).toMatchObject({
       where: {
         id: 'invite-id',
+        claimedAt: null,
         consumedAt: null,
         revokedAt: null,
         expiresAt: { gt: expect.any(Date) },

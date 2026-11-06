@@ -85,15 +85,16 @@ model User {
 
 // Better Auth owns credentials and sessions; users remains the application identity.
 model AuthUser {
-  id            String        @id
-  name          String
-  email         String        @unique
-  emailVerified Boolean       @default(false)
-  image         String?
-  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime      @updatedAt @db.Timestamptz(6)
-  sessions      AuthSession[]
-  accounts      AuthAccount[]
+  id                   String        @id
+  name                 String
+  email                String        @unique
+  emailVerified        Boolean       @default(false)
+  image                String?
+  createdAt            DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime      @updatedAt @db.Timestamptz(6)
+  invitationClaimNonce String?       @unique @map("invitation_claim_nonce") @db.Uuid
+  sessions             AuthSession[]
+  accounts             AuthAccount[]
 
   @@map("auth_users")
 }
@@ -147,13 +148,16 @@ model AuthVerification {
 }
 
 model AuthInvitation {
-  id         String    @id @default(uuid()) @db.Uuid
-  tokenHash  String    @unique @map("token_hash") @db.Char(64)
-  label      String?   @db.VarChar(120)
-  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
-  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
-  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  tokenHash    String    @unique @map("token_hash") @db.Char(64)
+  label        String?   @db.VarChar(120)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt   DateTime? @map("consumed_at") @db.Timestamptz(6)
+  claimedAt    DateTime? @map("claimed_at") @db.Timestamptz(6)
+  claimedEmail String?   @map("claimed_email") @db.VarChar(320)
+  claimedNonce String?   @unique @map("claimed_nonce") @db.Uuid
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([expiresAt])
   @@map("auth_invitations")
@@ -166,6 +170,7 @@ model AuthRateLimit {
   count       Int
   lastRequest BigInt
 
+  @@index([lastRequest])
   @@map("auth_rate_limits")
 }
 

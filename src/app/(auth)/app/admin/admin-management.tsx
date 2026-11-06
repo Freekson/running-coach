@@ -17,7 +17,7 @@ type Invitation = {
   label: string | null
   createdAt: string
   expiresAt: string
-  status: 'pending' | 'used' | 'expired' | 'revoked'
+  status: 'pending' | 'processing' | 'used' | 'expired' | 'revoked'
 }
 
 type RegisteredUser = {
@@ -30,21 +30,21 @@ type RegisteredUser = {
 
 const invitationTones: Record<Invitation['status'], BadgeProps['tone']> = {
   pending: 'warning',
+  processing: 'warning',
   used: 'success',
   revoked: 'error',
   expired: 'neutral',
 }
 const inviteToastKey = 'admin-invite-activity'
-const invitationListSchema = z.object({
-  invitations: z.array(
-    z.object({ id: z.string(), status: z.enum(['pending', 'used', 'expired', 'revoked']) }),
-  ),
+const invitationStatusSchema = z.object({
+  status: z.enum(['pending', 'processing', 'used', 'expired', 'revoked']),
 })
 type DisplayStatus = Invitation['status'] | 'checking' | 'checking-nonpending'
 type InvitationFilter = 'all' | Invitation['status']
 const invitationFilters: { value: InvitationFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'pending', label: 'Pending' },
+  { value: 'processing', label: 'Processing' },
   { value: 'used', label: 'Used' },
   { value: 'revoked', label: 'Revoked' },
   { value: 'expired', label: 'Expired' },
@@ -93,13 +93,20 @@ export function AdminManagement({
   const [filter, setFilter] = useState<InvitationFilter>('all')
   const filterSelection = useRef(0)
   const [now, setNow] = useState<number | null>(null)
+  const listedInvitations = useRef(invitations)
+  useEffect(() => {
+    if (listedInvitations.current !== invitations) {
+      listedInvitations.current = invitations
+      setStatusOverrides({})
+    }
+  }, [invitations])
   useEffect(() => {
     if (now === null) {
       const timer = setTimeout(() => setNow(Date.now()), 0)
       return () => clearTimeout(timer)
     }
     const pendingExpiries = invitations
-      .filter((invitation) => invitation.status === 'pending')
+      .filter((invitation) => invitation.status === 'pending' || invitation.status === 'processing')
       .map((invitation) => Date.parse(invitation.expiresAt))
     if (newLink) pendingExpiries.push(Date.parse(newLink.expiresAt))
     const nextExpiry = Math.min(...pendingExpiries.filter((expiry) => expiry > now))
@@ -111,11 +118,29 @@ export function AdminManagement({
     return () => clearTimeout(timer)
   }, [invitations, newLink, now])
   function displayStatus(invitation: Invitation): DisplayStatus {
+    if (invitation.status === 'processing') {
+      const confirmedStatus = statusOverrides[invitation.id]
+      if (
+        confirmedStatus &&
+        confirmedStatus !== 'checking' &&
+        confirmedStatus !== 'checking-nonpending'
+      ) {
+        if (
+          confirmedStatus === 'pending' &&
+          now !== null &&
+          Date.parse(invitation.expiresAt) <= now
+        )
+          return 'expired'
+        return confirmedStatus
+      }
+      return now !== null && Date.parse(invitation.expiresAt) <= now ? 'expired' : 'processing'
+    }
     if (invitation.status !== 'pending') return invitation.status
     if (revokedIds.includes(invitation.id)) return 'revoked'
     const confirmedStatus = statusOverrides[invitation.id]
     if (
       confirmedStatus === 'used' ||
+      confirmedStatus === 'processing' ||
       confirmedStatus === 'revoked' ||
       confirmedStatus === 'expired'
     ) {
@@ -132,6 +157,7 @@ export function AdminManagement({
   const filterCounts = {
     all: invitationRows.length,
     pending: invitationRows.filter(({ status }) => status === 'pending').length,
+    processing: invitationRows.filter(({ status }) => status === 'processing').length,
     used: invitationRows.filter(({ status }) => status === 'used').length,
     revoked: invitationRows.filter(({ status }) => status === 'revoked').length,
     expired: invitationRows.filter(({ status }) => status === 'expired').length,
@@ -176,22 +202,17 @@ export function AdminManagement({
     }
   }
 
-  async function checkStatus(
-    id: string,
-    knownNonPending: boolean,
-    filterSelectionAtStart = filterSelection.current,
-  ) {
+  async function checkStatus(id: string, filterSelectionAtStart = filterSelection.current) {
     setCheckingId(id)
     try {
-      const response = await fetch('/api/admin/invitations', { cache: 'no-store' })
+      const response = await fetch(`/api/admin/invitations/${id}/status`, {
+        method: 'POST',
+        cache: 'no-store',
+      })
       if (!response.ok) throw new Error('Status check failed')
-      const parsed = invitationListSchema.safeParse(await response.json())
-      const status = parsed.success
-        ? parsed.data.invitations.find((invitation) => invitation.id === id)?.status
-        : undefined
-      if (!status || (knownNonPending && status === 'pending')) {
-        throw new Error('Invitation status unavailable')
-      }
+      const parsed = invitationStatusSchema.safeParse(await response.json())
+      if (!parsed.success) throw new Error('Invitation status unavailable')
+      const status = parsed.data.status
       setStatusOverrides((current) => ({ ...current, [id]: status }))
       if (status !== 'pending') setNewLink((current) => (current?.id === id ? null : current))
       toast(
@@ -219,7 +240,7 @@ export function AdminManagement({
         setStatusOverrides((current) => ({ ...current, [id]: 'checking-nonpending' }))
         setNewLink((current) => (current?.id === id ? null : current))
         toast('warning', 'This invite is no longer pending. Checking its status.', inviteToastKey)
-        await checkStatus(id, true, filterSelectionAtStart)
+        await checkStatus(id, filterSelectionAtStart)
         return
       }
       if (!response.ok) throw new Error('Revoke failed')
@@ -234,7 +255,7 @@ export function AdminManagement({
     } catch {
       setStatusOverrides((current) => ({ ...current, [id]: 'checking' }))
       toast('warning', 'Could not confirm revocation. Checking the invite status.', inviteToastKey)
-      await checkStatus(id, false, filterSelectionAtStart)
+      await checkStatus(id, filterSelectionAtStart)
     } finally {
       setRevoking(null)
     }
@@ -344,13 +365,13 @@ export function AdminManagement({
                         )}
                       </Button>
                     )}
-                    {checking && (
+                    {(checking || status === 'processing') && (
                       <Button
                         variant="secondary"
                         size="compact"
                         disabled={checkingId !== null}
                         loading={checkingId === invitation.id}
-                        onClick={() => checkStatus(invitation.id, status === 'checking-nonpending')}
+                        onClick={() => checkStatus(invitation.id)}
                         aria-label={`Check status for ${invitation.label || 'unlabeled invite'}`}
                       >
                         Check status

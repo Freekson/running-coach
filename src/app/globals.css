@@ -201,7 +201,7 @@ a:active {
   padding: 4px 10px;
   border-radius: 100px;
   background: var(--color-surface-raised);
-  color: var(--color-primary);
+  color: var(--color-text-muted);
   font-size: var(--type-size-caption);
   font-weight: var(--type-weight-semibold);
   line-height: var(--type-leading-compact);
@@ -209,14 +209,17 @@ a:active {
 
 .badge--success {
   color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface-raised));
 }
 
 .badge--warning {
   color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface-raised));
 }
 
 .badge--error {
   color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 12%, var(--color-surface-raised));
 }
 
 .site-shell {

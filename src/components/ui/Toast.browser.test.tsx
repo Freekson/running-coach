@@ -21,6 +21,20 @@ function Trigger() {
   return <button onClick={() => toast('success', 'Saved')}>Notify</button>
 }
 
+function ReplacementTrigger() {
+  const toast = useToast()
+  return (
+    <>
+      <button onClick={() => toast('success', 'Invite link copied.', 'invite-action')}>
+        Copy feedback
+      </button>
+      <button onClick={() => toast('success', 'Invite revoked.', 'invite-action')}>
+        Revoke feedback
+      </button>
+    </>
+  )
+}
+
 function App() {
   const [, rerender] = useState(0)
   return (
@@ -109,4 +123,27 @@ it('keeps the focused toast when more than three notifications stack', () => {
   expect(host.querySelectorAll('[role="status"]')).toHaveLength(3)
   expect(host.querySelector('[data-toast-id="1"] button')).toBe(focused)
   expect(document.activeElement).toBe(focused)
+})
+
+it('replaces keyed feedback and resets its dismissal timer', () => {
+  vi.useFakeTimers()
+  act(() =>
+    root.render(
+      <ToastProvider>
+        <ReplacementTrigger />
+      </ToastProvider>,
+    ),
+  )
+  const buttons = host.querySelectorAll<HTMLButtonElement>('button')
+  act(() => buttons[0].click())
+  expect(host.querySelectorAll('[data-toast-id]')).toHaveLength(1)
+  act(() => vi.advanceTimersByTime(4000))
+  act(() => buttons[1].click())
+  expect(host.querySelectorAll('[data-toast-id]')).toHaveLength(1)
+  expect(host.textContent).not.toContain('Invite link copied.')
+  expect(host.textContent).toContain('Invite revoked.')
+  act(() => vi.advanceTimersByTime(1000))
+  expect(host.querySelectorAll('[data-toast-id]')).toHaveLength(1)
+  act(() => vi.advanceTimersByTime(4000))
+  expect(host.querySelectorAll('[data-toast-id]')).toHaveLength(0)
 })

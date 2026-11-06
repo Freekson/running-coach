@@ -74,24 +74,24 @@ jobs:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           VERCEL_PREVIEW_ALIAS: ${{ vars.VERCEL_PREVIEW_ALIAS }}
-          VERCEL_TEAM_SCOPE: freeksons-projects
+          VERCEL_TEAM_SLUG: freeksons-projects
         run: |
           node scripts/check-vercel-deploy-domain.mjs preview
           if [[ "$VERCEL_PREVIEW_ALIAS" != 'running-coach-dev-freeksons.vercel.app' ]]; then
             echo 'VERCEL_PREVIEW_ALIAS must be the verified stable Preview domain'
             exit 1
           fi
-          deployment_url="$(vercel deploy --yes --scope "$VERCEL_TEAM_SCOPE" --token "$VERCEL_TOKEN")"
+          echo 'Vercel domain preflight passed; deploying Preview'
+          if ! deployment_url="$(vercel deploy --yes --token "$VERCEL_TOKEN")"; then
+            echo 'Preview deployment failed before alias assignment'
+            exit 1
+          fi
           if [[ ! "$deployment_url" =~ ^https://[a-z0-9-]+\.vercel\.app$ ]]; then
             echo 'Vercel did not return a valid Preview deployment URL'
             exit 1
           fi
           echo 'Vercel returned a valid Preview deployment URL; assigning the configured stable alias'
-          if ! vercel alias set "$deployment_url" "$VERCEL_PREVIEW_ALIAS" --scope "$VERCEL_TEAM_SCOPE" --token "$VERCEL_TOKEN"; then
-            echo 'Preview alias assignment failed after deployment; inspect the current stable Preview URL mapping.'
-            echo 'Check the alias owner and team scope in Vercel before changing the token or hostname.'
-            exit 1
-          fi
+          node scripts/assign-vercel-preview-alias.mjs "$deployment_url"
           node scripts/verify-vercel-preview-alias.mjs "$deployment_url"
 
   migrate-production:

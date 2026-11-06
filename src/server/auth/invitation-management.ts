@@ -3,22 +3,25 @@ import 'server-only'
 import { createHash, randomBytes } from 'node:crypto'
 import { getPrismaClient } from '@/server/db/client'
 import { getCanonicalAppOrigin } from './public-origin'
+import { reconcileStaleInvitationClaim } from './invitations'
 
 const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000
 
-export type InvitationStatus = 'pending' | 'used' | 'expired' | 'revoked'
+export type InvitationStatus = 'pending' | 'processing' | 'used' | 'expired' | 'revoked'
 
 export function invitationStatus(
   invitation: {
     consumedAt: Date | null
     revokedAt: Date | null
+    claimedAt: Date | null
     expiresAt: Date
   },
   now = new Date(),
 ): InvitationStatus {
   if (invitation.consumedAt) return 'used'
   if (invitation.revokedAt) return 'revoked'
-  return invitation.expiresAt <= now ? 'expired' : 'pending'
+  if (invitation.expiresAt <= now) return 'expired'
+  return invitation.claimedAt ? 'processing' : 'pending'
 }
 
 export async function createInvitation(label: string | null) {
@@ -39,7 +42,7 @@ export async function createInvitation(label: string | null) {
 
 export async function listInvitations() {
   const prisma = await getPrismaClient()
-  const invitations = await prisma.authInvitation.findMany({
+  const query = {
     select: {
       id: true,
       label: true,
@@ -47,21 +50,37 @@ export async function listInvitations() {
       expiresAt: true,
       consumedAt: true,
       revokedAt: true,
+      claimedAt: true,
     },
     orderBy: { createdAt: 'desc' },
-  })
+  } as const
+  const invitations = await prisma.authInvitation.findMany(query)
   const now = new Date()
-  return invitations.map(({ consumedAt, revokedAt, ...invitation }) => ({
+  return invitations.map(({ consumedAt, revokedAt, claimedAt, ...invitation }) => ({
     ...invitation,
-    status: invitationStatus({ consumedAt, revokedAt, expiresAt: invitation.expiresAt }, now),
+    status: invitationStatus(
+      { consumedAt, revokedAt, claimedAt, expiresAt: invitation.expiresAt },
+      now,
+    ),
   }))
+}
+
+export async function checkInvitationStatus(id: string): Promise<InvitationStatus | null> {
+  await reconcileStaleInvitationClaim(id)
+  const prisma = await getPrismaClient()
+  const invitation = await prisma.authInvitation.findUnique({
+    where: { id },
+    select: { consumedAt: true, revokedAt: true, claimedAt: true, expiresAt: true },
+  })
+  return invitation ? invitationStatus(invitation) : null
 }
 
 export async function revokeInvitation(id: string): Promise<boolean> {
   const prisma = await getPrismaClient()
+  await reconcileStaleInvitationClaim(id)
   const now = new Date()
   const result = await prisma.authInvitation.updateMany({
-    where: { id, consumedAt: null, revokedAt: null, expiresAt: { gt: now } },
+    where: { id, claimedAt: null, consumedAt: null, revokedAt: null, expiresAt: { gt: now } },
     data: { revokedAt: now },
   })
   return result.count === 1

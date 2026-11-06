@@ -3,7 +3,7 @@ export type ToastTone = 'success' | 'error' | 'warning' | 'info'
 const redirectNotices = {
   'missing-invite': {
     tone: 'error',
-    message: 'Open the full invitation link to create an account.',
+    message: 'An invitation link is required to create an account.',
   },
 } as const satisfies Record<string, { tone: ToastTone; message: string }>
 

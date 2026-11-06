@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto'
 import { config } from 'dotenv'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { PrismaClient } from '@prisma/client'
@@ -25,7 +25,21 @@ if (databaseTestRequested && !runDatabaseTest)
 
 import { getPrismaClient } from '@/server/db/client'
 import { getAuth } from './better-auth'
-import { createInvitation, listInvitations, revokeInvitation } from './invitation-management'
+import {
+  consumeInvitation,
+  invitationStatus,
+  recoverInvitationAfterFailedSignup,
+} from './invitations'
+import {
+  allowInvitationStatusCheck,
+  pruneInvitationStatusRateLimits,
+} from './invitation-status-rate-limit'
+import {
+  checkInvitationStatus,
+  createInvitation,
+  listInvitations,
+  revokeInvitation,
+} from './invitation-management'
 import { POST } from '@/app/api/auth/[...all]/route'
 import { GET as getMe } from '@/app/api/me/route'
 
@@ -39,6 +53,8 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
   let authUserId = ''
   let secondAuthUserId = ''
   let retryAuthUserId = ''
+  let partialAuthUserId = ''
+  let crossInviteAuthUserId = ''
   let replacementAuthUserId = ''
   let ipCounter = 20
 
@@ -52,9 +68,14 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
 
   afterAll(async () => {
     if (!prisma) return
-    const ids = [authUserId, secondAuthUserId, retryAuthUserId, replacementAuthUserId].filter(
-      Boolean,
-    )
+    const ids = [
+      authUserId,
+      secondAuthUserId,
+      retryAuthUserId,
+      partialAuthUserId,
+      crossInviteAuthUserId,
+      replacementAuthUserId,
+    ].filter(Boolean)
     await prisma.user.deleteMany({ where: { authSubject: { in: ids } } })
     await prisma.authUser.deleteMany({ where: { id: { in: ids } } })
     await prisma.authInvitation.deleteMany({ where: { tokenHash } })
@@ -92,9 +113,17 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
     expect(response.status).toBe(200)
     const data = await response.json()
     authUserId = data.user.id
+    expect(data.user).not.toHaveProperty('invitationClaimNonce')
+    expect(
+      (await prisma.authUser.findUnique({ where: { id: authUserId } }))?.invitationClaimNonce,
+    ).toMatch(/^[0-9a-f-]{36}$/)
     expect(data.user.emailVerified).toBe(false)
     cookie = response.headers.get('set-cookie')?.split(';', 1)[0] ?? ''
     expect(cookie).toContain('session_token=')
+    const session = await (
+      await getAuth()
+    ).api.getSession({ headers: new Headers({ Cookie: cookie }) })
+    expect(session?.user).not.toHaveProperty('invitationClaimNonce')
     const invite = await prisma.authInvitation.findUnique({ where: { tokenHash } })
     expect(invite?.consumedAt).not.toBeNull()
     expect(await prisma.authRateLimit.count()).toBeGreaterThan(0)
@@ -118,7 +147,9 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
       data: { tokenHash: retryHash, expiresAt: new Date(Date.now() + 60_000) },
     })
     try {
-      expect((await signup(retryToken, email)).status).toBe(422)
+      const duplicate = await signup(retryToken, email)
+      expect(duplicate.status).toBe(422)
+      expect(duplicate.headers.get('x-running-coach-error')).toBe('duplicate-email')
       expect(
         (await prisma.authInvitation.findUnique({ where: { tokenHash: retryHash } }))?.consumedAt,
       ).toBeNull()
@@ -127,6 +158,199 @@ describe.skipIf(!runDatabaseTest)('Better Auth on development PostgreSQL', () =>
       retryAuthUserId = (await accepted.json()).user.id
     } finally {
       await prisma.authInvitation.deleteMany({ where: { tokenHash: retryHash } })
+    }
+  }, 30_000)
+
+  it('recovers a failed claim only when no account exists', async () => {
+    const recoveryToken = randomBytes(32).toString('hex')
+    const recoveryHash = createHash('sha256').update(recoveryToken).digest('hex')
+    await prisma.authInvitation.create({
+      data: { tokenHash: recoveryHash, expiresAt: new Date(Date.now() + 60_000) },
+    })
+    try {
+      const firstClaim = await consumeInvitation(recoveryToken, `missing-${email}`)
+      if (!firstClaim) throw new Error('Expected a valid invitation claim')
+      expect(await recoverInvitationAfterFailedSignup(firstClaim)).toBe(true)
+      expect(
+        (await prisma.authInvitation.findUnique({ where: { tokenHash: recoveryHash } }))
+          ?.consumedAt,
+      ).toBeNull()
+      const secondClaim = await consumeInvitation(recoveryToken, email)
+      if (!secondClaim) throw new Error('Expected a second invitation claim')
+      expect(await recoverInvitationAfterFailedSignup(secondClaim)).toBe(true)
+      expect(
+        (await prisma.authInvitation.findUnique({ where: { tokenHash: recoveryHash } }))
+          ?.consumedAt,
+      ).toBeNull()
+    } finally {
+      await prisma.authInvitation.deleteMany({ where: { tokenHash: recoveryHash } })
+    }
+  }, 30_000)
+
+  it('removes a partial Better Auth user and makes its invitation reusable', async () => {
+    const recoveryToken = randomBytes(32).toString('hex')
+    const recoveryHash = createHash('sha256').update(recoveryToken).digest('hex')
+    const recoveryEmail = `partial-${email}`
+    await prisma.authInvitation.create({
+      data: { tokenHash: recoveryHash, expiresAt: new Date(Date.now() + 60_000) },
+    })
+    try {
+      const claim = await consumeInvitation(recoveryToken, recoveryEmail)
+      if (!claim) throw new Error('Expected an invitation claim')
+      await prisma.authUser.create({
+        data: {
+          id: randomUUID(),
+          name: 'Partial Athlete',
+          email: recoveryEmail,
+          invitationClaimNonce: claim.nonce,
+        },
+      })
+      expect(await recoverInvitationAfterFailedSignup(claim)).toBe(true)
+      expect(await prisma.authUser.findUnique({ where: { email: recoveryEmail } })).toBeNull()
+      expect(await invitationStatus(recoveryToken)).toBe('valid')
+      const response = await signup(recoveryToken, recoveryEmail)
+      expect(response.status).toBe(200)
+      partialAuthUserId = (await response.json()).user.id
+    } finally {
+      await prisma.authUser.deleteMany({ where: { email: recoveryEmail } })
+      await prisma.authInvitation.deleteMany({ where: { tokenHash: recoveryHash } })
+    }
+  }, 30_000)
+
+  it('does not consume an abandoned invite when another invite created the email', async () => {
+    const firstToken = randomBytes(32).toString('hex')
+    const secondToken = randomBytes(32).toString('hex')
+    const firstHash = createHash('sha256').update(firstToken).digest('hex')
+    const secondHash = createHash('sha256').update(secondToken).digest('hex')
+    const sharedEmail = `cross-invite-${email}`
+    await prisma.authInvitation.createMany({
+      data: [
+        { tokenHash: firstHash, expiresAt: new Date(Date.now() + 60_000) },
+        { tokenHash: secondHash, expiresAt: new Date(Date.now() + 60_000) },
+      ],
+    })
+    try {
+      const firstClaim = await consumeInvitation(firstToken, sharedEmail)
+      if (!firstClaim) throw new Error('Expected first invitation claim')
+      const secondResponse = await signup(secondToken, sharedEmail)
+      expect(secondResponse.status).toBe(200)
+      crossInviteAuthUserId = (await secondResponse.json()).user.id
+      const createdUser = await prisma.authUser.findUnique({ where: { id: crossInviteAuthUserId } })
+      expect(createdUser?.invitationClaimNonce).not.toBe(firstClaim.nonce)
+      await prisma.authInvitation.update({
+        where: { tokenHash: firstHash },
+        data: { claimedAt: new Date(Date.now() - 3 * 60_000) },
+      })
+      expect(await invitationStatus(firstToken)).toBe('valid')
+      expect(await invitationStatus(secondToken)).toBe('used')
+      expect(
+        await prisma.authUser.findUnique({ where: { id: crossInviteAuthUserId } }),
+      ).not.toBeNull()
+    } finally {
+      await prisma.authUser.deleteMany({ where: { email: sharedEmail } })
+      await prisma.authInvitation.deleteMany({
+        where: { tokenHash: { in: [firstHash, secondHash] } },
+      })
+    }
+  }, 30_000)
+
+  it('lets an admin revoke an abandoned claim by invitation ID', async () => {
+    const abandonedToken = randomBytes(32).toString('hex')
+    const abandonedHash = createHash('sha256').update(abandonedToken).digest('hex')
+    const invitation = await prisma.authInvitation.create({
+      data: { tokenHash: abandonedHash, expiresAt: new Date(Date.now() + 60_000) },
+    })
+    try {
+      expect(await consumeInvitation(abandonedToken, `revoke-${email}`)).not.toBeNull()
+      await prisma.authInvitation.update({
+        where: { id: invitation.id },
+        data: { claimedAt: new Date(Date.now() - 3 * 60_000) },
+      })
+      expect(await revokeInvitation(invitation.id)).toBe(true)
+      expect(await invitationStatus(abandonedToken)).toBe('revoked')
+    } finally {
+      await prisma.authInvitation.deleteMany({ where: { id: invitation.id } })
+    }
+  }, 30_000)
+
+  it('reconciles an abandoned claim on a later invitation check', async () => {
+    const abandonedToken = randomBytes(32).toString('hex')
+    const abandonedHash = createHash('sha256').update(abandonedToken).digest('hex')
+    await prisma.authInvitation.create({
+      data: { tokenHash: abandonedHash, expiresAt: new Date(Date.now() + 60_000) },
+    })
+    try {
+      const claim = await consumeInvitation(abandonedToken, `abandoned-${email}`)
+      if (!claim) throw new Error('Expected an invitation claim')
+      const claimedInvitation = await prisma.authInvitation.findUnique({
+        where: { tokenHash: abandonedHash },
+        select: { id: true },
+      })
+      if (!claimedInvitation) throw new Error('Expected a stored invitation')
+      expect(await revokeInvitation(claimedInvitation.id)).toBe(false)
+      expect(await invitationStatus(abandonedToken)).toBe('processing')
+      await prisma.authInvitation.update({
+        where: { tokenHash: abandonedHash },
+        data: { claimedAt: new Date(Date.now() - 3 * 60_000) },
+      })
+      expect(
+        (await listInvitations()).find((item) => item.id === claimedInvitation.id)?.status,
+      ).toBe('processing')
+      expect(await checkInvitationStatus(claimedInvitation.id)).toBe('pending')
+      expect(await invitationStatus(abandonedToken)).toBe('valid')
+      expect(
+        (await prisma.authInvitation.findUnique({ where: { tokenHash: abandonedHash } }))
+          ?.claimedAt,
+      ).toBeNull()
+      expect(await consumeInvitation(abandonedToken, `recovered-${email}`)).not.toBeNull()
+    } finally {
+      await prisma.authInvitation.deleteMany({ where: { tokenHash: abandonedHash } })
+    }
+  }, 30_000)
+
+  it('shares an atomic per-client invitation-status limit across requests', async () => {
+    const clientIp = '192.0.2.245'
+    const otherIp = '192.0.2.246'
+    const secret = process.env.BETTER_AUTH_SECRET
+    if (!secret) throw new Error('Expected Better Auth secret')
+    const rateKey = `running-coach:invitation-status:ip:${createHmac('sha256', secret).update(clientIp).digest('hex')}`
+    const otherKey = `running-coach:invitation-status:ip:${createHmac('sha256', secret).update(otherIp).digest('hex')}`
+    const now = Date.now()
+    try {
+      expect(await allowInvitationStatusCheck(clientIp, now)).toBe(true)
+      await prisma.authRateLimit.update({
+        where: { key: rateKey },
+        data: { count: 60 },
+      })
+      expect(await allowInvitationStatusCheck(clientIp, now + 1)).toBe(false)
+      expect(await allowInvitationStatusCheck(otherIp, now + 1)).toBe(true)
+      expect(await allowInvitationStatusCheck(clientIp, now + 60_001)).toBe(true)
+    } finally {
+      await prisma.authRateLimit.deleteMany({ where: { key: { in: [rateKey, otherKey] } } })
+    }
+  }, 30_000)
+
+  it('prunes only expired invitation-status rate-limit keys', async () => {
+    const oldKey = `running-coach:invitation-status:ip:${randomUUID()}`
+    const recentKey = `running-coach:invitation-status:ip:${randomUUID()}`
+    const otherKey = `better-auth:${randomUUID()}`
+    const now = Date.now()
+    await prisma.authRateLimit.createMany({
+      data: [
+        { id: oldKey, key: oldKey, count: 1, lastRequest: BigInt(now - 2 * 24 * 60 * 60_000) },
+        { id: recentKey, key: recentKey, count: 1, lastRequest: BigInt(now) },
+        { id: otherKey, key: otherKey, count: 1, lastRequest: BigInt(now - 2 * 24 * 60 * 60_000) },
+      ],
+    })
+    try {
+      expect(await pruneInvitationStatusRateLimits(now)).toBeGreaterThanOrEqual(1)
+      expect(await prisma.authRateLimit.findUnique({ where: { key: oldKey } })).toBeNull()
+      expect(await prisma.authRateLimit.findUnique({ where: { key: recentKey } })).not.toBeNull()
+      expect(await prisma.authRateLimit.findUnique({ where: { key: otherKey } })).not.toBeNull()
+    } finally {
+      await prisma.authRateLimit.deleteMany({
+        where: { key: { in: [oldKey, recentKey, otherKey] } },
+      })
     }
   }, 30_000)
 

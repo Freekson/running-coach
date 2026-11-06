@@ -7,7 +7,7 @@ describe('redirect notifications', () => {
   it('maps only allowlisted codes to static copy', () => {
     expect(redirectNotice('missing-invite')).toEqual({
       tone: 'error',
-      message: 'Open the full invitation link to create an account.',
+      message: 'An invitation link is required to create an account.',
     })
     expect(redirectNotice('<script>alert(1)</script>')).toBeNull()
     expect(redirectNotice('__proto__')).toBeNull()

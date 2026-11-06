@@ -32,7 +32,7 @@ export function FormField({ id, label, hint, error, ...inputProps }: FormFieldPr
         aria-describedby={describedBy || undefined}
       />
       {error && (
-        <span className={styles.error} id={`${id}-error`}>
+        <span className={styles.error} id={`${id}-error`} role="alert">
           {error}
         </span>
       )}

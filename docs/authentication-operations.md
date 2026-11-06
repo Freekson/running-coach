@@ -52,7 +52,20 @@ Vercel instances count the same attempts. Vercel supplies the client IP in
 
 For a local development database only, confirm its private
 `database_identity.tier=NON_PRODUCTION`, then run `pnpm db:assert:development`,
-`pnpm db:migrate`, `pnpm db:grant:runtime` and `pnpm db:status`.
+`pnpm db:prepare:run70`, `pnpm db:migrate`, `pnpm db:grant:runtime` and
+`pnpm db:status`. The development and production migration jobs run the same
+RUN-70 preparation after checking database identity. On an existing auth
+database, it adds the nullable claim columns with a two-second lock timeout,
+builds the three indexes with `CREATE INDEX CONCURRENTLY`, verifies their
+definitions, and then uses Prisma `migrate resolve --applied` for the matching
+checked-in migrations. On a fresh database with no auth tables, regular
+`migrate deploy` applies the original migrations before the app receives
+traffic. A failed concurrent build leaves an invalid index; a retry removes
+that known invalid index and rebuilds it. If the migration ledger contains a
+failed record or a schema definition differs, the job stops for operator review.
+The already-applied development migration file remains intact, preserving its
+checksum. Do not run the preparer against production outside the protected
+migration job without checking the selected database and backup first.
 
 ## Create and share an invitation
 
@@ -88,6 +101,8 @@ Neon project, then `pnpm auth:invite --production`. The explicit flag and
 ADMIN users can now open `/app/admin` to generate, copy, list, and revoke
 invitations. New links appear once after generation; the list only shows their
 description, dates, and status. A replacement requires generating a new link.
+An invite shown as `Processing` can be checked individually from the admin
+page; listing invitations does not run claim recovery for every row.
 The same page lists registered users and their roles, including accounts that
 have registered but have not yet signed in to create a local app row. The
 description is only a private note and does not verify recipient identity.

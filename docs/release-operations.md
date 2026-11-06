@@ -27,8 +27,11 @@ no second approval step.
 The migration jobs read `database_identity` with a direct connection before
 applying anything. A development job requires `NON_PRODUCTION`; a production
 job requires `PRODUCTION`. Missing or mismatched markers fail closed. Both jobs
-then run `prisma migrate deploy`, refresh the restricted runtime role's grants,
-and check migration status. The marker guard complements the RUN-15 runtime
+then prepare RUN-70 concurrent indexes on an existing auth database, run
+`prisma migrate deploy`, refresh the restricted runtime role's grants, and
+check migration status. The RUN-70 preparation verifies the schema before
+marking those migrations applied; a fresh database still uses the original
+migration history. The marker guard complements the RUN-15 runtime
 guard and separate Neon projects; it does not replace environment scoping.
 
 ## Secret and environment inventory

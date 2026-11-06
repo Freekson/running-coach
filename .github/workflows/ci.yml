@@ -53,6 +53,7 @@ jobs:
             exit 1
           fi
           pnpm db:assert:development
+          pnpm db:prepare:run70
           pnpm db:migrate
           pnpm db:grant:runtime
           pnpm db:status
@@ -117,6 +118,7 @@ jobs:
             exit 1
           fi
           pnpm db:assert:production
+          pnpm db:prepare:run70
           pnpm db:migrate
           pnpm db:grant:runtime
           pnpm db:status

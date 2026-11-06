@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { Badge } from '@/components/ui/Badge'
+import { z } from 'zod'
+import { Badge, type BadgeProps } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { FormField } from '@/components/ui/FormField'
@@ -26,14 +27,40 @@ type RegisteredUser = {
   createdAt: string
 }
 
-function displayDate(value: string) {
-  return (
-    new Intl.DateTimeFormat('en', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      timeZone: 'UTC',
-    }).format(new Date(value)) + ' UTC'
+const invitationTones: Record<Invitation['status'], BadgeProps['tone']> = {
+  pending: 'warning',
+  used: 'success',
+  revoked: 'error',
+  expired: 'neutral',
+}
+const inviteToastKey = 'admin-invite-activity'
+const invitationListSchema = z.object({
+  invitations: z.array(
+    z.object({ id: z.string(), status: z.enum(['pending', 'used', 'expired', 'revoked']) }),
+  ),
+})
+type DisplayStatus = Invitation['status'] | 'checking' | 'checking-nonpending'
+
+function LocalTime({ value }: { value: string }) {
+  const isBrowser = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
   )
+  const formatted = isBrowser
+    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
+        new Date(value),
+      )
+    : 'Loading local time…'
+  return (
+    <time dateTime={value} title={new Date(value).toISOString()}>
+      {formatted}
+    </time>
+  )
+}
+
+function subscribeNoop() {
+  return () => {}
 }
 
 export function AdminManagement({
@@ -46,9 +73,56 @@ export function AdminManagement({
   const router = useRouter()
   const toast = useToast()
   const [label, setLabel] = useState('')
-  const [newLink, setNewLink] = useState<{ url: string; expiresAt: string } | null>(null)
+  const [newLink, setNewLink] = useState<{ id: string; url: string; expiresAt: string } | null>(
+    null,
+  )
   const [busy, setBusy] = useState(false)
   const [revoking, setRevoking] = useState<string | null>(null)
+  const [revokedIds, setRevokedIds] = useState<string[]>([])
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, DisplayStatus>>({})
+  const [checkingId, setCheckingId] = useState<string | null>(null)
+  const [now, setNow] = useState<number | null>(null)
+  useEffect(() => {
+    if (now === null) {
+      const timer = setTimeout(() => setNow(Date.now()), 0)
+      return () => clearTimeout(timer)
+    }
+    const pendingExpiries = invitations
+      .filter((invitation) => invitation.status === 'pending')
+      .map((invitation) => Date.parse(invitation.expiresAt))
+    if (newLink) pendingExpiries.push(Date.parse(newLink.expiresAt))
+    const nextExpiry = Math.min(...pendingExpiries.filter((expiry) => expiry > now))
+    if (!Number.isFinite(nextExpiry)) return
+    const timer = setTimeout(
+      () => setNow(Date.now()),
+      Math.max(0, Math.min(nextExpiry - Date.now(), 2_147_483_647)),
+    )
+    return () => clearTimeout(timer)
+  }, [invitations, newLink, now])
+  function displayStatus(invitation: Invitation): DisplayStatus {
+    if (invitation.status !== 'pending') return invitation.status
+    if (revokedIds.includes(invitation.id)) return 'revoked'
+    const confirmedStatus = statusOverrides[invitation.id]
+    if (
+      confirmedStatus === 'used' ||
+      confirmedStatus === 'revoked' ||
+      confirmedStatus === 'expired'
+    ) {
+      return confirmedStatus
+    }
+    if (now !== null && Date.parse(invitation.expiresAt) <= now) return 'expired'
+    return confirmedStatus ?? 'pending'
+  }
+
+  const listedNewLink = invitations.find((invitation) => invitation.id === newLink?.id)
+  const newLinkStatus = listedNewLink
+    ? displayStatus(listedNewLink)
+    : newLink && (statusOverrides[newLink.id] ?? 'pending')
+  const showNewLink =
+    newLink &&
+    !revokedIds.includes(newLink.id) &&
+    (newLinkStatus === 'pending' || newLinkStatus === 'checking') &&
+    (now === null || Date.parse(newLink.expiresAt) > now)
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -61,7 +135,7 @@ export function AdminManagement({
         body: JSON.stringify({ label: label.trim() || null }),
       })
       if (!response.ok) throw new Error('Generate failed')
-      const created: { url: string; expiresAt: string } = await response.json()
+      const created: { id: string; url: string; expiresAt: string } = await response.json()
       setNewLink(created)
       setLabel('')
       router.refresh()
@@ -76,15 +150,58 @@ export function AdminManagement({
     }
   }
 
+  async function checkStatus(id: string, knownNonPending: boolean) {
+    setCheckingId(id)
+    try {
+      const response = await fetch('/api/admin/invitations', { cache: 'no-store' })
+      if (!response.ok) throw new Error('Status check failed')
+      const parsed = invitationListSchema.safeParse(await response.json())
+      const status = parsed.success
+        ? parsed.data.invitations.find((invitation) => invitation.id === id)?.status
+        : undefined
+      if (!status || (knownNonPending && status === 'pending')) {
+        throw new Error('Invitation status unavailable')
+      }
+      setStatusOverrides((current) => ({ ...current, [id]: status }))
+      if (status !== 'pending') setNewLink((current) => (current?.id === id ? null : current))
+      toast(
+        status === 'revoked' ? 'success' : 'info',
+        status === 'pending' ? 'Invite is still pending.' : `Invite is ${status}.`,
+        inviteToastKey,
+      )
+    } catch {
+      toast('error', 'Could not verify invite status. Check again before sharing.', inviteToastKey)
+    } finally {
+      setCheckingId(null)
+      router.refresh()
+    }
+  }
+
   async function revoke(id: string) {
+    if (!window.confirm('Revoke this invite link? It will stop working immediately.')) return
     setRevoking(id)
     try {
       const response = await fetch(`/api/admin/invitations/${id}`, { method: 'DELETE' })
+      if (response.status === 409) {
+        setStatusOverrides((current) => ({ ...current, [id]: 'checking-nonpending' }))
+        setNewLink((current) => (current?.id === id ? null : current))
+        toast('warning', 'This invite is no longer pending. Checking its status.', inviteToastKey)
+        await checkStatus(id, true)
+        return
+      }
       if (!response.ok) throw new Error('Revoke failed')
-      toast('success', 'Invite revoked. Generate a new link if you need a replacement.')
+      setRevokedIds((current) => [...current, id])
+      setNewLink((current) => (current?.id === id ? null : current))
+      toast(
+        'success',
+        'Invite revoked. Generate a new link if you need a replacement.',
+        inviteToastKey,
+      )
       router.refresh()
     } catch {
-      toast('error', 'Could not revoke the invite. Refresh and try again.')
+      setStatusOverrides((current) => ({ ...current, [id]: 'checking' }))
+      toast('warning', 'Could not confirm revocation. Checking the invite status.', inviteToastKey)
+      await checkStatus(id, false)
     } finally {
       setRevoking(null)
     }
@@ -112,7 +229,7 @@ export function AdminManagement({
             Generate invite link
           </Button>
         </form>
-        {newLink && (
+        {showNewLink && (
           <div className={styles.created} role="status">
             <strong>New invite link</strong>
             <p>Copy this link now. It cannot be shown again after you leave this page.</p>
@@ -120,9 +237,16 @@ export function AdminManagement({
               id="new-invite-link"
               label="New invite link"
               value={newLink.url}
-              onCopyError={() => toast('error', 'Copy failed. Select and copy the link manually.')}
+              disabled={revoking === newLink.id || newLinkStatus !== 'pending'}
+              onCopySuccess={() => toast('success', 'Invite link copied.', inviteToastKey)}
+              onCopyError={() =>
+                toast('error', 'Copy failed. Select and copy the link manually.', inviteToastKey)
+              }
             />
-            <p>Expires {displayDate(newLink.expiresAt)}</p>
+            {newLinkStatus === 'checking' && <p>Checking this link before it can be shared.</p>}
+            <p>
+              Expires <LocalTime value={newLink.expiresAt} />
+            </p>
           </div>
         )}
       </Card>
@@ -132,38 +256,53 @@ export function AdminManagement({
           <p>No invitations yet.</p>
         ) : (
           <ul className={styles.list}>
-            {invitations.map((invitation) => (
-              <li key={invitation.id} className={styles.row}>
-                <div className={styles.details}>
-                  <strong>{invitation.label || 'Unlabeled invite'}</strong>
-                  <span>Created {displayDate(invitation.createdAt)}</span>
-                  <span>Expires {displayDate(invitation.expiresAt)}</span>
-                </div>
-                <Badge
-                  tone={
-                    invitation.status === 'pending'
-                      ? 'success'
-                      : invitation.status === 'expired'
-                        ? 'warning'
-                        : 'neutral'
-                  }
-                >
-                  {invitation.status}
-                </Badge>
-                {invitation.status === 'pending' && (
-                  <Button
-                    variant="secondary"
-                    size="compact"
-                    disabled={revoking !== null}
-                    loading={revoking === invitation.id}
-                    onClick={() => revoke(invitation.id)}
-                    aria-label={`Revoke ${invitation.label || 'unlabeled invite'}`}
-                  >
-                    Revoke
-                  </Button>
-                )}
-              </li>
-            ))}
+            {invitations.map((invitation) => {
+              const status = displayStatus(invitation)
+              const checking = status === 'checking' || status === 'checking-nonpending'
+              return (
+                <li key={invitation.id} className={styles.row}>
+                  <div className={styles.details}>
+                    <strong>{invitation.label || 'Unlabeled invite'}</strong>
+                    <span>
+                      Created <LocalTime value={invitation.createdAt} />
+                    </span>
+                    <span>
+                      Expires <LocalTime value={invitation.expiresAt} />
+                    </span>
+                  </div>
+                  <div className={styles.actions}>
+                    <Badge tone={checking ? 'neutral' : invitationTones[status]}>
+                      {checking ? 'Checking status' : status[0].toUpperCase() + status.slice(1)}
+                    </Badge>
+                    {status === 'pending' && (
+                      <Button
+                        variant="secondary"
+                        size="compact"
+                        className={styles.revoke}
+                        disabled={revoking !== null}
+                        loading={revoking === invitation.id}
+                        onClick={() => revoke(invitation.id)}
+                        aria-label={`Revoke ${invitation.label || 'unlabeled invite'}`}
+                      >
+                        Revoke
+                      </Button>
+                    )}
+                    {checking && (
+                      <Button
+                        variant="secondary"
+                        size="compact"
+                        disabled={checkingId !== null}
+                        loading={checkingId === invitation.id}
+                        onClick={() => checkStatus(invitation.id, status === 'checking-nonpending')}
+                        aria-label={`Check status for ${invitation.label || 'unlabeled invite'}`}
+                      >
+                        Check status
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
       </Card>
@@ -177,10 +316,26 @@ export function AdminManagement({
               <li key={user.id} className={styles.row}>
                 <div className={styles.details}>
                   <strong>{user.email || `Account ${user.id.slice(0, 8)}`}</strong>
-                  <span>Joined {displayDate(user.createdAt)}</span>
+                  <span>
+                    Joined <LocalTime value={user.createdAt} />
+                  </span>
                 </div>
-                <Badge>{user.role}</Badge>
-                {user.status && <span>{user.status.toLowerCase()}</span>}
+                <div className={styles.actions}>
+                  <Badge>{user.role}</Badge>
+                  {user.status && (
+                    <Badge
+                      tone={
+                        user.status === 'ACTIVE'
+                          ? 'success'
+                          : user.status === 'SUSPENDED'
+                            ? 'warning'
+                            : 'neutral'
+                      }
+                    >
+                      {user.status[0] + user.status.slice(1).toLowerCase()}
+                    </Badge>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

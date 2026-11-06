@@ -47,7 +47,7 @@ Keep source copy and Storybook examples in English unless an issue explicitly re
 
 ### Notifications and copy fields
 
-Mount `ToastProvider` once in the root layout. Client components call `useToast()(tone, message)` with `tone` set to `success`, `error`, `warning`, or `info`; messages dismiss automatically or through their keyboard-accessible close button. Server and client redirects can import `toastRedirectPath('/destination', 'missing-invite')` from `src/components/ui/toast-redirect.ts`. The provider consumes the `notice` query parameter once, removes it from the URL, and displays only allowlisted copy. Never put free-form or private content into a redirect notice code.
+Mount `ToastProvider` once in the root layout. Client components call `useToast()(tone, message)` with `tone` set to `success`, `error`, `warning`, or `info`; messages dismiss automatically or through their keyboard-accessible close button. Pass the same optional third `key` to replace an earlier notification for one action, such as copying and then revoking an invite. Server and client redirects can import `toastRedirectPath('/destination', 'missing-invite')` from `src/components/ui/toast-redirect.ts`. The provider consumes the `notice` query parameter once, removes it from the URL, and displays only allowlisted copy. Never put free-form or private content into a redirect notice code.
 
 Use `CopyableField` with `id`, `label`, and the complete `value`. Its read-only input stays selectable and its embedded button copies the full value. `disabled` also disables the action; `onCopyError` and `onCopySuccess` can trigger a Toast where useful.
 

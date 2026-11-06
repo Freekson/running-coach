@@ -16,7 +16,7 @@ import { redirectNotice, type ToastTone } from './toast-redirect'
 import styles from './Toast.module.scss'
 
 export type ToastMessage = { id: number; tone: ToastTone; message: string }
-type Notify = (tone: ToastTone, message: string) => void
+type Notify = (tone: ToastTone, message: string, key?: string) => void
 
 const ToastContext = createContext<Notify | null>(null)
 const toneIcons = {
@@ -102,22 +102,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const nextId = useRef(0)
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
+  const keyedIds = useRef(new Map<string, number>())
 
   const dismiss = useCallback((id: number) => {
     const timer = timers.current.get(id)
     if (timer) clearTimeout(timer)
     timers.current.delete(id)
+    for (const [key, value] of keyedIds.current) {
+      if (value === id) keyedIds.current.delete(key)
+    }
     setToasts((current) => current.filter((toast) => toast.id !== id))
   }, [])
 
   const notify = useCallback<Notify>(
-    (tone, message) => {
-      const id = ++nextId.current
+    (tone, message, key) => {
+      const existingId = key ? keyedIds.current.get(key) : undefined
+      const id = existingId ?? ++nextId.current
+      if (key) keyedIds.current.set(key, id)
+      const previousTimer = timers.current.get(id)
+      if (previousTimer) clearTimeout(previousTimer)
       const focusedId = Number(
         document.activeElement?.closest('[data-toast-id]')?.getAttribute('data-toast-id'),
       )
       setToasts((current) => {
-        const next = [...current, { id, tone, message }]
+        const replacement = { id, tone, message }
+        const next = current.some((toast) => toast.id === id)
+          ? current.map((toast) => (toast.id === id ? replacement : toast))
+          : [...current, replacement]
         if (next.length <= 3) return next
         const removableIndex = next.findIndex((item) => item.id !== focusedId)
         return next.filter((_, index) => index !== removableIndex)
@@ -139,9 +150,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const activeTimers = timers.current
+    const activeKeyedIds = keyedIds.current
     return () => {
       for (const timer of activeTimers.values()) clearTimeout(timer)
       activeTimers.clear()
+      activeKeyedIds.clear()
     }
   }, [])
 
@@ -156,7 +169,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   )
 }
 
-/** Call inside ToastProvider to show a transient success or error notification. */
+/** Call inside ToastProvider to show a transient notification. Reuse a key to replace one. */
 export function useToast(): Notify {
   const notify = useContext(ToastContext)
   if (!notify) throw new Error('useToast requires ToastProvider')

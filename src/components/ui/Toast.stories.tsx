@@ -20,6 +20,23 @@ function TriggerExample() {
   return <Button onClick={() => toast('success', 'Training plan saved.')}>Show toast</Button>
 }
 
+function InviteFeedbackExample() {
+  const toast = useToast()
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      <Button onClick={() => toast('success', 'Invite link copied.', 'invite-action')}>
+        Link copied
+      </Button>
+      <Button
+        variant="secondary"
+        onClick={() => toast('success', 'Invite revoked.', 'invite-action')}
+      >
+        Invite revoked
+      </Button>
+    </div>
+  )
+}
+
 const meta = {
   title: 'UI/Toast',
   component: ToastViewport,
@@ -86,6 +103,14 @@ export const Transient: Story = {
   render: () => (
     <ToastProvider>
       <TriggerExample />
+    </ToastProvider>
+  ),
+}
+
+export const ReplacedFeedback: Story = {
+  render: () => (
+    <ToastProvider>
+      <InviteFeedbackExample />
     </ToastProvider>
   ),
 }

@@ -5,7 +5,7 @@ import { ArrowRight } from 'lucide-react'
 export default function HomePage() {
   return (
     <section className="hero" aria-labelledby="hero-heading">
-      <div className="eyebrow">A calmer way to train</div>
+      <div className="eyebrow">Training on your terms</div>
       <h1 id="hero-heading">Make room for the miles that matter.</h1>
       <p className="hero-copy">
         Running Coach is taking shape as a private space to plan endurance training, review your

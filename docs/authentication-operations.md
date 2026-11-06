@@ -5,12 +5,12 @@
 Better Auth runs inside the app. There is no Clerk account, custom domain,
 email sender, Resend or SMTP configuration.
 
-| Variable             | Local development                                      | Vercel Preview                                                                                                               | Vercel Production                                    |
-| -------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `BETTER_AUTH_SECRET` | Random secret, at least 32 bytes, in gitignored `.env` | Separate random Vercel Preview secret                                                                                        | Separate random Vercel Production secret             |
-| `BETTER_AUTH_URL`    | `http://localhost:3000`                                | Stable Preview alias assigned by the development CLI deploy job, e.g. `https://<project>-git-development-<scope>.vercel.app` | Stable Production `https://<project>.vercel.app` URL |
-| `DATABASE_URL`       | Pooled development runtime role                        | Pooled development runtime role                                                                                              | Pooled production runtime role                       |
-| `APP_DATABASE_ENV`   | `development`                                          | `preview`                                                                                                                    | `production`                                         |
+| Variable             | Local development                                      | Vercel Preview                                                                                                    | Vercel Production                                    |
+| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `BETTER_AUTH_SECRET` | Random secret, at least 32 bytes, in gitignored `.env` | Separate random Vercel Preview secret                                                                             | Separate random Vercel Production secret             |
+| `BETTER_AUTH_URL`    | `http://localhost:3000`                                | `https://running-coach-dev-freeksons.vercel.app`, the stable Preview alias assigned by the development deploy job | Stable Production `https://<project>.vercel.app` URL |
+| `DATABASE_URL`       | Pooled development runtime role                        | Pooled development runtime role                                                                                   | Pooled production runtime role                       |
+| `APP_DATABASE_ENV`   | `development`                                          | `preview`                                                                                                         | `production`                                         |
 
 Set variables for **only** their matching Vercel environment. Never select
 “All Environments” for secrets or `DATABASE_URL`. `BETTER_AUTH_SECRET` is
@@ -20,7 +20,7 @@ Generate a fresh value separately for each environment with
 in a private terminal, then save it directly in the matching secure setting.
 The `BETTER_AUTH_URL` must be a real stable origin for that environment, with
 no trailing slash or path. In Preview its hostname must exactly match the
-`VERCEL_PREVIEW_ALIAS` GitHub development-deploy variable; the CLI job moves
+`VERCEL_PREVIEW_ALIAS` GitHub development-deploy variable; the deployment job moves
 that alias only after a successful Preview deployment. In Production it must
 be the project's Production domain. Vercel
 sets `VERCEL_URL` and `VERCEL_BRANCH_URL` for the current deployment; the app

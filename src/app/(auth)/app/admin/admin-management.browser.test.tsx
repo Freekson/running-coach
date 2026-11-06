@@ -59,7 +59,19 @@ function renderAdmin(items: Invitation[] = invitations) {
 }
 
 function revokeButton() {
-  return host.querySelector<HTMLButtonElement>('button[aria-label="Revoke pending invite"]')
+  return host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Revoke invitation: pending invite"]',
+  )
+}
+
+function filterButton(label: string) {
+  return [...host.querySelectorAll<HTMLButtonElement>('[aria-pressed]')].find((button) =>
+    button.textContent?.startsWith(label),
+  )
+}
+
+function invitationRows() {
+  return [...host.querySelectorAll('section[aria-labelledby="invitations-title"] li')]
 }
 
 it('shows distinct invitation statuses, local dates, and revoke only for pending links', () => {
@@ -86,6 +98,8 @@ it('shows distinct invitation statuses, local dates, and revoke only for pending
     ]),
   )
   expect(host.querySelectorAll('button[aria-label^="Revoke"]')).toHaveLength(1)
+  expect(revokeButton()?.title).toBe('Revoke invitation')
+  expect(revokeButton()?.querySelector('svg')).not.toBeNull()
   expect(host.querySelector('time')?.textContent).toBe(
     new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
       new Date(createdAt),
@@ -94,6 +108,46 @@ it('shows distinct invitation statuses, local dates, and revoke only for pending
   expect(host.querySelector('time')?.title).toBe(createdAt)
   expect(host.textContent).toContain('runner@example.com')
   expect(host.textContent).toContain('Active')
+})
+
+it('filters the loaded invitations with effective statuses and useful empty states', async () => {
+  renderAdmin([
+    ...invitations,
+    { ...invitations[0], id: 'expired-pending', label: 'late invite', expiresAt: createdAt },
+  ])
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
+  expect(filterButton('All')?.textContent).toContain('5')
+  expect(filterButton('Pending')?.textContent).toContain('1')
+  expect(filterButton('Expired')?.textContent).toContain('2')
+  act(() => filterButton('Expired')?.click())
+  expect(filterButton('Expired')?.getAttribute('aria-pressed')).toBe('true')
+  expect(invitationRows()).toHaveLength(2)
+  expect(host.textContent).toContain('late invite')
+  expect(host.querySelector('button[aria-label^="Revoke"]')).toBeNull()
+
+  act(() => filterButton('Used')?.click())
+  expect(invitationRows()).toHaveLength(1)
+  expect(invitationRows()[0].textContent).toContain('used invite')
+
+  renderAdmin([invitations[0]])
+  expect(host.textContent).toContain('No used invitations in this list.')
+  expect(filterButton('All')?.textContent).toContain('1')
+  expect(filterButton('Used')?.textContent).toContain('0')
+  act(() => filterButton('All')?.click())
+  expect(invitationRows()).toHaveLength(1)
+})
+
+it('keeps filter counts in sync after a pending invite is revoked', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  renderAdmin([invitations[0]])
+  act(() => filterButton('Pending')?.click())
+  expect(invitationRows()).toHaveLength(1)
+  await act(async () => revokeButton()?.click())
+  expect(invitationRows()).toHaveLength(0)
+  expect(host.textContent).toContain('No pending invitations in this list.')
+  expect(filterButton('Pending')?.textContent).toContain('0')
+  expect(filterButton('Revoked')?.textContent).toContain('1')
 })
 
 it('requires confirmation and removes a freshly generated link immediately after revocation', async () => {
@@ -114,8 +168,10 @@ it('requires confirmation and removes a freshly generated link immediately after
       ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
   })
   expect(host.querySelector<HTMLInputElement>('#new-invite-link')?.value).toBe(url)
+  expect(host.querySelector('label[for="new-invite-link"]')?.textContent).toBe('Link to share')
+  expect(host.textContent?.match(/New invite link/g)).toHaveLength(1)
   await act(async () =>
-    host.querySelector<HTMLButtonElement>('[aria-label="Copy new invite link"]')?.click(),
+    host.querySelector<HTMLButtonElement>('[aria-label="Copy link to share"]')?.click(),
   )
   expect(writeText).toHaveBeenCalledWith(url)
   expect(mocks.notify).toHaveBeenCalledWith(
@@ -174,7 +230,7 @@ it('reports copy failure and keeps the full generated URL selectable', async () 
       ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
   })
   await act(async () =>
-    host.querySelector<HTMLButtonElement>('[aria-label="Copy new invite link"]')?.click(),
+    host.querySelector<HTMLButtonElement>('[aria-label="Copy link to share"]')?.click(),
   )
   expect(host.querySelector<HTMLInputElement>('#new-invite-link')?.value).toBe(url)
   expect(host.querySelector<HTMLInputElement>('#new-invite-link')?.readOnly).toBe(true)
@@ -207,6 +263,7 @@ it('shows conflict feedback without claiming the invite was revoked', async () =
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 409 })))
   vi.spyOn(window, 'confirm').mockReturnValue(true)
   renderAdmin([invitations[0]])
+  act(() => filterButton('Pending')?.click())
   await act(async () => revokeButton()?.click())
   expect(mocks.notify).toHaveBeenCalledWith(
     'warning',
@@ -215,8 +272,38 @@ it('shows conflict feedback without claiming the invite was revoked', async () =
   )
   expect(mocks.refresh).toHaveBeenCalled()
   expect(host.textContent).toContain('Checking status')
+  expect(filterButton('All')?.getAttribute('aria-pressed')).toBe('true')
+  expect(invitationRows()).toHaveLength(1)
   expect(revokeButton()).toBeNull()
   expect(host.querySelector('button[aria-label^="Check status for"]')).not.toBeNull()
+})
+
+it('preserves a filter selected while a status check is in flight', async () => {
+  let finishStatusCheck: ((response: Response) => void) | undefined
+  const statusCheck = new Promise<Response>((resolve) => {
+    finishStatusCheck = resolve
+  })
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(null, { status: 409 }))
+    .mockReturnValueOnce(statusCheck)
+  vi.stubGlobal('fetch', fetchMock)
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  renderAdmin([invitations[0], invitations[1]])
+  act(() => filterButton('Pending')?.click())
+
+  await act(async () => {
+    revokeButton()?.click()
+    await Promise.resolve()
+  })
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  act(() => filterButton('Used')?.click())
+  expect(filterButton('Used')?.getAttribute('aria-pressed')).toBe('true')
+
+  await act(async () => finishStatusCheck?.(new Response(null, { status: 503 })))
+  expect(filterButton('Used')?.getAttribute('aria-pressed')).toBe('true')
+  expect(invitationRows()).toHaveLength(1)
+  expect(invitationRows()[0].textContent).toContain('used invite')
 })
 
 it('hides a generated URL when revocation conflicts with a nonpending status', async () => {
@@ -258,13 +345,16 @@ it('keeps the one-time URL but blocks copying until a retry verifies pending sta
       .querySelector('form')
       ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
   })
+  act(() => filterButton('Pending')?.click())
   await act(async () => revokeButton()?.click())
   expect(host.querySelector<HTMLInputElement>('#new-invite-link')?.value).toBe(url)
   expect(host.querySelector<HTMLInputElement>('#new-invite-link')?.disabled).toBe(true)
-  expect(
-    host.querySelector<HTMLButtonElement>('[aria-label="Copy new invite link"]')?.disabled,
-  ).toBe(true)
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="Copy link to share"]')?.disabled).toBe(
+    true,
+  )
   expect(host.textContent).toContain('Checking status')
+  expect(filterButton('All')?.getAttribute('aria-pressed')).toBe('true')
+  expect(invitationRows()).toHaveLength(1)
   expect(revokeButton()).toBeNull()
   expect(mocks.notify).toHaveBeenCalledWith(
     'warning',
@@ -275,9 +365,9 @@ it('keeps the one-time URL but blocks copying until a retry verifies pending sta
     host.querySelector<HTMLButtonElement>('[aria-label^="Check status for"]')?.click(),
   )
   expect(host.querySelector<HTMLInputElement>('#new-invite-link')?.disabled).toBe(false)
-  expect(
-    host.querySelector<HTMLButtonElement>('[aria-label="Copy new invite link"]')?.disabled,
-  ).toBe(false)
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="Copy link to share"]')?.disabled).toBe(
+    false,
+  )
   expect(host.textContent).toContain('Pending')
   expect(revokeButton()).not.toBeNull()
   expect(mocks.refresh).toHaveBeenCalled()

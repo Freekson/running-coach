@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, useSyncExternalStore, type FormEvent } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { Ban } from 'lucide-react'
 import { z } from 'zod'
 import { Badge, type BadgeProps } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -40,6 +41,14 @@ const invitationListSchema = z.object({
   ),
 })
 type DisplayStatus = Invitation['status'] | 'checking' | 'checking-nonpending'
+type InvitationFilter = 'all' | Invitation['status']
+const invitationFilters: { value: InvitationFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'used', label: 'Used' },
+  { value: 'revoked', label: 'Revoked' },
+  { value: 'expired', label: 'Expired' },
+]
 
 function LocalTime({ value }: { value: string }) {
   const isBrowser = useSyncExternalStore(
@@ -81,6 +90,8 @@ export function AdminManagement({
   const [revokedIds, setRevokedIds] = useState<string[]>([])
   const [statusOverrides, setStatusOverrides] = useState<Record<string, DisplayStatus>>({})
   const [checkingId, setCheckingId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<InvitationFilter>('all')
+  const filterSelection = useRef(0)
   const [now, setNow] = useState<number | null>(null)
   useEffect(() => {
     if (now === null) {
@@ -113,6 +124,21 @@ export function AdminManagement({
     if (now !== null && Date.parse(invitation.expiresAt) <= now) return 'expired'
     return confirmedStatus ?? 'pending'
   }
+
+  const invitationRows = invitations.map((invitation) => ({
+    invitation,
+    status: displayStatus(invitation),
+  }))
+  const filterCounts = {
+    all: invitationRows.length,
+    pending: invitationRows.filter(({ status }) => status === 'pending').length,
+    used: invitationRows.filter(({ status }) => status === 'used').length,
+    revoked: invitationRows.filter(({ status }) => status === 'revoked').length,
+    expired: invitationRows.filter(({ status }) => status === 'expired').length,
+  }
+  const visibleInvitations = invitationRows.filter(
+    ({ status }) => filter === 'all' || status === filter,
+  )
 
   const listedNewLink = invitations.find((invitation) => invitation.id === newLink?.id)
   const newLinkStatus = listedNewLink
@@ -150,7 +176,11 @@ export function AdminManagement({
     }
   }
 
-  async function checkStatus(id: string, knownNonPending: boolean) {
+  async function checkStatus(
+    id: string,
+    knownNonPending: boolean,
+    filterSelectionAtStart = filterSelection.current,
+  ) {
     setCheckingId(id)
     try {
       const response = await fetch('/api/admin/invitations', { cache: 'no-store' })
@@ -170,6 +200,8 @@ export function AdminManagement({
         inviteToastKey,
       )
     } catch {
+      // Keep a retry reachable unless the admin chose another filter while the request ran.
+      if (filterSelection.current === filterSelectionAtStart) setFilter('all')
       toast('error', 'Could not verify invite status. Check again before sharing.', inviteToastKey)
     } finally {
       setCheckingId(null)
@@ -179,6 +211,7 @@ export function AdminManagement({
 
   async function revoke(id: string) {
     if (!window.confirm('Revoke this invite link? It will stop working immediately.')) return
+    const filterSelectionAtStart = filterSelection.current
     setRevoking(id)
     try {
       const response = await fetch(`/api/admin/invitations/${id}`, { method: 'DELETE' })
@@ -186,7 +219,7 @@ export function AdminManagement({
         setStatusOverrides((current) => ({ ...current, [id]: 'checking-nonpending' }))
         setNewLink((current) => (current?.id === id ? null : current))
         toast('warning', 'This invite is no longer pending. Checking its status.', inviteToastKey)
-        await checkStatus(id, true)
+        await checkStatus(id, true, filterSelectionAtStart)
         return
       }
       if (!response.ok) throw new Error('Revoke failed')
@@ -201,7 +234,7 @@ export function AdminManagement({
     } catch {
       setStatusOverrides((current) => ({ ...current, [id]: 'checking' }))
       toast('warning', 'Could not confirm revocation. Checking the invite status.', inviteToastKey)
-      await checkStatus(id, false)
+      await checkStatus(id, false, filterSelectionAtStart)
     } finally {
       setRevoking(null)
     }
@@ -225,7 +258,7 @@ export function AdminManagement({
             onChange={(event) => setLabel(event.target.value)}
             maxLength={120}
           />
-          <Button type="submit" loading={busy}>
+          <Button type="submit" size="compact" className={styles.generate} loading={busy}>
             Generate invite link
           </Button>
         </form>
@@ -235,7 +268,7 @@ export function AdminManagement({
             <p>Copy this link now. It cannot be shown again after you leave this page.</p>
             <CopyableField
               id="new-invite-link"
-              label="New invite link"
+              label="Link to share"
               value={newLink.url}
               disabled={revoking === newLink.id || newLinkStatus !== 'pending'}
               onCopySuccess={() => toast('success', 'Invite link copied.', inviteToastKey)}
@@ -252,15 +285,34 @@ export function AdminManagement({
       </Card>
       <Card as="section" className={styles.section} aria-labelledby="invitations-title">
         <h2 id="invitations-title">Invitations</h2>
-        {invitations.length === 0 ? (
-          <p>No invitations yet.</p>
+        <div className={styles.filters} role="group" aria-label="Filter invitations by status">
+          {invitationFilters.map(({ value, label: filterLabel }) => (
+            <button
+              key={value}
+              type="button"
+              className={styles.filter}
+              aria-pressed={filter === value}
+              onClick={() => {
+                filterSelection.current += 1
+                setFilter(value)
+              }}
+            >
+              {filterLabel} <span className={styles.filterCount}>{filterCounts[value]}</span>
+            </button>
+          ))}
+        </div>
+        {visibleInvitations.length === 0 ? (
+          <p className={styles.empty} role="status">
+            {filter === 'all'
+              ? 'No invitations yet. Generate a link to invite someone.'
+              : `No ${filter} invitations in this list.`}
+          </p>
         ) : (
           <ul className={styles.list}>
-            {invitations.map((invitation) => {
-              const status = displayStatus(invitation)
+            {visibleInvitations.map(({ invitation, status }) => {
               const checking = status === 'checking' || status === 'checking-nonpending'
               return (
-                <li key={invitation.id} className={styles.row}>
+                <li key={invitation.id} className={`${styles.row} ${styles.invitationRow}`}>
                   <div className={styles.details}>
                     <strong>{invitation.label || 'Unlabeled invite'}</strong>
                     <span>
@@ -270,10 +322,12 @@ export function AdminManagement({
                       Expires <LocalTime value={invitation.expiresAt} />
                     </span>
                   </div>
-                  <div className={styles.actions}>
+                  <div className={styles.invitationStatus}>
                     <Badge tone={checking ? 'neutral' : invitationTones[status]}>
                       {checking ? 'Checking status' : status[0].toUpperCase() + status.slice(1)}
                     </Badge>
+                  </div>
+                  <div className={styles.invitationAction}>
                     {status === 'pending' && (
                       <Button
                         variant="secondary"
@@ -282,9 +336,12 @@ export function AdminManagement({
                         disabled={revoking !== null}
                         loading={revoking === invitation.id}
                         onClick={() => revoke(invitation.id)}
-                        aria-label={`Revoke ${invitation.label || 'unlabeled invite'}`}
+                        aria-label={`Revoke invitation: ${invitation.label || 'unlabeled invite'}`}
+                        title="Revoke invitation"
                       >
-                        Revoke
+                        {revoking !== invitation.id && (
+                          <Ban size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+                        )}
                       </Button>
                     )}
                     {checking && (

@@ -14,7 +14,7 @@ Read the diff, impacted code, relevant acceptance criteria and only the architec
 3. Data integrity: Prisma migrations and indexes, immutable plan revisions, correct units/timezones, no lost updates, transactional save and durable retries.
 4. Provider integration: secure per-user secrets, deduplication, remote IDs, retry/reconcile behavior, Garmin/Intervals capability proven rather than assumed.
 5. Functional regressions and performance/cost; test coverage especially negative cases.
-6. Maintainability and architecture violations. CI handles style/formatting; don't duplicate prettier feedback.
+6. Module ownership and maintainability: look for new flat shared UI files instead of `src/components/ui/<Component>/`, feature UI misplaced among primitives, missing co-located stories/tests, duplicate abstractions, import cycles, unnecessary barrels, and server/client boundary leaks. Check moved scripts against package, CI, and runbook paths, including case-sensitive paths. Prioritize functional and security findings over cosmetic naming; CI handles formatting.
 
 ## Output
 

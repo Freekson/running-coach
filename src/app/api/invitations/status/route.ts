@@ -1,10 +1,10 @@
 import { z } from 'zod'
 import { getTrustedOrigins } from '@/server/auth/better-auth'
-import { invitationStatus } from '@/server/auth/invitations'
+import { invitationStatus } from '@/server/auth/invitation/invitations'
 import {
   allowInvitationStatusCheck,
   invitationStatusClientIp,
-} from '@/server/auth/invitation-status-rate-limit'
+} from '@/server/auth/invitation/invitation-status-rate-limit'
 
 export const runtime = 'nodejs'
 

@@ -2,7 +2,10 @@ import { notFound } from 'next/navigation'
 import { AccountUnavailable } from '../account-unavailable'
 import { getAppUser } from '../access'
 import { AppShell } from '../app-shell'
-import { listInvitations, listRegisteredUsers } from '@/server/auth/invitation-management'
+import {
+  listInvitations,
+  listRegisteredUsers,
+} from '@/server/auth/invitation/invitation-management'
 import { AdminManagement } from './admin-management'
 
 export default async function AdminPage() {

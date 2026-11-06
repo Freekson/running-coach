@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { requireAdmin, requireTrustedOrigin, privateHeaders } from '@/server/auth/admin-access'
-import { regenerateInvitation } from '@/server/auth/invitation-management'
+import { regenerateInvitation } from '@/server/auth/invitation/invitation-management'
 
 export const runtime = 'nodejs'
 

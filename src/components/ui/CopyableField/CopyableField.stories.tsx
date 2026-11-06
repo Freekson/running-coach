@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { CopyableField } from './CopyableField'
+import { CopyableField } from '.'
 
 const meta = {
   title: 'UI/CopyableField',

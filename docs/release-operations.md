@@ -7,6 +7,11 @@ identity, and the private read-only connection check. RUN-60 owns the existing
 
 ## Release path and safety boundary
 
+The Preview alias and deployment-domain preflight scripts, with their tests,
+live in `scripts/vercel/`. CI calls these named entry points after validation;
+the guarded RUN-70 migration helper lives in `scripts/migrations/` and is
+invoked through `pnpm db:prepare:run70` before `pnpm db:migrate`.
+
 The [Quality checks workflow](../.github/workflows/ci.yml) runs on a push to
 either protected branch. Jobs in each branch run in this order:
 

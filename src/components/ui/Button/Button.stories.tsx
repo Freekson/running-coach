@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ArrowRight, ArrowUpRight, Plus, X } from 'lucide-react'
-import { Button, ButtonLink } from './Button'
+import { Button, ButtonLink } from '.'
 
 const meta = {
   title: 'UI/Button',

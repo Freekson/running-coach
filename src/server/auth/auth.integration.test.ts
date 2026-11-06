@@ -30,18 +30,18 @@ import {
   invitationStatus,
   recoverInvitationAfterFailedSignup,
   releaseInvitation,
-} from './invitations'
+} from './invitation/invitations'
 import {
   allowInvitationStatusCheck,
   pruneInvitationStatusRateLimits,
-} from './invitation-status-rate-limit'
+} from './invitation/invitation-status-rate-limit'
 import {
   checkInvitationStatus,
   createInvitation,
   listInvitations,
   revokeInvitation,
   regenerateInvitation,
-} from './invitation-management'
+} from './invitation/invitation-management'
 import { POST } from '@/app/api/auth/[...all]/route'
 import { GET as getMe } from '@/app/api/me/route'
 

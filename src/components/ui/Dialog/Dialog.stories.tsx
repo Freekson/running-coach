@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { Ban, CircleCheck } from 'lucide-react'
-import { Button } from './Button'
-import { ConfirmDialog, Dialog } from './Dialog'
+import { Button } from '../Button'
+import { ConfirmDialog, Dialog } from '.'
 
 function DialogExample({
   destructive = false,

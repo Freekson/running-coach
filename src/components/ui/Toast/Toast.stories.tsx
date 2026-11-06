@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { Button } from './Button'
-import { ToastProvider, ToastViewport, useToast, type ToastMessage } from './Toast'
+import { Button } from '../Button'
+import { ToastProvider, ToastViewport, useToast, type ToastMessage } from '.'
 
 function Example({ initial }: { initial: ToastMessage[] }) {
   const [toasts, setToasts] = useState(initial)

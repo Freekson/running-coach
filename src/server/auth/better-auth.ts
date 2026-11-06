@@ -4,7 +4,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { betterAuth } from 'better-auth'
 import type { PrismaClient } from '@prisma/client'
 import { getPrismaClient } from '@/server/db/client'
-import { currentInvitationClaimNonce } from './invitation-claim-context'
+import { currentInvitationClaimNonce } from './invitation/invitation-claim-context'
 
 export function getTrustedOrigins(baseURL: string): string[] {
   const origins = [new URL(baseURL).origin]

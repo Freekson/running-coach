@@ -2,6 +2,10 @@
 
 ## Configure each environment
 
+The invitation operator CLI and its tests live in `scripts/auth/`; use the
+`pnpm auth:invite` and `pnpm auth:bootstrap-admin` commands below. Invitation
+services and their tests live in `src/server/auth/invitation/`.
+
 Better Auth runs inside the app. There is no Clerk account, custom domain,
 email sender, Resend or SMTP configuration.
 

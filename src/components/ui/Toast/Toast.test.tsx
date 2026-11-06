@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ToastViewport } from './Toast'
+import { ToastViewport } from '.'
 import { redirectNotice, toastRedirectPath } from './toast-redirect'
 
 describe('redirect notifications', () => {

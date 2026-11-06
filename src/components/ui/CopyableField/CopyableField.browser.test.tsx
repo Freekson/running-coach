@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { CopyableField } from './CopyableField'
+import { CopyableField } from '.'
 
 let root: Root
 let host: HTMLDivElement

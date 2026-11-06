@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { Button } from './Button'
+import { Button } from '../Button'
 import styles from './Dialog.module.scss'
 
 export type DialogProps = {

@@ -10,8 +10,8 @@ const { invitationStatus, allowInvitationStatusCheck, invitationStatusClientIp }
 vi.mock('@/server/auth/better-auth', () => ({
   getTrustedOrigins: () => ['http://localhost:3000'],
 }))
-vi.mock('@/server/auth/invitations', () => ({ invitationStatus }))
-vi.mock('@/server/auth/invitation-status-rate-limit', () => ({
+vi.mock('@/server/auth/invitation/invitations', () => ({ invitationStatus }))
+vi.mock('@/server/auth/invitation/invitation-status-rate-limit', () => ({
   allowInvitationStatusCheck,
   invitationStatusClientIp,
 }))

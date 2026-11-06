@@ -20,7 +20,7 @@ Generate a fresh value separately for each environment with
 in a private terminal, then save it directly in the matching secure setting.
 The `BETTER_AUTH_URL` must be a real stable origin for that environment, with
 no trailing slash or path. In Preview its hostname must exactly match the
-`VERCEL_PREVIEW_ALIAS` GitHub development-deploy variable; the CLI job moves
+`VERCEL_PREVIEW_ALIAS` GitHub development-deploy variable; the deployment job moves
 that alias only after a successful Preview deployment. In Production it must
 be the project's Production domain. Vercel
 sets `VERCEL_URL` and `VERCEL_BRANCH_URL` for the current deployment; the app

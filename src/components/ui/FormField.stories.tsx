@@ -18,6 +18,9 @@ type Story = StoryObj<typeof meta>
 
 export const Default: Story = {}
 export const WithHint: Story = { args: { hint: 'Use the address from your invitation.' } }
+export const Optional: Story = {
+  args: { id: 'description', name: 'description', label: 'Description', optional: true },
+}
 export const Error: Story = { args: { error: 'Enter a valid email address.' } }
 export const DuplicateEmail: Story = {
   args: {

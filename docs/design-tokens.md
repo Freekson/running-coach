@@ -15,6 +15,7 @@ The app uses a dark theme from first paint. `src/app/globals.css` is the source 
 | `--color-primary-foreground`                                         | Text and icons on a primary fill                                   |
 | `--color-focus`                                                      | Keyboard focus outline                                             |
 | `--color-success`, `--color-warning`, `--color-error`                | Status text and badges, accompanied by words or icons              |
+| `--color-admin`, `--color-admin-surface`                             | Administrator role badge text and surface                          |
 
 Use the role that matches the element, rather than copying a hex value. Add a new semantic token to the root palette when a genuinely new role is needed.
 
@@ -35,6 +36,7 @@ The root layout loads variable Manrope and Inter through `next/font/google` with
 | `--font-mono`                                                                                   | System monospace for code samples only                      |
 | `--type-size-hero`, `--type-size-page`, `--type-size-card`                                      | Display, page, and card headings                            |
 | `--type-size-body`, `--type-size-body-large`                                                    | Standard and prominent paragraphs                           |
+| `--type-size-table-primary`, `--type-size-filter`                                               | Compact table names and table filters                       |
 | `--type-size-label`, `--type-size-caption`                                                      | Navigation, labels, badges, and compact notes               |
 | `--type-weight-regular`, `--type-weight-medium`, `--type-weight-semibold`, `--type-weight-bold` | Text emphasis without thin weights                          |
 | `--type-leading-tight`, `--type-leading-body`, `--type-leading-compact`                         | Heading, paragraph, and compact line heights                |
@@ -44,6 +46,10 @@ Use the heading family for headings and the body family for UI text. Keep headin
 Keep source copy and Storybook examples in English unless an issue explicitly requests localization. Check actual headings and controls, including apostrophes, en/em dashes, and values such as `1,234.56 km` and `12:34 /km`. Review 320–375px widths and 200% zoom with realistic labels and metric values.
 
 ## Reusable patterns
+
+### Dialogs
+
+Use shared `Dialog` for modal content and `ConfirmDialog` for explicit neutral or destructive decisions. Both use the browser's modal `<dialog>` behavior for focus trapping and focus restoration. Provide a clear title, optional description, and an `onClose` handler that clears sensitive one-time content. Set `pending` during mutations to disable confirmation and prevent Escape, backdrop, or close-button dismissal until the response resolves. Keep primary and cancel actions labeled with concrete verbs.
 
 ### Notifications and copy fields
 
@@ -55,9 +61,9 @@ Shared primitives live in `src/components/ui/`: `Button`/`ButtonLink`, `Input`/`
 
 Before adding UI, search this catalog and feature components. Compose existing primitives and tokens. Extend the shared library only for a missing pattern with clear reuse, keep variants narrow and typed, and update its stories when behavior changes. Feature-specific compositions can remain local. Check focus, labels, error text, contrast, 320–375px widths, and 200% zoom.
 
-- Primary action: `.button`; secondary action: `.button.button--secondary`. These work on buttons and links. Use the native `disabled` attribute on buttons. `ButtonLink disabled` renders an inert link-like element without an `href` or click handler and adds `aria-disabled="true"`.
+- Primary action: `.button`; secondary action: `.button.button--secondary`. Both default to a 40px minimum height, matching the compact Generate invite link action. These work on buttons and links. Use the native `disabled` attribute on buttons. `ButtonLink disabled` renders an inert link-like element without an `href` or click handler and adds `aria-disabled="true"`.
 - Text links use the global link colors. Navigation links use the header's navigation styling. Do not remove the global `:focus-visible` outline.
-- Text inputs, textareas, and selects use `.field` with a visible label. `aria-invalid="true"` adds an error border; pair it with an error message, since color alone does not explain a problem.
+- Text inputs, textareas, and selects use `.field` with a visible label and a 40px minimum height. `aria-invalid="true"` adds an error border; pair it with an error message, since color alone does not explain a problem.
 - Cards use `.card`; badges use `.badge` with `.badge--success`, `.badge--warning`, or `.badge--error` when appropriate. Include status text so meaning does not depend on color.
 - Use `--color-text-muted` for supporting copy and placeholders, never opacity on text. Keep `--color-border` for decorative edges; controls use `--color-border-strong` or the focus outline.
 

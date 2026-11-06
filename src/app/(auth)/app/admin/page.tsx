@@ -9,19 +9,24 @@ export default async function AdminPage() {
   const user = await getAppUser()
   if (!user) return <AccountUnavailable />
   if (user.role !== 'ADMIN') notFound()
-  const [invitations, users] = await Promise.all([listInvitations(), listRegisteredUsers()])
+  const [invitations, users] = await Promise.all([listInvitations(1), listRegisteredUsers(1)])
   return (
     <AppShell user={user}>
       <AdminManagement
-        invitations={invitations.map((invitation) => ({
+        invitations={invitations.invitations.map((invitation) => ({
           ...invitation,
           createdAt: invitation.createdAt.toISOString(),
           expiresAt: invitation.expiresAt.toISOString(),
         }))}
-        users={users.map((registered) => ({
+        invitationPage={invitations.page}
+        invitationTotal={invitations.total}
+        invitationCounts={invitations.counts}
+        users={users.users.map((registered) => ({
           ...registered,
           createdAt: registered.createdAt.toISOString(),
         }))}
+        userPage={users.page}
+        userTotal={users.total}
       />
     </AppShell>
   )

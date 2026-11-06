@@ -48,4 +48,15 @@ describe('app navigation', () => {
     expect(markup).toContain('Sign out')
     expect(markup).toContain('<h1>Dashboard</h1>')
   })
+
+  it('shows the admin role badge in the shell', () => {
+    const markup = renderToStaticMarkup(
+      <AppShell user={{ id: 'admin-a', role: 'ADMIN', email: 'admin@example.test' }}>
+        <h1>Dashboard</h1>
+      </AppShell>,
+    )
+    expect(markup).toContain('badge--admin')
+    expect(markup).toContain('ADMIN')
+    expect(markup).toContain('aria-hidden="true"')
+  })
 })

@@ -8,6 +8,11 @@
   }
 }
 
+.optional {
+  color: var(--color-text-muted);
+  font-weight: var(--type-weight-regular);
+}
+
 .hint {
   color: var(--color-text-muted);
   font-size: var(--type-size-caption);

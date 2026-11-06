@@ -10,16 +10,32 @@ export function Input({ className, ...props }: InputProps) {
 export type FormFieldProps = Omit<InputProps, 'id' | 'aria-invalid' | 'aria-describedby'> & {
   id: string
   label: string
+  optional?: boolean
   hint?: string
   error?: string
 }
 
-export function FormField({ id, label, hint, error, ...inputProps }: FormFieldProps) {
+export function FormField({
+  id,
+  label,
+  optional = false,
+  hint,
+  error,
+  ...inputProps
+}: FormFieldProps) {
   const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ')
 
   return (
     <div className={styles.fieldGroup}>
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id}>
+        {label}
+        {optional && (
+          <>
+            {' '}
+            <span className={styles.optional}>(optional)</span>
+          </>
+        )}
+      </label>
       {hint && (
         <span className={styles.hint} id={`${id}-hint`}>
           {hint}

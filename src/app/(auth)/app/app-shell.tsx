@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { CurrentUser } from '@/server/auth/current-user'
+import { AdminBadge } from '@/components/ui/AdminBadge'
 import { SignOutButton } from '../sign-out-button'
 import { AppNavigation } from './navigation'
 import styles from './app-shell.module.scss'
@@ -18,7 +19,7 @@ export function AppShell({ children, user }: { children: ReactNode; user: Curren
         <div className={styles.account}>
           <p className={styles.accountLabel}>Signed in as</p>
           <p className={styles.identity}>{user.email ?? `Account ${user.id.slice(0, 8)}`}</p>
-          <p className={styles.role}>{user.role === 'ADMIN' ? 'Admin' : 'User'}</p>
+          <p className={styles.role}>{user.role === 'ADMIN' ? <AdminBadge /> : 'User'}</p>
           <SignOutButton />
         </div>
       </aside>

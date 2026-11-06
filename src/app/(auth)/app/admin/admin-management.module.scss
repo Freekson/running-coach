@@ -304,7 +304,7 @@
   justify-content: flex-end;
   gap: 4px;
 }
-.iconAction {
+.tableActions .iconAction {
   width: 36px;
   min-height: 36px;
   padding: 0;
@@ -312,8 +312,11 @@
   background: transparent;
   color: var(--color-text-muted);
 }
-.iconAction:hover:not(:disabled),
-.iconAction:focus-visible:not(:disabled) {
+.tableActions .iconAction svg {
+  flex: none;
+}
+.tableActions .iconAction:hover:not(:disabled),
+.tableActions .iconAction:focus-visible:not(:disabled) {
   border-color: transparent;
   background: var(--color-surface-hover);
   color: var(--color-text);
@@ -359,7 +362,7 @@
   align-items: center;
   gap: 8px;
 }
-.pagerButton {
+.pagerActions .pagerButton {
   width: 36px;
   min-height: 36px;
   padding: 0;
@@ -367,11 +370,14 @@
   background: transparent;
   color: var(--color-text-muted);
 }
-.pagerButton:hover:not(:disabled) {
+.pagerActions .pagerButton svg {
+  flex: none;
+}
+.pagerActions .pagerButton:hover:not(:disabled) {
   background: var(--color-surface-hover);
   color: var(--color-text);
 }
-.pagerButton:disabled {
+.pagerActions .pagerButton:disabled {
   border-color: transparent;
   background: transparent;
   color: var(--color-text-muted);

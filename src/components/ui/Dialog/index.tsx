@@ -1,6 +1,12 @@
 'use client'
 
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import {
+  useEffect,
+  useId,
+  useRef,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { X } from 'lucide-react'
 import { Button } from '../Button'
 import styles from './Dialog.module.scss'
@@ -12,10 +18,44 @@ export type DialogProps = {
   icon?: ReactNode
   iconTone?: 'neutral' | 'success' | 'error'
   size?: 'default' | 'wide'
+  className?: string
   children: ReactNode
   actions?: ReactNode
   onClose: () => void
   pending?: boolean
+}
+
+type ScrollLock = {
+  count: number
+  bodyOverflow: string
+  rootOverflow: string
+}
+
+const scrollLocks = new WeakMap<Document, ScrollLock>()
+
+function lockBackgroundScroll(ownerDocument: Document) {
+  const current = scrollLocks.get(ownerDocument)
+  if (current) {
+    current.count += 1
+  } else {
+    scrollLocks.set(ownerDocument, {
+      count: 1,
+      bodyOverflow: ownerDocument.body.style.overflow,
+      rootOverflow: ownerDocument.documentElement.style.overflow,
+    })
+    ownerDocument.body.style.overflow = 'hidden'
+    ownerDocument.documentElement.style.overflow = 'hidden'
+  }
+
+  return () => {
+    const lock = scrollLocks.get(ownerDocument)
+    if (!lock) return
+    lock.count -= 1
+    if (lock.count > 0) return
+    ownerDocument.body.style.overflow = lock.bodyOverflow
+    ownerDocument.documentElement.style.overflow = lock.rootOverflow
+    scrollLocks.delete(ownerDocument)
+  }
 }
 
 export function Dialog({
@@ -25,27 +65,43 @@ export function Dialog({
   icon,
   iconTone = 'neutral',
   size = 'default',
+  className,
   children,
   actions,
   onClose,
   pending = false,
 }: DialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
+  const pointerStartedOnBackdrop = useRef(false)
   const titleId = useId()
   const descriptionId = useId()
+  function isBackdropPointer(event: ReactPointerEvent<HTMLDialogElement>) {
+    if (event.button !== 0 || event.target !== event.currentTarget) return false
+    const bounds = event.currentTarget.getBoundingClientRect()
+    return (
+      event.clientX < bounds.left ||
+      event.clientX > bounds.right ||
+      event.clientY < bounds.top ||
+      event.clientY > bounds.bottom
+    )
+  }
   useEffect(() => {
     const element = dialog.current
     if (!element) return
     if (open && !element.open) element.showModal()
     if (!open && element.open) element.close()
+    const unlockScroll = open ? lockBackgroundScroll(element.ownerDocument) : undefined
     return () => {
       if (element.open) element.close()
+      unlockScroll?.()
     }
   }, [open])
   return (
     <dialog
       ref={dialog}
-      className={[styles.dialog, size === 'wide' && styles.wide].filter(Boolean).join(' ')}
+      className={[styles.dialog, size === 'wide' && styles.wide, className]
+        .filter(Boolean)
+        .join(' ')}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       aria-busy={pending || undefined}
@@ -53,8 +109,16 @@ export function Dialog({
         event.preventDefault()
         if (!pending) onClose()
       }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget && !pending) onClose()
+      onPointerDown={(event) => {
+        pointerStartedOnBackdrop.current = isBackdropPointer(event)
+      }}
+      onPointerUp={(event) => {
+        const shouldClose = pointerStartedOnBackdrop.current && isBackdropPointer(event)
+        pointerStartedOnBackdrop.current = false
+        if (shouldClose && !pending) onClose()
+      }}
+      onPointerCancel={() => {
+        pointerStartedOnBackdrop.current = false
       }}
     >
       <div className={styles.content}>

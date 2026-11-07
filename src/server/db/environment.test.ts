@@ -3,7 +3,30 @@ import {
   assertDatabaseEnvironment,
   assertDatabaseTier,
   getExpectedDatabaseTier,
+  isLocalPostgres,
 } from './environment'
+
+describe('isLocalPostgres', () => {
+  it('uses the native Prisma client only for explicitly local nonproduction databases', () => {
+    const local = 'postgresql://runner:secret@127.0.0.1:55432/running_coach_local'
+    expect(isLocalPostgres({ APP_DATABASE_ENV: 'development', DATABASE_URL: local })).toBe(true)
+    expect(isLocalPostgres({ APP_DATABASE_ENV: 'test', DATABASE_URL: local })).toBe(true)
+    expect(isLocalPostgres({ APP_DATABASE_ENV: 'production', DATABASE_URL: local })).toBe(false)
+    expect(
+      isLocalPostgres({
+        VERCEL_ENV: 'preview',
+        APP_DATABASE_ENV: 'development',
+        DATABASE_URL: local,
+      }),
+    ).toBe(false)
+    expect(
+      isLocalPostgres({
+        APP_DATABASE_ENV: 'development',
+        DATABASE_URL: 'postgresql://runner:secret@db.example.test/app',
+      }),
+    ).toBe(false)
+  })
+})
 
 describe('assertDatabaseEnvironment', () => {
   const pooledUrl = 'postgresql://user:secret@ep-test-pooler.us-east-1.aws.neon.tech/db'

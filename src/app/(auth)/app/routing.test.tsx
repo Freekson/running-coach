@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getCurrentUser, redirect, requestPath } = vi.hoisted(() => ({
+const { getCurrentUser, redirect, requestPath, chartCookie } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   requestPath: vi.fn(() => '/app/dashboard'),
+  chartCookie: vi.fn(() => undefined as string | undefined),
   redirect: vi.fn((destination: string) => {
     throw new Error(`Redirect to ${destination}`)
   }),
@@ -10,6 +11,12 @@ const { getCurrentUser, redirect, requestPath } = vi.hoisted(() => ({
 
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({ 'x-running-coach-app-path': requestPath() }),
+  cookies: async () => ({
+    get: () => {
+      const value = chartCookie()
+      return value === undefined ? undefined : { value }
+    },
+  }),
 }))
 vi.mock('@/server/auth/current-user', () => ({
   AccountUnavailableError: class AccountUnavailableError extends Error {},
@@ -23,6 +30,13 @@ vi.mock('@/server/auth/invitation/invitation-management', () => ({
     counts: { all: 0, pending: 0, processing: 0, used: 0, revoked: 0, expired: 0 },
   })),
   listRegisteredUsers: vi.fn(async () => ({ users: [], page: 1, total: 0 })),
+}))
+vi.mock('@/server/athlete/profile', () => ({
+  getMeasurementSystem: vi.fn(async () => 'METRIC'),
+  getAthleteSettings: vi.fn(async () => ({
+    profile: { measurementSystem: 'METRIC' },
+    weights: [],
+  })),
 }))
 const { notFound } = vi.hoisted(() => ({
   notFound: vi.fn(() => {
@@ -43,10 +57,12 @@ import AdminPage from './admin/page'
 import { AppShell } from './app-shell'
 import { AccountUnavailable } from './account-unavailable'
 import { AccountUnavailableError } from '@/server/auth/current-user'
+import { getAthleteSettings, getMeasurementSystem } from '@/server/athlete/profile'
 
 beforeEach(() => {
   vi.clearAllMocks()
   requestPath.mockReturnValue('/app/dashboard')
+  chartCookie.mockReturnValue(undefined)
 })
 
 describe('authenticated /app routes', () => {
@@ -103,15 +119,42 @@ describe('authenticated /app routes', () => {
       await expect(page()).rejects.toThrow('Redirect to /sign-in?next=%2Fapp%2Fdashboard')
     }
     expect(redirect).toHaveBeenCalledTimes(7)
+    expect(getAthleteSettings).not.toHaveBeenCalled()
   })
 
   it('provides honest content for each linked route', async () => {
     getCurrentUser.mockResolvedValue({ id: 'user-a', role: 'USER', email: 'a@example.test' })
-    for (const page of [TrainingPage, CalendarPage, GoalsPage, SettingsPage]) {
+    for (const page of [TrainingPage, CalendarPage, GoalsPage]) {
       const result = await page()
       expect(result.type).toBe(AppShell)
       expect(result.props.children.props.description).toMatch(/later/)
     }
+    const settings = await SettingsPage()
+    expect(settings.type).toBe(AppShell)
+    expect(settings.props.children.props.initial.weights).toEqual([])
+    expect(settings.props.children.props.initialChartPeriod).toBe('7D')
+    expect(getAthleteSettings).toHaveBeenCalledWith('user-a', '7D')
+  })
+
+  it('restores a valid chart period and ignores an invalid cookie', async () => {
+    getCurrentUser.mockResolvedValue({ id: 'user-a', role: 'USER', email: 'a@example.test' })
+    chartCookie.mockReturnValue('30D')
+    const selected = await SettingsPage()
+    expect(selected.props.children.props.initialChartPeriod).toBe('30D')
+    expect(getAthleteSettings).toHaveBeenLastCalledWith('user-a', '30D')
+
+    chartCookie.mockReturnValue('invalid')
+    const fallback = await SettingsPage()
+    expect(fallback.props.children.props.initialChartPeriod).toBe('7D')
+    expect(getAthleteSettings).toHaveBeenLastCalledWith('user-a', '7D')
+  })
+
+  it('loads the owner’s saved measurement system for protected pages', async () => {
+    getCurrentUser.mockResolvedValue({ id: 'athlete-a', role: 'USER' })
+    vi.mocked(getMeasurementSystem).mockResolvedValueOnce('IMPERIAL')
+    const dashboard = await DashboardPage()
+    expect(dashboard.props.measurementSystem).toBe('IMPERIAL')
+    expect(getMeasurementSystem).toHaveBeenCalledWith('athlete-a')
   })
 
   it('blocks a different non-admin user from the admin route', async () => {

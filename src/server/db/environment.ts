@@ -1,5 +1,20 @@
 export type DatabaseTier = 'NON_PRODUCTION' | 'PRODUCTION'
 
+export function isLocalPostgres(env: Readonly<Record<string, string | undefined>>): boolean {
+  if (env.VERCEL_ENV || !['development', 'test'].includes(env.APP_DATABASE_ENV ?? '')) {
+    return false
+  }
+  try {
+    const url = new URL(env.DATABASE_URL ?? '')
+    return (
+      ['postgres:', 'postgresql:'].includes(url.protocol) &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
 export function assertDatabaseEnvironment(env: Readonly<Record<string, string | undefined>>): void {
   if (env.VERCEL_ENV !== 'preview' && env.VERCEL_ENV !== 'production') return
 

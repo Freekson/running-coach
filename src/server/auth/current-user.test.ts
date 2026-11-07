@@ -87,6 +87,66 @@ describe('getCurrentUser', () => {
     expect(upsert).not.toHaveBeenCalled()
   })
 
+  it('provides the name entered at registration for the signed-in owner', async () => {
+    getSession.mockResolvedValue({
+      session: { id: 's' },
+      user: { id: 'a', email: 'a@example.test', name: '  Avery Runner  ' },
+    })
+    findUnique.mockResolvedValue({
+      id: 'internal-a',
+      role: 'USER',
+      email: 'a@example.test',
+      status: 'ACTIVE',
+    })
+    await expect(getCurrentUser()).resolves.toMatchObject({
+      id: 'internal-a',
+      name: 'Avery Runner',
+    })
+  })
+
+  it('reads the saved display name only from the signed-in owner profile', async () => {
+    getSession
+      .mockResolvedValueOnce({
+        session: { id: 's-a' },
+        user: { id: 'a', email: 'a@example.test', name: 'Avery Runner' },
+      })
+      .mockResolvedValueOnce({
+        session: { id: 's-b' },
+        user: { id: 'b', email: 'b@example.test', name: 'Blair Runner' },
+      })
+    findUnique
+      .mockResolvedValueOnce({
+        id: 'internal-a',
+        role: 'USER',
+        email: 'a@example.test',
+        status: 'ACTIVE',
+        profile: { displayName: '  Trail Avery  ' },
+      })
+      .mockResolvedValueOnce({
+        id: 'internal-b',
+        role: 'USER',
+        email: 'b@example.test',
+        status: 'ACTIVE',
+        profile: { displayName: 'Blair on Track' },
+      })
+
+    await expect(getCurrentUser()).resolves.toMatchObject({
+      id: 'internal-a',
+      displayName: 'Trail Avery',
+    })
+    await expect(getCurrentUser()).resolves.toMatchObject({
+      id: 'internal-b',
+      displayName: 'Blair on Track',
+    })
+    expect(findUnique.mock.calls.map(([query]) => query.where)).toEqual([
+      { authSubject: 'a' },
+      { authSubject: 'b' },
+    ])
+    expect(findUnique.mock.calls[0][0].select.profile).toEqual({
+      select: { displayName: true },
+    })
+  })
+
   it('reads the same auth identity after a concurrent create wins the unique key', async () => {
     getSession.mockResolvedValue({
       session: { id: 's' },

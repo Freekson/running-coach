@@ -1,0 +1,188 @@
+.fieldGroup {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldGroup label {
+  font-weight: var(--type-weight-medium);
+}
+
+.optional,
+.placeholder {
+  color: var(--color-text-muted);
+  font-weight: var(--type-weight-regular);
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 11px 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trigger:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.trigger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.trigger svg {
+  flex: none;
+}
+
+.popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 14px;
+  background: var(--color-surface-raised);
+  box-shadow: 0 16px 32px rgb(0 0 0 / 28%);
+}
+
+.selectRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.selectWrap {
+  position: relative;
+  min-width: 0;
+}
+
+.selectWrap select {
+  width: 100%;
+  min-height: 48px;
+  padding: 9px 34px 9px 12px;
+  appearance: none;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.selectWrap select:hover {
+  border-color: var(--color-primary);
+}
+
+.selectWrap option {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.selectWrap svg {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--color-text-muted);
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.weekday,
+.day {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 40px;
+  font-size: var(--type-size-label);
+}
+
+.weekday {
+  color: var(--color-text-muted);
+}
+
+.day {
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.day:hover:not(:disabled),
+.day:focus-visible {
+  background: var(--color-surface-hover);
+}
+
+.day[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface-raised));
+  color: var(--color-primary);
+}
+
+.day:disabled {
+  color: var(--color-text-muted);
+  opacity: 0.4;
+  cursor: default;
+}
+
+.clear {
+  margin-top: 10px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+:global(dialog) .popover {
+  padding: 12px;
+}
+
+:global(dialog) .selectRow {
+  margin-bottom: 8px;
+}
+
+:global(dialog) .selectWrap select {
+  min-height: 40px;
+}
+
+:global(dialog) .weekday {
+  min-height: 28px;
+}
+
+:global(dialog) .day {
+  min-height: 32px;
+}
+
+@media (max-width: 375px) {
+  .popover {
+    padding: 12px;
+  }
+
+  .weekday,
+  .day {
+    min-height: 36px;
+  }
+}

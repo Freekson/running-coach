@@ -74,6 +74,7 @@ model User {
   updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   profile                AthleteProfile?
+  bodyMeasurements       BodyMeasurement[]
   integrationConnections IntegrationConnection[]
   activities             Activity[]
   dailyHealthMetrics     DailyHealthMetric[]
@@ -178,11 +179,15 @@ model AthleteProfile {
   userId                     String    @id @map("user_id") @db.Uuid
   displayName                String?   @map("display_name")
   birthDate                  DateTime? @map("birth_date") @db.Date
+  // Legacy profiles may be null until their owner chooses MALE or FEMALE.
+  sex                        String?   @db.VarChar(32)
   heightCm                   Decimal?  @map("height_cm") @db.Decimal(5, 2)
-  experienceLevel            String?   @map("experience_level")
+  experienceLevel            String    @default("BEGINNER") @map("experience_level")
   preferredTimezone          String?   @map("preferred_timezone")
-  distanceUnit               String?   @map("distance_unit")
-  weightUnit                 String?   @map("weight_unit")
+  // Kept for the migration compatibility window; measurementSystem is authoritative.
+  distanceUnit               String?   @map("distance_unit") @ignore
+  weightUnit                 String?   @map("weight_unit") @ignore
+  measurementSystem          String    @default("METRIC") @map("measurement_system") @db.VarChar(16)
   defaultTrainingDaysPerWeek Int?      @map("default_training_days_per_week") @db.SmallInt
   defaultAvailableWeekdays   Json?     @map("default_available_weekdays")
   updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -190,6 +195,25 @@ model AthleteProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("athlete_profiles")
+}
+
+model BodyMeasurement {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  measuredAt       DateTime  @map("measured_at") @db.Timestamptz(6)
+  measuredOn       DateTime? @map("measured_on") @db.Date
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  measurementType  String    @map("measurement_type") @db.VarChar(32)
+  value            Decimal   @db.Decimal(9, 2)
+  unit             String    @db.VarChar(16)
+  source           String    @db.VarChar(32)
+  sourceExternalId String?   @map("source_external_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, source, sourceExternalId])
+  @@index([userId, measurementType, measuredAt(sort: Desc), createdAt(sort: Desc), id(sort: Desc)], map: "body_measurements_owner_weight_order_idx")
+  @@map("body_measurements")
 }
 
 model IntegrationConnection {

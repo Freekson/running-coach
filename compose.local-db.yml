@@ -1,0 +1,24 @@
+name: running-coach-local-db
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: running-coach-postgres-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: running_coach_local
+      POSTGRES_USER: running_coach_local
+      POSTGRES_PASSWORD: ${LOCAL_POSTGRES_PASSWORD:?Set LOCAL_POSTGRES_PASSWORD in .env.local-db}
+    ports:
+      - '127.0.0.1:55432:5432'
+    volumes:
+      - running_coach_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U running_coach_local -d running_coach_local']
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  running_coach_pgdata:
+    name: running-coach-pgdata-local

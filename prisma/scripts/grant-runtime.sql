@@ -6,6 +6,7 @@ GRANT USAGE ON SCHEMA public TO running_coach_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     public.users,
     public.athlete_profiles,
+    public.body_measurements,
     public.integration_connections,
     public.integration_credentials,
     public.sync_cursors,

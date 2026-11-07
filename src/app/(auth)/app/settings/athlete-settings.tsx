@@ -10,6 +10,7 @@ import { DateField } from '@/components/ui/DateField'
 import { FormField } from '@/components/ui/FormField'
 import { useToast } from '@/components/ui/Toast'
 import type { MeasurementSystem } from '@/lib/measurement-system'
+import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
 import { weightUnitFor } from '@/lib/measurement-system'
 import type { ProfilePatch } from '@/server/athlete/profile'
 import { useMeasurementSystem } from '../measurement-system-provider'
@@ -18,6 +19,7 @@ import { TrainingExperienceSelect, type TrainingExperience } from './training-ex
 import { WeightHistoryPanel } from './weight-history-panel'
 import { sortWeightReadings, type ChartPeriod, type WeightReading } from './weight-history'
 import { useClientReady } from './use-client-ready'
+import { ProviderCredentials } from './provider-credentials'
 import styles from './athlete-settings.module.scss'
 
 type Profile = {
@@ -58,10 +60,12 @@ export function AthleteSettingsRoute({
   initial,
   initialChartPeriod,
   registrationName,
+  openaiConnection,
 }: {
   initial: Settings
   initialChartPeriod: ChartPeriod
   registrationName: string | null
+  openaiConnection: ProviderConnectionStatus
 }) {
   const router = useRouter()
   return (
@@ -69,6 +73,7 @@ export function AthleteSettingsRoute({
       initial={initial}
       initialChartPeriod={initialChartPeriod}
       registrationName={registrationName}
+      openaiConnection={openaiConnection}
       onProfileSaved={() => router.refresh()}
     />
   )
@@ -78,11 +83,13 @@ export function AthleteSettings({
   initial,
   initialChartPeriod = '7D',
   registrationName,
+  openaiConnection,
   onProfileSaved,
 }: {
   initial: Settings
   initialChartPeriod?: ChartPeriod
   registrationName?: string | null
+  openaiConnection?: ProviderConnectionStatus
   onProfileSaved?: () => void
 }) {
   const { system, setSystem } = useMeasurementSystem()
@@ -476,6 +483,8 @@ export function AthleteSettings({
       <p className={styles.status} role="status" aria-live="polite">
         {profileMessage}
       </p>
+
+      <ProviderCredentials initial={openaiConnection} />
 
       <WeightHistoryPanel
         initialPeriod={initialChartPeriod}

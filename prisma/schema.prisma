@@ -22,6 +22,7 @@ enum UserStatus {
 enum IntegrationProvider {
   GARMIN
   INTERVALS
+  OPENAI
 }
 
 enum IntegrationAuthMethod {
@@ -236,6 +237,7 @@ model IntegrationConnection {
   syncRuns   SyncRun[]
 
   @@unique([userId, id])
+  @@unique([userId, provider])
   @@unique([userId, provider, externalAccountId])
   @@index([userId, provider, status])
   @@map("integration_connections")

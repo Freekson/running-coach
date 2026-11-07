@@ -1,4 +1,5 @@
 import { AccountUnavailableError, getCurrentUser } from '@/server/auth/current-user'
+import { getOwnerContext } from '@/server/authorization/ownership'
 import {
   profilePatchSchema,
   SexRequiredError,
@@ -11,6 +12,7 @@ export async function PATCH(request: Request) {
   try {
     const user = await getCurrentUser()
     if (!user) return new Response(null, { status: 401, headers: privateHeaders })
+    const owner = getOwnerContext(user)
     if (!request.headers.get('content-type')?.startsWith('application/json'))
       return new Response(null, { status: 415, headers: privateHeaders })
     let body: unknown
@@ -25,7 +27,7 @@ export async function PATCH(request: Request) {
         { error: 'Invalid profile fields' },
         { status: 400, headers: privateHeaders },
       )
-    await updateAthleteProfile(user.id, parsed.data)
+    await updateAthleteProfile(owner, parsed.data)
     return new Response(null, { status: 204, headers: privateHeaders })
   } catch (error) {
     if (error instanceof AccountUnavailableError)

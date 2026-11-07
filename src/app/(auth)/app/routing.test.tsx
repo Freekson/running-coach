@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getCurrentUser, redirect, requestPath, chartCookie } = vi.hoisted(() => ({
-  getCurrentUser: vi.fn(),
-  requestPath: vi.fn(() => '/app/dashboard'),
-  chartCookie: vi.fn(() => undefined as string | undefined),
-  redirect: vi.fn((destination: string) => {
-    throw new Error(`Redirect to ${destination}`)
+vi.mock('server-only', () => ({}))
+
+const { getCurrentUser, isVerifiedCurrentUser, redirect, requestPath, chartCookie } = vi.hoisted(
+  () => ({
+    getCurrentUser: vi.fn(),
+    isVerifiedCurrentUser: vi.fn(() => true),
+    requestPath: vi.fn(() => '/app/dashboard'),
+    chartCookie: vi.fn(() => undefined as string | undefined),
+    redirect: vi.fn((destination: string) => {
+      throw new Error(`Redirect to ${destination}`)
+    }),
   }),
-}))
+)
 
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({ 'x-running-coach-app-path': requestPath() }),
@@ -21,6 +26,7 @@ vi.mock('next/headers', () => ({
 vi.mock('@/server/auth/current-user', () => ({
   AccountUnavailableError: class AccountUnavailableError extends Error {},
   getCurrentUser,
+  isVerifiedCurrentUser,
 }))
 vi.mock('@/server/auth/invitation/invitation-management', () => ({
   listInvitations: vi.fn(async () => ({
@@ -133,7 +139,7 @@ describe('authenticated /app routes', () => {
     expect(settings.type).toBe(AppShell)
     expect(settings.props.children.props.initial.weights).toEqual([])
     expect(settings.props.children.props.initialChartPeriod).toBe('7D')
-    expect(getAthleteSettings).toHaveBeenCalledWith('user-a', '7D')
+    expect(getAthleteSettings).toHaveBeenCalledWith({ userId: 'user-a' }, '7D')
   })
 
   it('restores a valid chart period and ignores an invalid cookie', async () => {
@@ -141,12 +147,12 @@ describe('authenticated /app routes', () => {
     chartCookie.mockReturnValue('30D')
     const selected = await SettingsPage()
     expect(selected.props.children.props.initialChartPeriod).toBe('30D')
-    expect(getAthleteSettings).toHaveBeenLastCalledWith('user-a', '30D')
+    expect(getAthleteSettings).toHaveBeenLastCalledWith({ userId: 'user-a' }, '30D')
 
     chartCookie.mockReturnValue('invalid')
     const fallback = await SettingsPage()
     expect(fallback.props.children.props.initialChartPeriod).toBe('7D')
-    expect(getAthleteSettings).toHaveBeenLastCalledWith('user-a', '7D')
+    expect(getAthleteSettings).toHaveBeenLastCalledWith({ userId: 'user-a' }, '7D')
   })
 
   it('loads the owner’s saved measurement system for protected pages', async () => {
@@ -154,7 +160,7 @@ describe('authenticated /app routes', () => {
     vi.mocked(getMeasurementSystem).mockResolvedValueOnce('IMPERIAL')
     const dashboard = await DashboardPage()
     expect(dashboard.props.measurementSystem).toBe('IMPERIAL')
-    expect(getMeasurementSystem).toHaveBeenCalledWith('athlete-a')
+    expect(getMeasurementSystem).toHaveBeenCalledWith({ userId: 'athlete-a' })
   })
 
   it('blocks a different non-admin user from the admin route', async () => {

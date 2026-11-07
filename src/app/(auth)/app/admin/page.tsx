@@ -8,15 +8,17 @@ import {
 } from '@/server/auth/invitation/invitation-management'
 import { AdminManagement } from './admin-management'
 import { getMeasurementSystem } from '@/server/athlete/profile'
+import { getOwnerContext } from '@/server/authorization/ownership'
 
 export default async function AdminPage() {
   const user = await getAppUser()
   if (!user) return <AccountUnavailable />
   if (user.role !== 'ADMIN') notFound()
+  const owner = getOwnerContext(user)
   const [invitations, users, measurementSystem] = await Promise.all([
     listInvitations(1),
     listRegisteredUsers(1),
-    getMeasurementSystem(user.id),
+    getMeasurementSystem(owner),
   ])
   return (
     <AppShell user={user} measurementSystem={measurementSystem}>

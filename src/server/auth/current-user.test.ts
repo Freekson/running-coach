@@ -15,7 +15,7 @@ vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }))
 vi.mock('./better-auth', () => ({ getAuth }))
 vi.mock('@/server/db/client', () => ({ getPrismaClient }))
 
-import { AccountUnavailableError, getCurrentUser } from './current-user'
+import { AccountUnavailableError, getCurrentUser, isVerifiedCurrentUser } from './current-user'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -50,11 +50,15 @@ describe('getCurrentUser', () => {
         status: 'ACTIVE',
       })
 
-    expect(await getCurrentUser()).toEqual({
+    const verifiedA = await getCurrentUser()
+    expect(verifiedA).toEqual({
       id: 'internal-a',
       role: 'USER',
       email: 'a@example.test',
     })
+    if (!verifiedA) throw new Error('Expected a verified user')
+    expect(isVerifiedCurrentUser(verifiedA)).toBe(true)
+    expect(isVerifiedCurrentUser({ ...verifiedA })).toBe(false)
     expect(await getCurrentUser()).toEqual({
       id: 'internal-b',
       role: 'USER',

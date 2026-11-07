@@ -45,7 +45,7 @@
 .copy:disabled,
 .copy[aria-disabled='true'] {
   color: var(--color-text-muted);
-  cursor: not-allowed;
+  cursor: default;
 }
 .feedback {
   position: absolute;

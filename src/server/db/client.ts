@@ -2,7 +2,7 @@ import { PrismaNeon } from '@prisma/adapter-neon'
 import { PrismaClient } from '@prisma/client'
 import { neonConfig } from '@neondatabase/serverless'
 import WebSocket from 'ws'
-import { assertDatabaseTier, getExpectedDatabaseTier } from './environment'
+import { assertDatabaseTier, getExpectedDatabaseTier, isLocalPostgres } from './environment'
 
 neonConfig.webSocketConstructor = WebSocket
 
@@ -16,9 +16,11 @@ export async function getPrismaClient(): Promise<PrismaClient> {
   }
 
   if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = new PrismaClient({
-      adapter: new PrismaNeon({ connectionString: process.env.DATABASE_URL }),
-    })
+    globalForPrisma.prisma = isLocalPostgres(process.env)
+      ? new PrismaClient()
+      : new PrismaClient({
+          adapter: new PrismaNeon({ connectionString: process.env.DATABASE_URL }),
+        })
   }
 
   const prisma = globalForPrisma.prisma

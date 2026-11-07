@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import type { UserRole } from '@prisma/client'
+import { useNavigationGuard } from './navigation-guard'
 import styles from './app-shell.module.scss'
 
 const sections = [
@@ -15,6 +16,8 @@ const sections = [
 
 export function AppNavigation({ role }: { role: UserRole }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { requestLeave } = useNavigationGuard()
   const links = role === 'ADMIN' ? [...sections, { label: 'Admin', href: '/app/admin' }] : sections
 
   return (
@@ -25,6 +28,9 @@ export function AppNavigation({ role }: { role: UserRole }) {
           href={href}
           className={styles.navLink}
           aria-current={pathname === href || pathname.startsWith(`${href}/`) ? 'page' : undefined}
+          onNavigate={(event) => {
+            if (pathname !== href && requestLeave(() => router.push(href))) event.preventDefault()
+          }}
         >
           {label}
         </Link>

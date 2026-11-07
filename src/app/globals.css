@@ -155,7 +155,7 @@ a:active {
   border-color: var(--color-border);
   background: var(--color-surface-raised);
   color: var(--color-text-muted);
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .card {
@@ -179,6 +179,17 @@ a:active {
   font: inherit;
 }
 
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .field::placeholder {
   color: var(--color-text-muted);
   opacity: 1;
@@ -192,7 +203,7 @@ a:active {
   border-color: var(--color-border);
   background: var(--color-surface-raised);
   color: var(--color-text-muted);
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .field[aria-invalid='true'] {
@@ -263,7 +274,7 @@ a:active {
 }
 .app-page {
   display: grid;
-  gap: 24px;
+  gap: 20px;
   min-width: 0;
 }
 .app-page h1 {

@@ -7,14 +7,19 @@ import {
   listRegisteredUsers,
 } from '@/server/auth/invitation/invitation-management'
 import { AdminManagement } from './admin-management'
+import { getMeasurementSystem } from '@/server/athlete/profile'
 
 export default async function AdminPage() {
   const user = await getAppUser()
   if (!user) return <AccountUnavailable />
   if (user.role !== 'ADMIN') notFound()
-  const [invitations, users] = await Promise.all([listInvitations(1), listRegisteredUsers(1)])
+  const [invitations, users, measurementSystem] = await Promise.all([
+    listInvitations(1),
+    listRegisteredUsers(1),
+    getMeasurementSystem(user.id),
+  ])
   return (
-    <AppShell user={user}>
+    <AppShell user={user} measurementSystem={measurementSystem}>
       <AdminManagement
         invitations={invitations.invitations.map((invitation) => ({
           ...invitation,

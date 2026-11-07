@@ -28,7 +28,7 @@ async function resolveCreatedUser(
       SELECT "id" FROM "auth_users"
       WHERE "id" = ${user.id}
         AND "email" = ${user.email}
-        AND "invitation_claim_nonce" = ${user.invitationClaimNonce}
+        AND "invitation_claim_nonce" = CAST(${user.invitationClaimNonce} AS UUID)
       FOR UPDATE
     `
     if (locked.length !== 1) return 'uncertain'

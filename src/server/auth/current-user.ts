@@ -11,22 +11,49 @@ export class AccountUnavailableError extends Error {
   }
 }
 
-export type CurrentUser = { id: string; role: UserRole; email: string | null }
+export type CurrentUser = {
+  id: string
+  role: UserRole
+  email: string | null
+  name?: string
+  displayName?: string
+}
+
+const userSelect = {
+  id: true,
+  role: true,
+  email: true,
+  status: true,
+  profile: { select: { displayName: true } },
+} as const
+
+function profileDisplayName(value: string | null | undefined) {
+  const displayName = value?.trim()
+  return displayName ? { displayName } : {}
+}
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const auth = await getAuth()
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.session || !session.user) return null
+  const registeredName = session.user.name?.trim()
+  const name = registeredName ? { name: registeredName } : {}
 
   const prisma = await getPrismaClient()
   const userId = session.user.id
   const existingUser = await prisma.user.findUnique({
     where: { authSubject: userId },
-    select: { id: true, role: true, email: true, status: true },
+    select: userSelect,
   })
   if (existingUser) {
     if (existingUser.status !== 'ACTIVE') throw new AccountUnavailableError()
-    return { id: existingUser.id, role: existingUser.role, email: existingUser.email }
+    return {
+      id: existingUser.id,
+      role: existingUser.role,
+      email: existingUser.email,
+      ...name,
+      ...profileDisplayName(existingUser.profile?.displayName),
+    }
   }
 
   // Do not attach a Clerk-era athlete record by email. The operator must
@@ -46,7 +73,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       where: { authSubject: userId },
       create: { authSubject: userId, email: session.user.email, role: 'USER' },
       update: {},
-      select: { id: true, role: true, email: true, status: true },
+      select: userSelect,
     })
     .catch(async (error: unknown) => {
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
@@ -54,12 +81,18 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       // Another request may have created this same auth identity first.
       const concurrentUser = await prisma.user.findUnique({
         where: { authSubject: userId },
-        select: { id: true, role: true, email: true, status: true },
+        select: userSelect,
       })
       if (!concurrentUser) throw error
       return concurrentUser
     })
 
   if (user.status !== 'ACTIVE') throw new AccountUnavailableError()
-  return { id: user.id, role: user.role, email: user.email }
+  return {
+    id: user.id,
+    role: user.role,
+    email: user.email,
+    ...name,
+    ...profileDisplayName(user.profile?.displayName),
+  }
 }

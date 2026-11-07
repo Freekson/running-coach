@@ -134,7 +134,7 @@ Lifecycle:
 
 1. A trusted operator issues a seven-day single-use invitation link through the CLI; RUN-18 adds an ADMIN-only UI for this.
 2. User signs up, verifies contact as required, and receives an internal `User` row keyed by the verified external auth subject.
-3. User completes optional Athlete Profile; chooses units, timezone, default weekly training availability.
+3. User completes Athlete Profile and chooses units and default weekly training availability. The settings form requires height; local dates use the user's browser timezone.
 4. User explicitly connects each external provider.
 5. Account deletion disconnects integrations, revokes subscriptions, schedules tenant-data removal, and provides data export.
 

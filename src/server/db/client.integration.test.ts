@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client'
 import { config } from 'dotenv'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getPrismaClient } from './client'
+import { isLocalPostgres } from './environment'
 
 const databaseTestRequested = process.env.npm_lifecycle_event === 'test:db'
 if (databaseTestRequested) config()
@@ -89,13 +90,18 @@ describe.skipIf(!runDatabaseTest)('Prisma on an isolated PostgreSQL database', (
   }, 30_000)
 
   it('rejects Production when pointed at the marked development database', async () => {
+    const localDatabase = isLocalPostgres(process.env)
     const originalVercelEnvironment = process.env.VERCEL_ENV
     const originalDatabaseEnvironment = process.env.APP_DATABASE_ENV
     process.env.VERCEL_ENV = 'production'
     process.env.APP_DATABASE_ENV = 'production'
 
     try {
-      await expect(getPrismaClient()).rejects.toThrow('Database environment verification failed')
+      await expect(getPrismaClient()).rejects.toThrow(
+        localDatabase
+          ? 'Vercel database access requires a pooled Neon URL'
+          : 'Database environment verification failed',
+      )
     } finally {
       if (originalVercelEnvironment === undefined) delete process.env.VERCEL_ENV
       else process.env.VERCEL_ENV = originalVercelEnvironment

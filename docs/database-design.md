@@ -71,19 +71,20 @@ Do not use email as the ownership key; email can change. Social/shared accounts 
 
 One-to-one with `users`; `user_id` is the primary key and foreign key.
 
-Optional demographic/training fields: `display_name`, `birth_date` (or age estimate; choose one in implementation), `sex` (optional/private, with values defined separately), `height_cm`, `experience_level`, `preferred_timezone`, `distance_unit`, `weight_unit`, `default_training_days_per_week`, `default_available_weekdays` (small array/JSON), `updated_at`.
+Required on profile save: `sex`, with values `MALE` or `FEMALE`. Existing profiles may have `NULL` until their owner selects one; do not assign a value automatically. Other demographic/training fields are nullable in the database: `display_name`, `birth_date` (or age estimate; choose one in implementation), `height_cm`, `default_training_days_per_week`, `default_available_weekdays` (small array/JSON), `updated_at`. `experience_level` is required with default `BEGINNER`; existing null values are backfilled to `BEGINNER`. The settings form requires height, but the database and profile API keep it optional for existing records and independent updates. The optional `preferred_timezone` column is retained for compatibility but is not exposed by profile settings; local dates use the user's browser timezone. `measurement_system` is the single account-wide display preference (`METRIC` or `IMPERIAL`, default `METRIC`). The old `distance_unit` and `weight_unit` columns remain temporarily for deployment compatibility but are no longer read or written. Existing distance preference takes precedence over weight preference when backfilled. Stored measurements remain in canonical units.
 
-- Missing personal data must not prevent planning.
+- Other missing personal data must not prevent planning.
 - Do not export birth date or sex to AI unless explicitly selected.
 - User may override **training days/week and exact weekdays in each plan**; defaults are only convenience.
 
 ### `body_measurements`
 
-`id`, `user_id`, `measured_at`, `measurement_type` (e.g. WEIGHT, HEIGHT), `value`, `unit`, `source`, `source_external_id` nullable.
+`id`, `user_id`, `measured_at`, nullable `measured_on` (the calendar date chosen for a manual reading), `created_at`, `measurement_type` (e.g. WEIGHT, HEIGHT), `value`, `unit`, `source`, `source_external_id` nullable. Keep `measured_on` null for old readings because their original browser timezone cannot be recovered from `measured_at`; display those using the current browser timezone.
 
 - Weight must be a history rather than overwriting one number.
 - Current displayed weight is latest eligible valid measurement.
 - Keep source and timestamp so manual vs Garmin imports can be reconciled.
+- Order history by `measured_at DESC`, `created_at DESC`, then `id DESC` so later entries for the same measurement time remain deterministic.
 
 ## 4. External providers and synchronization (P0)
 

@@ -44,6 +44,14 @@ vi.mock('@/server/athlete/profile', () => ({
     weights: [],
   })),
 }))
+vi.mock('@/server/provider/vault', () => ({
+  getProviderConnectionStatus: vi.fn(async () => ({
+    provider: 'OPENAI',
+    status: 'DISCONNECTED',
+    createdAt: null,
+    updatedAt: null,
+  })),
+}))
 const { notFound } = vi.hoisted(() => ({
   notFound: vi.fn(() => {
     throw new Error('Not found')

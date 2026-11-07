@@ -1,4 +1,5 @@
 import { AccountUnavailableError, getCurrentUser } from '@/server/auth/current-user'
+import { getOwnerContext } from '@/server/authorization/ownership'
 import {
   addWeight,
   getWeightChartReadings,
@@ -15,13 +16,14 @@ export async function GET(request: Request) {
   try {
     const user = await getCurrentUser()
     if (!user) return new Response(null, { status: 401, headers: privateHeaders })
+    const owner = getOwnerContext(user)
     const params = new URL(request.url).searchParams
     if (params.get('view') === 'chart') {
       const period = weightChartPeriodSchema.safeParse(params.get('period'))
       if (!period.success)
         return Response.json({ error: 'Invalid period' }, { status: 400, headers: privateHeaders })
       return Response.json(
-        { items: await getWeightChartReadings(user.id, period.data) },
+        { items: await getWeightChartReadings(owner, period.data) },
         { headers: privateHeaders },
       )
     }
@@ -29,7 +31,7 @@ export async function GET(request: Request) {
       const page = weightHistoryPageSchema.safeParse(params.get('page'))
       if (!page.success)
         return Response.json({ error: 'Invalid page' }, { status: 400, headers: privateHeaders })
-      return Response.json(await getWeightHistoryPage(user.id, page.data), {
+      return Response.json(await getWeightHistoryPage(owner, page.data), {
         headers: privateHeaders,
       })
     }
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
   try {
     const user = await getCurrentUser()
     if (!user) return new Response(null, { status: 401, headers: privateHeaders })
+    const owner = getOwnerContext(user)
     if (!request.headers.get('content-type')?.startsWith('application/json'))
       return new Response(null, { status: 415, headers: privateHeaders })
     let body: unknown
@@ -56,7 +59,7 @@ export async function POST(request: Request) {
     const parsed = weightInputSchema.safeParse(body)
     if (!parsed.success)
       return Response.json({ error: 'Invalid weight' }, { status: 400, headers: privateHeaders })
-    const measurement = await addWeight(user.id, parsed.data)
+    const measurement = await addWeight(owner, parsed.data)
     return Response.json(
       {
         id: measurement.id,

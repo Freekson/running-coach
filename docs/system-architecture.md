@@ -145,6 +145,15 @@ Authorization:
 - Admin role is only for invites/app operations. Any future coach sharing requires explicit consent and a separate permission model.
 - Verify against IDOR, cross-user file import, direct-link read, sync execution as another user, notification subscription takeover, and external publication.
 
+Current implementation: `getCurrentUser()` marks objects issued from a verified session. `getOwnerContext()` accepts only those objects and issues a runtime-checked owner context required by athlete services. `ownedWhere` scopes profile and weight queries. New resource-by-ID reads and writes should use `ownedIdWhere`, and new child writes that reference integration connections should first use `requireOwnedConnection`; database composite owner foreign keys provide a second check. ADMIN invitation access does not change the owner used by personal-data services. Account export is planned separately. RLS remains deferred until tenant context is proven safe with pooled connections.
+
+Ownership verification by feature:
+
+- RUN-20 exercises the existing profile and weight routes against PostgreSQL with two owners, including an ADMIN acting only on their own data. Weight creation is the current production child write.
+- RUN-21 must exercise a credential write with another owner's connection ID and verify that no credential is stored. The provider service must check `requireOwnedConnection` before writing and still use the composite owner foreign key.
+- RUN-51 must test the account export response for a USER and an ADMIN against a second owner's records. Each exported model query must be owner-scoped, and credentials must not appear in the export. RUN-20's projected-list query test is a helper contract, not export endpoint coverage.
+- Later sync child-write services must test guessed connection IDs through their service or route, in addition to the existing composite foreign-key test.
+
 Optional defense in depth: PostgreSQL RLS, **only after** verifying request-scoped tenant context with Prisma and Neon pooled connections. Do not assert RLS is active unless integration tests prove it; app authorization remains mandatory.
 
 ## 5. Integration adapters

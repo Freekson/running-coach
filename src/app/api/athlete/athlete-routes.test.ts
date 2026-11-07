@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   getCurrentUser,
+  isVerifiedCurrentUser,
   updateAthleteProfile,
   addWeight,
   getWeightChartReadings,
   getWeightHistoryPage,
 } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
+  isVerifiedCurrentUser: vi.fn(() => true),
   updateAthleteProfile: vi.fn(),
   addWeight: vi.fn(),
   getWeightChartReadings: vi.fn(),
@@ -17,6 +19,7 @@ vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({
   AccountUnavailableError: class AccountUnavailableError extends Error {},
   getCurrentUser,
+  isVerifiedCurrentUser,
 }))
 vi.mock('@/server/athlete/profile', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/athlete/profile')>()),
@@ -61,7 +64,7 @@ describe('athlete settings APIs', () => {
     )
     expect(chart.status).toBe(200)
     expect(chart.headers.get('Cache-Control')).toBe('private, no-store')
-    expect(getWeightChartReadings).toHaveBeenCalledWith('athlete-a', '90D')
+    expect(getWeightChartReadings).toHaveBeenCalledWith({ userId: 'athlete-a' }, '90D')
     getCurrentUser.mockResolvedValue({ id: 'athlete-b', role: 'ADMIN' })
     const history = await GET(
       new Request(
@@ -69,7 +72,7 @@ describe('athlete settings APIs', () => {
       ),
     )
     expect(history.status).toBe(200)
-    expect(getWeightHistoryPage).toHaveBeenCalledWith('athlete-b', 2)
+    expect(getWeightHistoryPage).toHaveBeenCalledWith({ userId: 'athlete-b' }, 2)
     expect(
       (await GET(new Request('https://coach.example.test/api/athlete/weight?view=history&page=0')))
         .status,
@@ -118,8 +121,14 @@ describe('athlete settings APIs', () => {
     expect(
       (await POST(request('weight', 'POST', { value: 70, unit: 'KG', requestId }))).status,
     ).toBe(201)
-    expect(updateAthleteProfile).toHaveBeenCalledWith('athlete-a', { displayName: 'Runner' })
-    expect(addWeight).toHaveBeenCalledWith('athlete-b', { value: 70, unit: 'KG', requestId })
+    expect(updateAthleteProfile).toHaveBeenCalledWith(
+      { userId: 'athlete-a' },
+      { displayName: 'Runner' },
+    )
+    expect(addWeight).toHaveBeenCalledWith(
+      { userId: 'athlete-b' },
+      { value: 70, unit: 'KG', requestId },
+    )
     expect(
       (await PATCH(request('profile', 'PATCH', { userId: 'athlete-b', heightCm: 170 }))).status,
     ).toBe(400)
@@ -157,9 +166,12 @@ describe('athlete settings APIs', () => {
     expect(
       (await PATCH(request('profile', 'PATCH', { measurementSystem: 'IMPERIAL' }))).status,
     ).toBe(204)
-    expect(updateAthleteProfile).toHaveBeenCalledWith('athlete-a', {
-      measurementSystem: 'IMPERIAL',
-    })
+    expect(updateAthleteProfile).toHaveBeenCalledWith(
+      { userId: 'athlete-a' },
+      {
+        measurementSystem: 'IMPERIAL',
+      },
+    )
   })
 
   it('returns a private conflict response when a request ID is reused for another value', async () => {

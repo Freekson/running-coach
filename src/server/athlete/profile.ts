@@ -3,6 +3,7 @@ import 'server-only'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { getPrismaClient } from '@/server/db/client'
+import { ownedWhere, ownerId, type OwnerContext } from '@/server/authorization/ownership'
 import { normalizeMeasurementSystem, type MeasurementSystem } from '@/lib/measurement-system'
 
 const dateOnly = z
@@ -86,24 +87,25 @@ function serializeWeight(item: {
   }
 }
 
-export async function getWeightChartReadings(userId: string, period: WeightChartPeriod) {
+export async function getWeightChartReadings(owner: OwnerContext, period: WeightChartPeriod) {
+  ownerId(owner)
   const prisma = await getPrismaClient()
   const cutoff = weightCutoff(period)
   const measurements = await prisma.bodyMeasurement.findMany({
-    where: {
-      userId,
+    where: ownedWhere(owner, {
       measurementType: 'WEIGHT',
       ...(cutoff ? { measuredAt: { gte: cutoff } } : {}),
-    },
+    }),
     orderBy: weightOrder,
     select: weightSelect,
   })
   return measurements.map(serializeWeight)
 }
 
-export async function getWeightHistoryPage(userId: string, page: number) {
+export async function getWeightHistoryPage(owner: OwnerContext, page: number) {
+  ownerId(owner)
   const prisma = await getPrismaClient()
-  const where = { userId, measurementType: 'WEIGHT' }
+  const where = ownedWhere(owner, { measurementType: 'WEIGHT' })
   const [total, measurements] = await Promise.all([
     prisma.bodyMeasurement.count({ where }),
     prisma.bodyMeasurement.findMany({
@@ -137,26 +139,28 @@ export class SexRequiredError extends Error {
 
 export type ProfilePatch = z.infer<typeof profilePatchSchema>
 
-export async function getMeasurementSystem(userId: string): Promise<MeasurementSystem> {
+export async function getMeasurementSystem(owner: OwnerContext): Promise<MeasurementSystem> {
+  ownerId(owner)
   const prisma = await getPrismaClient()
   const profile = await prisma.athleteProfile.findUnique({
-    where: { userId },
+    where: ownedWhere(owner, {}),
     select: { measurementSystem: true },
   })
   return normalizeMeasurementSystem(profile?.measurementSystem)
 }
 
-export async function getAthleteSettings(userId: string, period: WeightChartPeriod = '7D') {
+export async function getAthleteSettings(owner: OwnerContext, period: WeightChartPeriod = '7D') {
+  ownerId(owner)
   const prisma = await getPrismaClient()
   const [profile, measurements, chartWeights] = await Promise.all([
-    prisma.athleteProfile.findUnique({ where: { userId } }),
+    prisma.athleteProfile.findUnique({ where: ownedWhere(owner, {}) }),
     prisma.bodyMeasurement.findMany({
-      where: { userId, measurementType: 'WEIGHT' },
+      where: ownedWhere(owner, { measurementType: 'WEIGHT' }),
       orderBy: weightOrder,
       select: weightSelect,
       take: 3,
     }),
-    getWeightChartReadings(userId, period),
+    getWeightChartReadings(owner, period),
   ])
   const weekdays = z
     .array(z.number().int().min(0).max(6))
@@ -177,32 +181,34 @@ export async function getAthleteSettings(userId: string, period: WeightChartPeri
   }
 }
 
-export async function updateAthleteProfile(userId: string, patch: ProfilePatch) {
+export async function updateAthleteProfile(owner: OwnerContext, patch: ProfilePatch) {
+  const userId = ownerId(owner)
   const prisma = await getPrismaClient()
   const onlyMeasurementSystem =
     patch.measurementSystem !== undefined && Object.keys(patch).length === 1
   if (patch.sex === undefined && !onlyMeasurementSystem) {
     const existing = await prisma.athleteProfile.findUnique({
-      where: { userId },
+      where: ownedWhere(owner, {}),
       select: { sex: true },
     })
     if (existing?.sex !== 'MALE' && existing?.sex !== 'FEMALE') throw new SexRequiredError()
   }
   const data: Prisma.AthleteProfileUncheckedCreateInput = {
-    userId,
     ...patch,
     birthDate: patch.birthDate ? new Date(`${patch.birthDate}T00:00:00.000Z`) : patch.birthDate,
     defaultAvailableWeekdays:
       patch.defaultAvailableWeekdays === null ? Prisma.DbNull : patch.defaultAvailableWeekdays,
+    userId,
   }
   await prisma.athleteProfile.upsert({
-    where: { userId },
+    where: ownedWhere(owner, {}),
     create: data,
     update: data,
   })
 }
 
-export async function addWeight(userId: string, input: z.infer<typeof weightInputSchema>) {
+export async function addWeight(owner: OwnerContext, input: z.infer<typeof weightInputSchema>) {
+  const userId = ownerId(owner)
   const prisma = await getPrismaClient()
   const kilograms = input.unit === 'LB' ? input.value * 0.45359237 : input.value
   const value = Math.round(kilograms * 100) / 100

@@ -19,6 +19,18 @@ export type CurrentUser = {
   displayName?: string
 }
 
+const verifiedUsers = new WeakSet<CurrentUser>()
+
+function issuedUser(user: CurrentUser): CurrentUser {
+  const verified = Object.freeze(user)
+  verifiedUsers.add(verified)
+  return verified
+}
+
+export function isVerifiedCurrentUser(user: CurrentUser): boolean {
+  return verifiedUsers.has(user)
+}
+
 const userSelect = {
   id: true,
   role: true,
@@ -47,13 +59,13 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   })
   if (existingUser) {
     if (existingUser.status !== 'ACTIVE') throw new AccountUnavailableError()
-    return {
+    return issuedUser({
       id: existingUser.id,
       role: existingUser.role,
       email: existingUser.email,
       ...name,
       ...profileDisplayName(existingUser.profile?.displayName),
-    }
+    })
   }
 
   // Do not attach a Clerk-era athlete record by email. The operator must
@@ -88,11 +100,11 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     })
 
   if (user.status !== 'ACTIVE') throw new AccountUnavailableError()
-  return {
+  return issuedUser({
     id: user.id,
     role: user.role,
     email: user.email,
     ...name,
     ...profileDisplayName(user.profile?.displayName),
-  }
+  })
 }

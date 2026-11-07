@@ -1,18 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
+import {
+  getOwnerContext,
+  InvalidOwnerContextError,
+  type OwnerContext,
+} from '@/server/authorization/ownership'
 
-const { getPrismaClient, findUnique, findMany, count, upsert, create, findMeasurement } =
-  vi.hoisted(() => ({
-    getPrismaClient: vi.fn(),
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
-    count: vi.fn(),
-    upsert: vi.fn(),
-    create: vi.fn(),
-    findMeasurement: vi.fn(),
-  }))
+let ownerA: OwnerContext
+let ownerB: OwnerContext
+
+const {
+  getPrismaClient,
+  isVerifiedCurrentUser,
+  findUnique,
+  findMany,
+  count,
+  upsert,
+  create,
+  findMeasurement,
+} = vi.hoisted(() => ({
+  getPrismaClient: vi.fn(),
+  isVerifiedCurrentUser: vi.fn(),
+  findUnique: vi.fn(),
+  findMany: vi.fn(),
+  count: vi.fn(),
+  upsert: vi.fn(),
+  create: vi.fn(),
+  findMeasurement: vi.fn(),
+}))
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/db/client', () => ({ getPrismaClient }))
+vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser }))
 
 import {
   addWeight,
@@ -29,6 +47,9 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  isVerifiedCurrentUser.mockReturnValue(true)
+  ownerA = getOwnerContext({ id: 'athlete-a', role: 'USER', email: null })
+  ownerB = getOwnerContext({ id: 'athlete-b', role: 'ADMIN', email: null })
   findUnique.mockResolvedValue({ sex: 'FEMALE' })
   getPrismaClient.mockResolvedValue({
     athleteProfile: { findUnique, upsert },
@@ -37,20 +58,41 @@ beforeEach(() => {
 })
 
 describe('athlete profile', () => {
+  it('rejects an unissued owner context before any database access', async () => {
+    const forged = { userId: ownerB.userId }
+    await expect(getAthleteSettings(forged)).rejects.toBeInstanceOf(InvalidOwnerContextError)
+    await expect(getMeasurementSystem(forged)).rejects.toBeInstanceOf(InvalidOwnerContextError)
+    await expect(getWeightChartReadings(forged, 'ALL')).rejects.toBeInstanceOf(
+      InvalidOwnerContextError,
+    )
+    await expect(getWeightHistoryPage(forged, 1)).rejects.toBeInstanceOf(InvalidOwnerContextError)
+    await expect(
+      updateAthleteProfile(forged, { measurementSystem: 'METRIC' }),
+    ).rejects.toBeInstanceOf(InvalidOwnerContextError)
+    await expect(
+      addWeight(forged, {
+        value: 70,
+        unit: 'KG',
+        requestId: '969e52dd-3b4f-48ce-935a-3ad674584a24',
+      }),
+    ).rejects.toBeInstanceOf(InvalidOwnerContextError)
+    expect(getPrismaClient).not.toHaveBeenCalled()
+  })
+
   it('reads only the authenticated owner profile and weight history', async () => {
     findUnique.mockResolvedValue(null)
     findMany.mockResolvedValue([])
-    expect((await getAthleteSettings('athlete-a')).profile.experienceLevel).toBe('BEGINNER')
-    expect((await getAthleteSettings('athlete-b')).profile.experienceLevel).toBe('BEGINNER')
+    expect((await getAthleteSettings(ownerA)).profile.experienceLevel).toBe('BEGINNER')
+    expect((await getAthleteSettings(ownerB)).profile.experienceLevel).toBe('BEGINNER')
     expect(findUnique.mock.calls.map(([args]) => args.where.userId)).toEqual([
-      'athlete-a',
-      'athlete-b',
+      ownerA.userId,
+      ownerB.userId,
     ])
     expect(findMany.mock.calls.map(([args]) => args.where.userId)).toEqual([
-      'athlete-a',
-      'athlete-a',
-      'athlete-b',
-      'athlete-b',
+      ownerA.userId,
+      ownerA.userId,
+      ownerB.userId,
+      ownerB.userId,
     ])
     expect(findMany.mock.calls.every(([args]) => args.where.measurementType === 'WEIGHT')).toBe(
       true,
@@ -59,20 +101,20 @@ describe('athlete profile', () => {
 
   it('loads seven days by default and the requested period when supplied', async () => {
     findMany.mockResolvedValue([])
-    await getAthleteSettings('athlete-a')
+    await getAthleteSettings(ownerA)
     expect(findMany.mock.calls[1][0].where.measuredAt.gte).toBeInstanceOf(Date)
 
-    await getAthleteSettings('athlete-a', 'ALL')
+    await getAthleteSettings(ownerA, 'ALL')
     expect(findMany.mock.calls[3][0].where.measuredAt).toBeUndefined()
   })
 
   it('reads the account-wide measurement system for each owner', async () => {
     findUnique.mockResolvedValueOnce({ measurementSystem: 'IMPERIAL' }).mockResolvedValueOnce(null)
-    await expect(getMeasurementSystem('athlete-a')).resolves.toBe('IMPERIAL')
-    await expect(getMeasurementSystem('athlete-b')).resolves.toBe('METRIC')
+    await expect(getMeasurementSystem(ownerA)).resolves.toBe('IMPERIAL')
+    await expect(getMeasurementSystem(ownerB)).resolves.toBe('METRIC')
     expect(findUnique.mock.calls.map(([args]) => args.where.userId)).toEqual([
-      'athlete-a',
-      'athlete-b',
+      ownerA.userId,
+      ownerB.userId,
     ])
   })
 
@@ -87,7 +129,7 @@ describe('athlete profile', () => {
         value: new Prisma.Decimal(70),
       },
     ])
-    const page = await getWeightHistoryPage('athlete-a', 2)
+    const page = await getWeightHistoryPage(ownerA, 2)
     expect(page).toMatchObject({
       page: 2,
       pageSize: 5,
@@ -96,23 +138,23 @@ describe('athlete profile', () => {
       items: [{ id: 'reading-a', measuredOn: '2026-11-07', valueKg: 70 }],
     })
     expect(count).toHaveBeenCalledWith({
-      where: { userId: 'athlete-a', measurementType: 'WEIGHT' },
+      where: { userId: ownerA.userId, measurementType: 'WEIGHT' },
     })
     expect(findMany.mock.calls[0][0]).toMatchObject({
-      where: { userId: 'athlete-a', measurementType: 'WEIGHT' },
+      where: { userId: ownerA.userId, measurementType: 'WEIGHT' },
       orderBy: [{ measuredAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
       skip: 5,
       take: 5,
     })
-    await getWeightChartReadings('athlete-b', 'ALL')
+    await getWeightChartReadings(ownerB, 'ALL')
     expect(findMany.mock.calls[1][0]).toMatchObject({
-      where: { userId: 'athlete-b', measurementType: 'WEIGHT' },
+      where: { userId: ownerB.userId, measurementType: 'WEIGHT' },
       orderBy: [{ measuredAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
     })
     expect(findMany.mock.calls[1][0].where.measuredAt).toBeUndefined()
-    await getWeightChartReadings('athlete-a', '7D')
+    await getWeightChartReadings(ownerA, '7D')
     expect(findMany.mock.calls[2][0].where).toMatchObject({
-      userId: 'athlete-a',
+      userId: ownerA.userId,
       measuredAt: { gte: expect.any(Date) },
     })
   })
@@ -120,30 +162,40 @@ describe('athlete profile', () => {
   it('preserves a previously selected training experience', async () => {
     findUnique.mockResolvedValue({ experienceLevel: 'ADVANCED' })
     findMany.mockResolvedValue([])
-    expect((await getAthleteSettings('athlete-a')).profile.experienceLevel).toBe('ADVANCED')
+    expect((await getAthleteSettings(ownerA)).profile.experienceLevel).toBe('ADVANCED')
   })
 
   it('saves measurement units independently of sex', async () => {
     findUnique.mockResolvedValue(null)
-    await updateAthleteProfile('athlete-a', { measurementSystem: 'IMPERIAL' })
+    await updateAthleteProfile(ownerA, { measurementSystem: 'IMPERIAL' })
     expect(upsert.mock.calls[0][0].update).toMatchObject({ measurementSystem: 'IMPERIAL' })
     expect(findUnique).not.toHaveBeenCalled()
   })
 
   it('updates only supplied optional fields and leaves approved plans untouched', async () => {
     const patch = profilePatchSchema.parse({ defaultTrainingDaysPerWeek: 4 })
-    await updateAthleteProfile('athlete-a', patch)
+    await updateAthleteProfile(ownerA, patch)
     expect(upsert).toHaveBeenCalledWith({
-      where: { userId: 'athlete-a' },
-      create: expect.objectContaining({ userId: 'athlete-a', defaultTrainingDaysPerWeek: 4 }),
-      update: expect.objectContaining({ userId: 'athlete-a', defaultTrainingDaysPerWeek: 4 }),
+      where: { userId: ownerA.userId },
+      create: expect.objectContaining({ userId: ownerA.userId, defaultTrainingDaysPerWeek: 4 }),
+      update: expect.objectContaining({ userId: ownerA.userId, defaultTrainingDaysPerWeek: 4 }),
     })
     expect(upsert.mock.calls[0][0].update).not.toHaveProperty('heightCm')
     expect(upsert.mock.calls[0][0].update).not.toHaveProperty('displayName')
   })
 
+  it('keeps the verified owner when an internal caller passes an extra userId', async () => {
+    const patch = { measurementSystem: 'IMPERIAL' as const, userId: ownerB.userId }
+    await updateAthleteProfile(ownerA, patch)
+    expect(upsert.mock.calls[0][0]).toMatchObject({
+      where: { userId: ownerA.userId },
+      create: { userId: ownerA.userId },
+      update: { userId: ownerA.userId },
+    })
+  })
+
   it('clears optional values, including a nullable weekday preference', async () => {
-    await updateAthleteProfile('athlete-a', {
+    await updateAthleteProfile(ownerA, {
       birthDate: null,
       defaultAvailableWeekdays: null,
     })
@@ -155,23 +207,23 @@ describe('athlete profile', () => {
 
   it('requires a male or female choice before the first profile save', async () => {
     findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ sex: null })
-    await expect(updateAthleteProfile('athlete-a', { heightCm: 170 })).rejects.toBeInstanceOf(
+    await expect(updateAthleteProfile(ownerA, { heightCm: 170 })).rejects.toBeInstanceOf(
       SexRequiredError,
     )
-    await expect(updateAthleteProfile('athlete-a', { heightCm: 170 })).rejects.toBeInstanceOf(
+    await expect(updateAthleteProfile(ownerA, { heightCm: 170 })).rejects.toBeInstanceOf(
       SexRequiredError,
     )
     expect(upsert).not.toHaveBeenCalled()
-    await updateAthleteProfile('athlete-a', { sex: 'MALE', heightCm: 170 })
+    await updateAthleteProfile(ownerA, { sex: 'MALE', heightCm: 170 })
     expect(upsert.mock.calls[0][0].create).toMatchObject({
-      userId: 'athlete-a',
+      userId: ownerA.userId,
       sex: 'MALE',
       heightCm: 170,
     })
   })
 
   it('rejects unexpected fields, invalid dates and duplicate weekdays while allowing nullable height', () => {
-    expect(profilePatchSchema.safeParse({ userId: 'athlete-b' }).success).toBe(false)
+    expect(profilePatchSchema.safeParse({ userId: ownerB.userId }).success).toBe(false)
     expect(profilePatchSchema.safeParse({ birthDate: '2025-02-30' }).success).toBe(false)
     expect(profilePatchSchema.safeParse({ preferredTimezone: 'Asia/Tokyo' }).success).toBe(false)
     expect(profilePatchSchema.safeParse({ heightCm: null }).success).toBe(true)
@@ -203,7 +255,7 @@ describe('athlete profile', () => {
       value: data.value,
     }))
     await addWeight(
-      'athlete-a',
+      ownerA,
       weightInputSchema.parse({
         value: 100,
         unit: 'LB',
@@ -211,7 +263,7 @@ describe('athlete profile', () => {
       }),
     )
     await addWeight(
-      'athlete-a',
+      ownerA,
       weightInputSchema.parse({
         value: 70,
         unit: 'KG',
@@ -220,7 +272,7 @@ describe('athlete profile', () => {
     )
     expect(create).toHaveBeenCalledTimes(2)
     expect(create.mock.calls[0][0].data).toMatchObject({
-      userId: 'athlete-a',
+      userId: ownerA.userId,
       measurementType: 'WEIGHT',
       value: 45.36,
       unit: 'KG',
@@ -238,7 +290,7 @@ describe('athlete profile', () => {
       value: data.value,
     }))
     const requestId = '969e52dd-3b4f-48ce-935a-3ad674584a24'
-    await addWeight('athlete-a', { value: 70, unit: 'KG', measuredOn: '2026-11-05', requestId })
+    await addWeight(ownerA, { value: 70, unit: 'KG', measuredOn: '2026-11-05', requestId })
     expect(create.mock.calls[0][0].data.measuredAt.toISOString()).toBe('2026-11-05T12:00:00.000Z')
     create.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('duplicate', {
@@ -254,7 +306,7 @@ describe('athlete profile', () => {
       measurementType: 'WEIGHT',
     })
     await expect(
-      addWeight('athlete-a', { value: 70, unit: 'KG', measuredOn: '2026-11-06', requestId }),
+      addWeight(ownerA, { value: 70, unit: 'KG', measuredOn: '2026-11-06', requestId }),
     ).rejects.toBeInstanceOf(WeightRequestConflictError)
   })
 
@@ -268,7 +320,7 @@ describe('athlete profile', () => {
       timezoneOffsetMinutes: 540,
       requestId,
     }
-    await addWeight('athlete-a', input)
+    await addWeight(ownerA, input)
     expect(create.mock.calls[0][0].data.measuredAt.toISOString()).toBe('2026-11-05T21:00:00.000Z')
     expect(create.mock.calls[0][0].data.measuredOn.toISOString()).toBe('2026-11-05T00:00:00.000Z')
 
@@ -286,10 +338,10 @@ describe('athlete profile', () => {
       unit: 'KG',
       measurementType: 'WEIGHT',
     })
-    await expect(addWeight('athlete-a', input)).resolves.toMatchObject({ id: 'old' })
-    await expect(
-      addWeight('athlete-a', { ...input, timezoneOffsetMinutes: 0 }),
-    ).rejects.toBeInstanceOf(WeightRequestConflictError)
+    await expect(addWeight(ownerA, input)).resolves.toMatchObject({ id: 'old' })
+    await expect(addWeight(ownerA, { ...input, timezoneOffsetMinutes: 0 })).rejects.toBeInstanceOf(
+      WeightRequestConflictError,
+    )
   })
 
   it('accepts a retry for a pre-migration reading without measured_on', async () => {
@@ -308,7 +360,7 @@ describe('athlete profile', () => {
       measurementType: 'WEIGHT',
     })
     await expect(
-      addWeight('athlete-a', {
+      addWeight(ownerA, {
         value: 70,
         unit: 'KG',
         measuredOn: '2026-11-05',
@@ -334,7 +386,7 @@ describe('athlete profile', () => {
       measurementType: 'WEIGHT',
     })
     await expect(
-      addWeight('athlete-a', {
+      addWeight(ownerA, {
         value: 70,
         unit: 'KG',
         requestId: '969e52dd-3b4f-48ce-935a-3ad674584a24',
@@ -358,13 +410,11 @@ describe('athlete profile', () => {
       measurementType: 'WEIGHT',
     }
     findMeasurement.mockResolvedValue(existing)
-    await expect(addWeight('athlete-a', { value: 70, unit: 'KG', requestId })).resolves.toBe(
-      existing,
-    )
+    await expect(addWeight(ownerA, { value: 70, unit: 'KG', requestId })).resolves.toBe(existing)
     expect(findMeasurement).toHaveBeenCalledWith({
       where: {
         userId_source_sourceExternalId: {
-          userId: 'athlete-a',
+          userId: ownerA.userId,
           source: 'MANUAL',
           sourceExternalId: requestId,
         },
@@ -380,7 +430,7 @@ describe('athlete profile', () => {
       },
     })
     findMeasurement.mockResolvedValue({ ...existing, value: new Prisma.Decimal(71) })
-    await expect(addWeight('athlete-a', { value: 70, unit: 'KG', requestId })).rejects.toThrow(
+    await expect(addWeight(ownerA, { value: 70, unit: 'KG', requestId })).rejects.toThrow(
       'already used',
     )
   })

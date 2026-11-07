@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { requireAdmin, requireTrustedOrigin } from '@/server/auth/admin-access'
-import { revokeInvitation } from '@/server/auth/invitation-management'
+import { revokeInvitation } from '@/server/auth/invitation/invitation-management'
 
 export const runtime = 'nodejs'
 

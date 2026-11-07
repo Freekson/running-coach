@@ -7,7 +7,7 @@ import { retainInvitationToken } from '@/lib/invitation-link'
 import { Button } from '@/components/ui/Button'
 import { FormField } from '@/components/ui/FormField'
 import { useToast } from '@/components/ui/Toast'
-import { toastRedirectPath } from '@/components/ui/toast-redirect'
+import { toastRedirectPath } from '@/components/ui/Toast/toast-redirect'
 
 type Field = 'name' | 'email' | 'password'
 type FieldErrors = Partial<Record<Field, string>>

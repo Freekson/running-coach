@@ -15,7 +15,7 @@ vi.mock('@/server/auth/current-user', () => ({
   AccountUnavailableError: class AccountUnavailableError extends Error {},
   getCurrentUser,
 }))
-vi.mock('@/server/auth/invitation-management', () => ({
+vi.mock('@/server/auth/invitation/invitation-management', () => ({
   listInvitations: vi.fn(async () => ({
     invitations: [],
     page: 1,

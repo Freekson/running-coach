@@ -1,5 +1,5 @@
 import { requireAdmin, privateHeaders } from '@/server/auth/admin-access'
-import { listRegisteredUsers } from '@/server/auth/invitation-management'
+import { listRegisteredUsers } from '@/server/auth/invitation/invitation-management'
 
 export const runtime = 'nodejs'
 

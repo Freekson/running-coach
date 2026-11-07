@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { ButtonLink } from './Button'
-import { EmptyState, LoadingState } from './States'
+import { ButtonLink } from '../Button'
+import { EmptyState, LoadingState } from '.'
 
 const meta = {
   title: 'UI/States',

@@ -1,14 +1,14 @@
 import { toNextJsHandler } from 'better-auth/next-js'
 import { z } from 'zod'
 import { getAuth, getTrustedOrigins } from '@/server/auth/better-auth'
-import { withInvitationClaim } from '@/server/auth/invitation-claim-context'
+import { withInvitationClaim } from '@/server/auth/invitation/invitation-claim-context'
 import {
   completeInvitation,
   consumeInvitation,
   invitationStatus,
   recoverInvitationAfterFailedSignup,
   releaseInvitation,
-} from '@/server/auth/invitations'
+} from '@/server/auth/invitation/invitations'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60

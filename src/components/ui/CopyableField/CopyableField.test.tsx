@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CopyableField, copyValue } from './CopyableField'
+import { CopyableField, copyValue } from '.'
 
 it('renders the entire value in a labeled read-only field with an embedded copy action', () => {
   const value = `https://running.example/sign-up#invite=${'a'.repeat(180)}`

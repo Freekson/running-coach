@@ -27,14 +27,14 @@ vi.mock('@/server/auth/better-auth', () => ({
   getAuth,
   getTrustedOrigins: () => ['http://localhost:3000'],
 }))
-vi.mock('@/server/auth/invitations', () => ({
+vi.mock('@/server/auth/invitation/invitations', () => ({
   consumeInvitation,
   completeInvitation,
   invitationStatus,
   recoverInvitationAfterFailedSignup,
   releaseInvitation,
 }))
-vi.mock('@/server/auth/invitation-claim-context', () => ({ withInvitationClaim }))
+vi.mock('@/server/auth/invitation/invitation-claim-context', () => ({ withInvitationClaim }))
 
 import { POST } from './route'
 

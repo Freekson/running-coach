@@ -77,7 +77,7 @@ jobs:
           VERCEL_PREVIEW_ALIAS: ${{ vars.VERCEL_PREVIEW_ALIAS }}
           VERCEL_TEAM_SLUG: freeksons-projects
         run: |
-          node scripts/check-vercel-deploy-domain.mjs preview
+          node scripts/vercel/check-vercel-deploy-domain.mjs preview
           if [[ "$VERCEL_PREVIEW_ALIAS" != 'running-coach-dev-freeksons.vercel.app' ]]; then
             echo 'VERCEL_PREVIEW_ALIAS must be the verified stable Preview domain'
             exit 1
@@ -92,8 +92,8 @@ jobs:
             exit 1
           fi
           echo 'Vercel returned a valid Preview deployment URL; assigning the configured stable alias'
-          node scripts/assign-vercel-preview-alias.mjs "$deployment_url"
-          node scripts/verify-vercel-preview-alias.mjs "$deployment_url"
+          node scripts/vercel/assign-vercel-preview-alias.mjs "$deployment_url"
+          node scripts/vercel/verify-vercel-preview-alias.mjs "$deployment_url"
 
   migrate-production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -141,5 +141,5 @@ jobs:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           VERCEL_PRODUCTION_HOST: ${{ vars.VERCEL_PRODUCTION_HOST }}
         run: |
-          node scripts/check-vercel-deploy-domain.mjs production
+          node scripts/vercel/check-vercel-deploy-domain.mjs production
           vercel deploy --yes --prod --token "$VERCEL_TOKEN"

@@ -4,7 +4,7 @@
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { ToastProvider, useToast } from './Toast'
+import { ToastProvider, useToast } from '.'
 
 const navigationState = vi.hoisted(() => ({ nullSearchParams: false }))
 

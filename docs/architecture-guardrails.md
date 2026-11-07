@@ -4,6 +4,8 @@ Architecture documents in Linear: [System Architecture](https://linear.app/fr-ru
 
 Use one Next.js App Router application deployed to Vercel with Neon + Prisma. No always-on service for MVP. Domain-first `src/server/{auth,authorization,athlete,activities,goals,plans,workouts,integrations,jobs,notifications,files}/` is the target; adopt incrementally, not empty directories.
 
+Group cohesive domain modules and their tests together, as in `src/server/auth/invitation/`. Keep route handlers and App Router reserved filenames under `src/app/`; they authenticate, authorize, and call server services. Shared UI uses `src/components/ui/<Component>/index.tsx` with local styles, stories, and tests. Feature-specific UI stays with its feature. Use explicit imports across modules and avoid barrels that introduce cycles or cross the server/client boundary.
+
 ## Trust boundaries
 
 1. Browser -> server: verify auth and owner on every request; never trust submitted `userId`.

@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Check, CircleX, Copy } from 'lucide-react'
-import { Input } from './FormField'
+import { Input } from '../FormField'
 import styles from './CopyableField.module.scss'
 
 export type CopyableFieldProps = {

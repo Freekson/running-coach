@@ -3,7 +3,7 @@ import 'server-only'
 import { createHash, randomBytes } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { getPrismaClient } from '@/server/db/client'
-import { getCanonicalAppOrigin } from './public-origin'
+import { getCanonicalAppOrigin } from '../public-origin'
 import { reconcileStaleInvitationClaim } from './invitations'
 
 const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000

@@ -1,6 +1,7 @@
 'use client'
 
 import { bodyFont, headingFont } from './fonts'
+import { Button } from '@/components/ui/Button'
 import './globals.css'
 
 export default function GlobalError({ retry }: { error: unknown; retry: () => void }) {
@@ -13,9 +14,7 @@ export default function GlobalError({ retry }: { error: unknown; retry: () => vo
               <div className="eyebrow">App error</div>
               <h1 id="error-heading">Something went wrong.</h1>
               <p>We couldn&apos;t load this page. Please try again.</p>
-              <button className="button" type="button" onClick={retry}>
-                Try again
-              </button>
+              <Button onClick={retry}>Try again</Button>
             </section>
           </main>
         </div>

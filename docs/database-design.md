@@ -56,14 +56,14 @@ erDiagram
 
 ### `users`
 
-| Column                     | Type / intent                                                |
-| -------------------------- | ------------------------------------------------------------ |
-| `id`                       | UUID, primary key (internal identity)                        |
-| `auth_subject`             | text, unique: stable verified ID from Clerk/Auth.js provider |
-| `email`                    | text nullable, informational (provider may update it)        |
-| `role`                     | USER / ADMIN                                                 |
-| `status`                   | ACTIVE / SUSPENDED / DELETING                                |
-| `created_at`, `updated_at` | timestamptz                                                  |
+| Column                     | Type / intent                                         |
+| -------------------------- | ----------------------------------------------------- |
+| `id`                       | UUID, primary key (internal identity)                 |
+| `auth_subject`             | text, unique: stable Better Auth user ID              |
+| `email`                    | text nullable, informational (provider may update it) |
+| `role`                     | USER / ADMIN                                          |
+| `status`                   | ACTIVE / SUSPENDED / DELETING                         |
+| `created_at`, `updated_at` | timestamptz                                           |
 
 Do not use email as the ownership key; email can change. Social/shared accounts are out of scope.
 
@@ -375,7 +375,7 @@ Unique user/type/fingerprint while the same logical event remains unresolved. Di
 ## 15. Open DB/implementation decisions
 
 - **DB-001:** UUID vs CUID2 for internal IDs (either fine; consistent policy preferred).
-- **DB-002:** final Clerk/Auth.js choice and user provisioning strategy.
+- **DB-002:** resolved by [ADR-001](adr/001-authentication-provider.md): Better Auth with manually shared one-time links, a local `USER` row and trusted ADMIN bootstrap.
 - **DB-003:** fitness metrics schema shape: daily summaries vs typed time-series observations for HRV/sleep.
 - **DB-004:** which activity source is authoritative where Garmin and Intervals duplicate results.
 - **DB-005:** exact snapshot/revision membership semantics for deleted/moved workouts across plan revisions.
@@ -390,25 +390,12 @@ Unique user/type/fingerprint while the same logical event remains unresolved. Di
 - [Intervals.icu](http://Intervals.icu) API: [https://www.intervals.icu/features/open-api/](https://www.intervals.icu/features/open-api/)
 - Garmin Personal API FAQ: [https://developer.garmin.com/gc-developer-program/personal/personal-faq/](https://developer.garmin.com/gc-developer-program/personal/personal-faq/)
 - Vercel Cron: [https://vercel.com/docs/cron-jobs/usage-and-pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing)
-- Clerk restricted sign-up: [https://clerk.com/docs/guides/secure/restricting-access](https://clerk.com/docs/guides/secure/restricting-access)
+- Better Auth Prisma adapter: [https://www.better-auth.com/docs/adapters/prisma](https://www.better-auth.com/docs/adapters/prisma)
 
 ## 17. Invitations: admin-only access control (confirmed)
 
-**Role model:** `users.role` is `USER | ADMIN`. An invitation can only be issued, listed, resent, or revoked by a verified `ADMIN` at the server/service authorization layer. Invited users always start with `USER` role. Role changes require a privileged administrative procedure; never trust client-supplied role values.
+**Role model:** `users.role` is `USER | ADMIN`. RUN-17 issues invitations only from a trusted operator CLI. RUN-18 will add ADMIN-only creation, listing and revocation in the application. New accounts always start `USER`; role changes require a trusted procedure.
 
-**Invitation persistence:** Prefer provider-managed invites if using Clerk and it exposes all required lifecycle operations; do not create unnecessary duplicate local invite tables. If custom invites are needed, add:
+**Invitation persistence:** RUN-17 implements `auth_invitations` with `id`, unique `token_hash`, `expires_at`, `consumed_at`, `revoked_at` and `created_at`. Links are shared manually, prove possession of the token, and are **not** email-bound. `auth_users.emailVerified` remains false without separate email verification. The signup route atomically claims a valid token before account creation; invalid input and Better Auth 4xx responses permit retry, while unknown server failures remain fail-closed. RUN-18 may add issuer/audit metadata without storing raw tokens.
 
-`invitations`:
-
-- `id` UUID PK
-- `email_normalized` text
-- `token_hash` text unique (**store hash**, not plaintext bearer token)
-- `status` PENDING | ACCEPTED | EXPIRED | REVOKED
-- `invited_by_user_id` FK -> [users.id](http://users.id) (issuer must have been ADMIN at issuance)
-- `expires_at`, `created_at`, `accepted_at`, `revoked_at`
-- `accepted_by_user_id` nullable FK -> [users.id](http://users.id)
-- Optional `provider_invitation_id` for externally managed invitations
-
-Use atomic single-use acceptance, expiry validation, invite-email/verified-email matching as supported, rate limiting, auditing, and safe public error messages. Unique indexes should prevent unintended concurrent active invites for one email where appropriate. Bootstrap the initial admin through trusted provider/deployment configuration, not a public registration flow.
-
-**Tests:** ordinary USER and unauthenticated requests cannot list/create/revoke/resend invites; accepted/expired/revoked tokens cannot register another user; signup never grants ADMIN; admin status does not bypass other users' data-ownership checks.
+**Tests:** RUN-17 covers direct signup bypass, token replay/expiry/revocation, and USER default. RUN-18 must cover unauthorized invite management. ADMIN status never bypasses another user's data ownership.

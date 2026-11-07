@@ -27,6 +27,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm build-storybook
 
   migrate-development:
     if: github.event_name == 'push' && github.ref == 'refs/heads/development'
@@ -52,6 +53,7 @@ jobs:
             exit 1
           fi
           pnpm db:assert:development
+          pnpm db:prepare:run70
           pnpm db:migrate
           pnpm db:grant:runtime
           pnpm db:status
@@ -72,12 +74,26 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_PREVIEW_ALIAS: ${{ vars.VERCEL_PREVIEW_ALIAS }}
+          VERCEL_TEAM_SLUG: freeksons-projects
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
-            echo 'Vercel deployment settings are not configured'
+          node scripts/vercel/check-vercel-deploy-domain.mjs preview
+          if [[ "$VERCEL_PREVIEW_ALIAS" != 'running-coach-dev-freeksons.vercel.app' ]]; then
+            echo 'VERCEL_PREVIEW_ALIAS must be the verified stable Preview domain'
             exit 1
           fi
-          vercel deploy --yes --target=preview --token "$VERCEL_TOKEN"
+          echo 'Vercel domain preflight passed; deploying Preview'
+          if ! deployment_url="$(vercel deploy --yes --token "$VERCEL_TOKEN")"; then
+            echo 'Preview deployment failed before alias assignment'
+            exit 1
+          fi
+          if [[ ! "$deployment_url" =~ ^https://[a-z0-9-]+\.vercel\.app$ ]]; then
+            echo 'Vercel did not return a valid Preview deployment URL'
+            exit 1
+          fi
+          echo 'Vercel returned a valid Preview deployment URL; assigning the configured stable alias'
+          node scripts/vercel/assign-vercel-preview-alias.mjs "$deployment_url"
+          node scripts/vercel/verify-vercel-preview-alias.mjs "$deployment_url"
 
   migrate-production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -102,6 +118,7 @@ jobs:
             exit 1
           fi
           pnpm db:assert:production
+          pnpm db:prepare:run70
           pnpm db:migrate
           pnpm db:grant:runtime
           pnpm db:status
@@ -122,9 +139,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_PRODUCTION_HOST: ${{ vars.VERCEL_PRODUCTION_HOST }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
-            echo 'Vercel deployment settings are not configured'
-            exit 1
-          fi
+          node scripts/vercel/check-vercel-deploy-domain.mjs production
           vercel deploy --yes --prod --token "$VERCEL_TOKEN"

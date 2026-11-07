@@ -1,0 +1,172 @@
+# RUN-17: Better Auth operations
+
+## Configure each environment
+
+The invitation operator CLI and its tests live in `scripts/auth/`; use the
+`pnpm auth:invite` and `pnpm auth:bootstrap-admin` commands below. Invitation
+services and their tests live in `src/server/auth/invitation/`.
+
+Better Auth runs inside the app. There is no Clerk account, custom domain,
+email sender, Resend or SMTP configuration.
+
+| Variable             | Local development                                      | Vercel Preview                                                                                                    | Vercel Production                                    |
+| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `BETTER_AUTH_SECRET` | Random secret, at least 32 bytes, in gitignored `.env` | Separate random Vercel Preview secret                                                                             | Separate random Vercel Production secret             |
+| `BETTER_AUTH_URL`    | `http://localhost:3000`                                | `https://running-coach-dev-freeksons.vercel.app`, the stable Preview alias assigned by the development deploy job | Stable Production `https://<project>.vercel.app` URL |
+| `DATABASE_URL`       | Pooled development runtime role                        | Pooled development runtime role                                                                                   | Pooled production runtime role                       |
+| `APP_DATABASE_ENV`   | `development`                                          | `preview`                                                                                                         | `production`                                         |
+
+Set variables for **only** their matching Vercel environment. Never select
+“All Environments” for secrets or `DATABASE_URL`. `BETTER_AUTH_SECRET` is
+server-only; never prefix it with `NEXT_PUBLIC_` or place it in GitHub Actions.
+Generate a fresh value separately for each environment with
+`node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`
+in a private terminal, then save it directly in the matching secure setting.
+The `BETTER_AUTH_URL` must be a real stable origin for that environment, with
+no trailing slash or path. In Preview its hostname must exactly match the
+`VERCEL_PREVIEW_ALIAS` GitHub development-deploy variable; the deployment job moves
+that alias only after a successful Preview deployment. In Production it must
+be the project's Production domain. Vercel
+sets `VERCEL_URL` and `VERCEL_BRANCH_URL` for the current deployment; the app
+includes those exact origins for signup CSRF checks, so immutable Preview URLs
+work too. No broad `*.vercel.app` trust wildcard is used.
+
+`DIRECT_URL` is needed by the Prisma migration jobs and the trusted operator
+CLI, **not** by the Vercel app runtime. Keep it in the restricted GitHub
+migration environments as described in [release operations](release-operations.md).
+For local CLI operations, keep the development direct role URL in gitignored
+`.env`. Remove all old `CLERK_*` and `NEXT_PUBLIC_CLERK_*` variables from local
+and Vercel settings.
+
+## Apply migration
+
+The additive `20261031_better_auth_foundation` migration creates auth and
+invitation tables. `20261031_z_auth_rate_limit` adds the shared Better Auth
+rate-limit table. Neither deletes `users` or athlete data. RUN-16 branch
+pipelines apply it through `prisma migrate deploy` **before** deploying the
+corresponding Vercel version, then run the runtime grants. Do not run
+`prisma db push`, production `migrate dev`, or a migration during build.
+RUN-18 adds `20261105_run18_invitation_label`, a nullable 120-character label
+column on `auth_invitations`. Apply it before deploying the admin UI; existing
+invitations remain valid and simply have no label. The migration has no backfill
+or destructive step.
+Better Auth's login limits use the shared `auth_rate_limits` table, so all
+Vercel instances count the same attempts. Vercel supplies the client IP in
+`x-forwarded-for`; no separate rate-limit service is needed.
+
+For a local development database only, confirm its private
+`database_identity.tier=NON_PRODUCTION`, then run `pnpm db:assert:development`,
+`pnpm db:prepare:run70`, `pnpm db:migrate`, `pnpm db:grant:runtime` and
+`pnpm db:status`. The development and production migration jobs run the same
+RUN-70 preparation after checking database identity. On an existing auth
+database, it adds the nullable claim columns with a two-second lock timeout,
+builds the three indexes with `CREATE INDEX CONCURRENTLY`, verifies their
+definitions, and then uses Prisma `migrate resolve --applied` for the matching
+checked-in migrations. On a fresh database with no auth tables, regular
+`migrate deploy` applies the original migrations before the app receives
+traffic. A failed concurrent build leaves an invalid index; a retry removes
+that known invalid index and rebuilds it. If the migration ledger contains a
+failed record or a schema definition differs, the job stops for operator review.
+The already-applied development migration file remains intact, preserving its
+checksum. Do not run the preparer against production outside the protected
+migration job without checking the selected database and backup first.
+
+## Create and share an invitation
+
+Use a private operator terminal with the matching `DIRECT_URL`,
+`APP_DATABASE_ENV=development` and `BETTER_AUTH_URL`. Run:
+
+```powershell
+pnpm auth:invite
+```
+
+The CLI checks the database tier and prints one registration URL. It stores
+**only SHA-256 of the random 32-byte token** in `auth_invitations`; the raw link
+is never stored server-side. The token sits in the URL fragment (`#token=...`),
+which is not sent in the initial HTTP request. The page keeps a temporary copy
+in that browser tab's session storage so a remount does not lose it, then
+removes the fragment from the address bar. Successful registration or an
+invalid/used-link response clears the tab copy. Copy the link privately via
+Telegram, Discord or another trusted channel. Do not place it in source,
+issues, logs, screenshots or public chat. The holder can choose an email and
+password once within seven days. The link does not prove email ownership;
+`emailVerified` remains false. Invalid form fields and Better Auth 4xx responses
+leave the link available for retry. A 403 caused by origin validation also
+preserves the tab copy; only an explicitly invalid invitation clears it. An
+unknown server failure can still consume the link conservatively, so issue a
+new one if sign-in also fails. Public `POST /api/auth/sign-up/email` without a
+valid token returns 403.
+
+For production, run from a controlled terminal with the production direct
+role URL and `APP_DATABASE_ENV=production`, after independently checking the
+Neon project, then `pnpm auth:invite --production`. The explicit flag and
+`database_identity=PRODUCTION` check guard the command. Codex does not run it.
+
+ADMIN users can now open `/app/admin` to generate, copy, list, and revoke
+invitations. New links appear once after generation; the list only shows their
+description, dates, and status. A replacement requires generating a new link.
+An invite shown as `Processing` can be checked individually from the admin
+page; listing invitations does not run claim recovery for every row.
+The same page lists registered users and their roles, including accounts that
+have registered but have not yet signed in to create a local app row. The
+description is only a private note and does not verify recipient identity.
+Direct `/api/admin/invitations` and `/api/admin/users` requests require an
+active ADMIN session; non-ADMIN users cannot read or change them.
+
+For an emergency operator revocation, use the migration role in the
+**selected** Neon database, identifying the invitation row by its `id`:
+
+```sql
+UPDATE auth_invitations
+SET revoked_at = now()
+WHERE id = '<verified-invitation-uuid>'
+  AND consumed_at IS NULL
+  AND revoked_at IS NULL
+  AND expires_at > now();
+```
+
+The app never reveals the token again. RUN-18 may list metadata and generate
+new links, but cannot reconstruct an old raw link from the hash.
+
+## Bootstrap the first ADMIN
+
+1. Generate a link through the trusted CLI and privately share it with the
+   initial operator. Register normally. The new account starts `USER`.
+2. Sign in once at `/app` (which opens `/app/dashboard`) so the local `users`
+   row is created. Verify the
+   Better Auth user ID in the **matching** database's `auth_users` table and
+   confirm its `users.auth_subject` maps to the intended internal user. For
+   example, with the direct role in the matching Neon SQL editor:
+
+   ```sql
+   SELECT a.id AS auth_user_id, a.email, u.id AS app_user_id, u.role
+   FROM auth_users AS a
+   JOIN users AS u ON u.auth_subject = a.id
+   WHERE a.email = '<operator-email>';
+   ```
+
+3. With the matching direct migration role URL, run
+   `pnpm auth:bootstrap-admin <verified-auth-user-id>` for development, or
+   append `--production` for production. The CLI refuses if any ADMIN already
+   exists, checks the database tier, and changes only that active local user.
+4. Sign out and sign in again. `GET /api/me` should return the same internal
+   `id` and `role: "ADMIN"`. No public promotion endpoint exists.
+
+Do not use an email match alone to select the account. If legacy Clerk athlete
+rows exist, verify identity out of band and update `users.auth_subject` through
+a separately reviewed migration/operation before signup. The app refuses to
+attach a new Better Auth ID to a legacy row by email; old sessions and Clerk
+passwords are not migrated.
+
+## Verify deployed behavior
+
+In both Preview and Production, use separate test identities and no real
+athlete data in Preview. Confirm unauthenticated `/api/me` returns 401 and
+both `/app` and `/app/dashboard` redirect to `/sign-in` with a safe `next`
+destination. After signing in, `/app` should open `/app/dashboard`. Try direct
+signup without a token, with an
+expired/revoked link, then with a valid link; the first cases must return 403.
+Confirm a used link cannot create a second account. Sign in/out and repeat
+`/api/me`; expired or revoked sessions must return 401. The repo tests cover
+these conditions, but deployed behavior remains a manual check until tested
+against each live environment.

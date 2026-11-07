@@ -9,9 +9,9 @@ A private, invite-only endurance training application for planning workouts, tra
 
 **Early development — application foundation.**
 
-The repository currently contains the Next.js application shell, deployment smoke page, development tooling, and CI checks.
+The repository contains the Next.js application shell, deployment smoke page, development tooling, CI checks, and the Better Auth invite-only foundation. The auth migration and Vercel settings must be applied before the new flow is available in deployed environments.
 
-Authentication, athlete profiles, database persistence, Garmin/Intervals.icu integrations, and training plan generation are planned features and are not yet implemented.
+Athlete profiles, Garmin/Intervals.icu integrations, and training plan generation remain planned features.
 
 ## Planned Features
 
@@ -155,6 +155,8 @@ The `/status` endpoint confirms application rendering only. It does not validate
 - [Database design](docs/database-design.md)
 - [System architecture](docs/system-architecture.md)
 - [Database operations](docs/database-operations.md)
+- [Authentication setup and ADMIN bootstrap](docs/authentication-operations.md)
+- [Authentication provider decision](docs/adr/001-authentication-provider.md)
 - [Dark theme and design tokens](docs/design-tokens.md)
 - [Linear project and technical specifications](https://linear.app/fr-running-coach/project/running-coach-2730d3d0f69a)
 

@@ -16,14 +16,19 @@
   --color-success: #80cdb0;
   --color-warning: #f5cb82;
   --color-error: #f4a8a1;
+  --color-admin: #d4b0f9;
+  --color-admin-surface: #342b48;
+  --icon-gap: 8px;
   --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
   --type-size-hero: clamp(2.25rem, 4vw, 4rem);
   --type-size-page: clamp(1.75rem, 3vw, 2.25rem);
   --type-size-card: 1.125rem;
   --type-size-body: 1rem;
   --type-size-body-large: clamp(1.125rem, 2vw, 1.375rem);
+  --type-size-table-primary: 0.875rem;
   --type-size-label: 0.8125rem;
   --type-size-caption: 0.8125rem;
+  --type-size-filter: 0.75rem;
   --type-weight-regular: 400;
   --type-weight-medium: 500;
   --type-weight-semibold: 600;
@@ -78,11 +83,11 @@ a:active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  min-height: 44px;
-  padding: 16px 22px;
+  gap: var(--icon-gap);
+  min-height: 40px;
+  padding: 9px 16px;
   border: 1px solid transparent;
-  border-radius: 100px;
+  border-radius: 10px;
   background: var(--color-primary);
   color: var(--color-primary-foreground);
   font: inherit;
@@ -91,6 +96,32 @@ a:active {
   cursor: pointer;
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.button--compact {
+  min-height: 40px;
+  padding: 9px 16px;
+}
+
+.button__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: button-spin 0.8s linear infinite;
+}
+
+@keyframes button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button__spinner {
+    animation-duration: 2s;
+  }
 }
 
 .button:hover {
@@ -133,10 +164,14 @@ a:active {
   background: var(--color-surface);
 }
 
+.card--raised {
+  background: var(--color-surface-raised);
+}
+
 .field {
   width: 100%;
-  min-height: 44px;
-  padding: 12px 14px;
+  min-height: 40px;
+  padding: 7px 12px;
   border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   background: var(--color-surface);
@@ -170,7 +205,7 @@ a:active {
   padding: 4px 10px;
   border-radius: 100px;
   background: var(--color-surface-raised);
-  color: var(--color-primary);
+  color: var(--color-text-muted);
   font-size: var(--type-size-caption);
   font-weight: var(--type-weight-semibold);
   line-height: var(--type-leading-compact);
@@ -178,20 +213,70 @@ a:active {
 
 .badge--success {
   color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface-raised));
 }
 
 .badge--warning {
   color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface-raised));
 }
 
 .badge--error {
   color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 12%, var(--color-surface-raised));
+}
+
+.badge--admin {
+  gap: 4px;
+  background: var(--color-admin-surface);
+  color: var(--color-admin);
 }
 
 .site-shell {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.site-shell:has(> main > [data-app-shell]) > .site-header,
+.site-shell:has(> main > [data-app-shell]) > .site-footer {
+  display: none;
+}
+
+.site-shell > main:has(> [data-app-shell]) {
+  width: 100%;
+  max-width: none;
+}
+
+.auth-page {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  width: min(100%, 520px);
+  margin: 0 auto;
+  padding: 72px 24px;
+}
+
+.auth-page h1,
+.auth-page p {
+  margin: 0;
+}
+.app-page {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.app-page h1 {
+  margin: 0;
+  font-size: var(--type-size-page);
+}
+.auth-form {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.auth-form [role='alert'] {
+  color: var(--color-error);
 }
 .site-header,
 .site-footer {

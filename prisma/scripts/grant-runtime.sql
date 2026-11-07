@@ -11,7 +11,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     public.sync_cursors,
     public.sync_runs,
     public.activities,
-    public.daily_health_metrics
+    public.daily_health_metrics,
+    public.auth_users,
+    public.auth_sessions,
+    public.auth_accounts,
+    public.auth_verifications,
+    public.auth_invitations,
+    public.auth_rate_limits
 TO running_coach_runtime;
 
 REVOKE ALL ON TABLE public.database_identity FROM running_coach_runtime;

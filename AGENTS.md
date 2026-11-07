@@ -7,6 +7,7 @@
 - Source of truth: Linear issue acceptance criteria + relevant docs in `docs/`. Do not read every doc for an unrelated small change.
 - Follow [Engineering Workflow & Code Quality](https://linear.app/fr-running-coach/project/running-coach-2730d3d0f69a) for issue and PR evidence.
 - Business logic and external provider adapters belong in `src/server/<domain>/`; route handlers and server actions authenticate, authorize, and delegate to services. UI components/hooks must not import server modules.
+- Group cohesive server concerns under their domain (for example, `src/server/auth/invitation/`) with tests beside implementation. Keep imports explicit and server-only boundaries intact; avoid barrels that create cycles or pull server modules into client code.
 
 ## Non-negotiable invariants
 
@@ -25,13 +26,20 @@
 - Source formatting: Prettier. Correctness linting: ESLint. Type correctness: `tsc --noEmit`.
 - Add unit/contract tests for domain changes, integration tests for auth, sync and DB changes, and include negative-path / ownership cases.
 - For UI changes, use the semantic color and typography tokens and reusable styles in `src/app/globals.css`; follow `docs/design-tokens.md`. Keep the dark theme on first paint, use Manrope for headings and Inter for UI, and check contrast plus narrow/zoomed layouts.
+- Use `lucide-react` as the default icon library. Size icons at 16–20px with a 2px stroke, use semantic color tokens, hide decorative icons from screen readers, and label icon-only controls. Compose icons with existing shared buttons rather than creating parallel icon-button primitives.
+- Keep UI copy, Storybook examples, and source comments in English unless an issue explicitly requests localization.
+- Before building UI, search `src/components/ui/` and existing feature components for a matching component or pattern. Import and compose shared components and their established variants instead of adding lookalikes or hard-coded colors.
+- Each shared React primitive lives in `src/components/ui/<Component>/index.tsx`, with its stylesheet, `*.stories.tsx`, and tests in the same directory when needed. Preserve named exports and import via `@/components/ui/<Component>`; do not create a flat duplicate or a catch-all barrel.
+- Keep feature-specific UI and its stories/tests with the feature (for example, `src/app/(auth)/app/admin/`). Extend a shared primitive only when reuse is clear; keep variants typed and update stories whenever public behavior or states change. Preserve App Router reserved names such as `page.tsx`, `layout.tsx`, and `route.ts`.
+- Keep operational CLI entry points named by action under `scripts/auth/`, `scripts/vercel/`, or `scripts/migrations/`, with tests beside each script. Prisma SQL and database role/target guards stay in `prisma/scripts/`; update package, CI, and runbook paths when moving a script.
+- Review labels, keyboard focus, disabled/error/loading states, dark contrast, and mobile layouts. Run `pnpm build-storybook` alongside the standard checks for shared UI changes; keep Storybook and story mocks out of production imports.
 
 ## Definition of done
 
 - Meet all applicable Linear acceptance criteria, including error and unauthorized cases.
 - Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` if build dependencies/env are available.
 - Report actual command results, code changes, migrations, test coverage, and unverified integration assumptions. Never claim a check ran if it did not.
-- Open or review a PR referencing the Linear issue; don't silently expand scope.
+- Prepare a PR handoff referencing the Linear issue; the user handles GitHub PR creation and remote Git operations. Don't silently expand scope.
 
 ## Project skills
 

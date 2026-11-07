@@ -15,12 +15,19 @@ The app uses a dark theme from first paint. `src/app/globals.css` is the source 
 | `--color-primary-foreground`                                         | Text and icons on a primary fill                                   |
 | `--color-focus`                                                      | Keyboard focus outline                                             |
 | `--color-success`, `--color-warning`, `--color-error`                | Status text and badges, accompanied by words or icons              |
+| `--color-admin`, `--color-admin-surface`                             | Administrator role badge text and surface                          |
 
 Use the role that matches the element, rather than copying a hex value. Add a new semantic token to the root palette when a genuinely new role is needed.
 
+## Icons
+
+Use `lucide-react` as the default icon library. Use 20px icons for toast status, 18px for actions, and 16px where space is tight, all with `strokeWidth={2}`. Icon and label spacing uses `--icon-gap` (8px); icons inherit text color or use the semantic success, warning, error, or primary token. Avoid hard-coded icon colors and glyph substitutes for UI actions.
+
+Icons next to visible text are decorative: set `aria-hidden="true"` and `focusable="false"`. Give every icon-only button an accessible `aria-label` describing its action. Use the existing `Button` or native button pattern; no separate icon wrapper is needed. Toast success, error, warning, and info icons accompany readable message text, and the close control is labeled.
+
 ## Typography
 
-The root layout loads variable Manrope and Inter through `next/font/google` with `display: 'swap'`, Latin and Cyrillic subsets, and metric-adjusted system fallbacks. Next.js self-hosts the generated font files, so browsers do not contact a third-party font server. Ukrainian uses the Cyrillic subset; add `cyrillic-ext` only if content requires glyphs outside it. Keep to these two custom families in the MVP.
+The root layout loads variable Manrope and Inter through `next/font/google` with `display: 'swap'`, Latin and Cyrillic subsets, and metric-adjusted system fallbacks. Next.js self-hosts the generated font files, so browsers do not contact a third-party font server. Keep to these two custom families in the MVP; the Cyrillic subset is available if localization is requested later.
 
 | Token                                                                                           | Use                                                         |
 | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -29,19 +36,34 @@ The root layout loads variable Manrope and Inter through `next/font/google` with
 | `--font-mono`                                                                                   | System monospace for code samples only                      |
 | `--type-size-hero`, `--type-size-page`, `--type-size-card`                                      | Display, page, and card headings                            |
 | `--type-size-body`, `--type-size-body-large`                                                    | Standard and prominent paragraphs                           |
+| `--type-size-table-primary`, `--type-size-filter`                                               | Compact table names and table filters                       |
 | `--type-size-label`, `--type-size-caption`                                                      | Navigation, labels, badges, and compact notes               |
 | `--type-weight-regular`, `--type-weight-medium`, `--type-weight-semibold`, `--type-weight-bold` | Text emphasis without thin weights                          |
 | `--type-leading-tight`, `--type-leading-body`, `--type-leading-compact`                         | Heading, paragraph, and compact line heights                |
 
 Use the heading family for headings and the body family for UI text. Keep headings at semibold or bold, body text at regular or medium, and compact UI at medium or semibold. Use `.metric-value` or `font-variant-numeric: tabular-nums` for pace, distance, counters, and aligned columns; right-align comparable values when their labels are separate. Use the body font for units. Let long values wrap instead of clipping them.
 
-Check English and Ukrainian copy in actual headings and controls, including `І`, `Ї`, `Є`, `Ґ`, apostrophes, en/em dashes, and values such as `1 234,56 км` and `12:34 /км`. Give Ukrainian content `lang="uk"`; add a CJK font or fallback plan before introducing Japanese UI. Review 320–375px widths and 200% zoom with realistic labels and metric values.
+Keep source copy and Storybook examples in English unless an issue explicitly requests localization. Check actual headings and controls, including apostrophes, en/em dashes, and values such as `1,234.56 km` and `12:34 /km`. Review 320–375px widths and 200% zoom with realistic labels and metric values.
 
 ## Reusable patterns
 
-- Primary action: `.button`; secondary action: `.button.button--secondary`. These work on buttons and links. Use the native `disabled` attribute on buttons. For a disabled link, remove its `href` and click handler as well as adding `aria-disabled="true"`.
+### Dialogs
+
+Use shared `Dialog` for modal content and `ConfirmDialog` for explicit neutral or destructive decisions. Both use the browser's modal `<dialog>` behavior for focus trapping and focus restoration. Provide a clear title, optional description, and an `onClose` handler that clears sensitive one-time content. Set `pending` during mutations to disable confirmation and prevent Escape, backdrop, or close-button dismissal until the response resolves. Keep primary and cancel actions labeled with concrete verbs.
+
+### Notifications and copy fields
+
+Mount `ToastProvider` once in the root layout. Client components call `useToast()(tone, message)` with `tone` set to `success`, `error`, `warning`, or `info`; messages dismiss automatically or through their keyboard-accessible close button. Pass the same optional third `key` to replace an earlier notification for one action, such as copying and then revoking an invite. Server and client redirects can import `toastRedirectPath('/destination', 'missing-invite')` from `src/components/ui/Toast/toast-redirect.ts`. The provider consumes the `notice` query parameter once, removes it from the URL, and displays only allowlisted copy. Never put free-form or private content into a redirect notice code.
+
+Use `CopyableField` with `id`, `label`, and the complete `value`. Its read-only input stays selectable and its embedded button copies the full value. `disabled` also disables the action; `onCopyError` and `onCopySuccess` can trigger a Toast where useful.
+
+Shared primitives live in `src/components/ui/<Component>/`: `Button`/`ButtonLink`, `Input`/`FormField`, `Card`, `Badge`, `EmptyState`/`LoadingState`, `Dialog`/`ConfirmDialog`, `ToastProvider`/`ToastViewport`, and `CopyableField`. Each React component exports from `index.tsx`; its stylesheet, `*.stories.tsx`, and tests live beside it where needed. Import through `@/components/ui/<Component>` and keep feature-only compositions with the feature. Storybook's `src/**/*.stories.@(ts|tsx)` glob finds both shared and feature stories. Run `pnpm storybook` for the local workbench at port 6006 and `pnpm build-storybook` for a static verification build. Storybook imports `src/app/globals.css` and local Manrope/Inter font files, so it needs no database, session, or secrets. The static output is ignored by Git.
+
+Before adding UI, search this catalog and feature components. Compose existing primitives and tokens. Extend the shared library only for a missing pattern with clear reuse, keep variants narrow and typed, and update its stories when behavior changes. Feature-specific compositions can remain local. Check focus, labels, error text, contrast, 320–375px widths, and 200% zoom.
+
+- Primary action: `.button`; secondary action: `.button.button--secondary`. Both default to a 40px minimum height, matching the compact Generate invite link action. These work on buttons and links. Use the native `disabled` attribute on buttons. `ButtonLink disabled` renders an inert link-like element without an `href` or click handler and adds `aria-disabled="true"`.
 - Text links use the global link colors. Navigation links use the header's navigation styling. Do not remove the global `:focus-visible` outline.
-- Text inputs, textareas, and selects use `.field` with a visible label. `aria-invalid="true"` adds an error border; pair it with an error message, since color alone does not explain a problem.
+- Text inputs, textareas, and selects use `.field` with a visible label and a 40px minimum height. `aria-invalid="true"` adds an error border; pair it with an error message, since color alone does not explain a problem.
 - Cards use `.card`; badges use `.badge` with `.badge--success`, `.badge--warning`, or `.badge--error` when appropriate. Include status text so meaning does not depend on color.
 - Use `--color-text-muted` for supporting copy and placeholders, never opacity on text. Keep `--color-border` for decorative edges; controls use `--color-border-strong` or the focus outline.
 

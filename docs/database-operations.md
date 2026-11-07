@@ -5,6 +5,10 @@ Prisma ORM and Client are pinned to 6.19.0. The Vercel Node runtime uses
 Prisma CLI migration commands use `DIRECT_URL` through both
 `schema.prisma`'s `directUrl` and `prisma.config.ts`. There is no
 database migration in `next build` or a request handler.
+Prisma target assertions, marker and role SQL, and their executable guard live
+in `prisma/scripts/`. The RUN-70 recovery preflight is
+`scripts/migrations/prepare-run70-migrations.mjs` and runs through
+`pnpm db:prepare:run70` in the guarded CI migration sequence.
 The CLI rejects a direct URL whose host, port, database, or effective PostgreSQL
 schema does not match the runtime URL after removing Neon's `-pooler` suffix.
 This foundation uses only the `public` schema; a different `schema` URL

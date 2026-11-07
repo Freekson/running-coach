@@ -36,6 +36,7 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test"
   },
   "dependencies": {
+    "@garmin/fitsdk": "21.218.0",
     "@neondatabase/serverless": "1.2.0",
     "@prisma/adapter-neon": "6.19.0",
     "@prisma/client": "6.19.0",

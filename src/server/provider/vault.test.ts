@@ -16,15 +16,19 @@ import {
   getProviderConnectionStatus,
   InvalidCredentialError,
   readProviderApiKey,
+  readProviderApiKeySnapshot,
+  recordProviderApiKeyAccess,
   saveProviderApiKey,
 } from './vault'
 
 type Connection = {
   id: string
   userId: string
-  provider: 'OPENAI' | 'INTERVALS'
+  provider: 'OPENAI' | 'INTERVALS' | 'GARMIN'
   authMethod: 'API_KEY'
-  status: 'CONNECTED' | 'PENDING' | 'REVOKED'
+  status: 'CONNECTED' | 'PENDING' | 'REVOKED' | 'ERROR'
+  lastSuccessAt?: Date | null
+  lastFailureAt?: Date | null
   createdAt: Date
   updatedAt: Date
 }
@@ -78,15 +82,42 @@ const prisma = {
         data,
       }: {
         where: { userId_id: { userId: string; id: string } }
-        data: { status: Connection['status'] }
+        data: Partial<Connection>
       }) => {
         const connection = [...connections.values()].find(
           (c) => c.id === where.userId_id.id && c.userId === where.userId_id.userId,
         )
         if (!connection) throw new Error('not found')
-        connection.status = data.status
+        Object.assign(connection, data)
         connection.updatedAt = new Date()
         return connection
+      },
+    ),
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: {
+          userId: string
+          provider: string
+          status: Connection['status']
+          credential: { is: { userId: string; nonce: Uint8Array } }
+        }
+        data: Partial<Connection>
+      }) => {
+        const connection = connectionFor({ userId_provider: where })
+        const credential = connection && credentials.get(connection.id)
+        if (
+          !connection ||
+          connection.status !== where.status ||
+          credential?.userId !== where.credential.is.userId ||
+          !Buffer.from(credential.nonce).equals(Buffer.from(where.credential.is.nonce))
+        )
+          return { count: 0 }
+        Object.assign(connection, data)
+        connection.updatedAt = new Date()
+        return { count: 1 }
       },
     ),
   },
@@ -166,5 +197,26 @@ describe('owner-scoped provider vault', () => {
     expect(credentials.size).toBe(0)
     expect(await getProviderConnectionStatus(a, 'OPENAI')).toMatchObject({ status: 'DISCONNECTED' })
     await expect(readProviderApiKey(a, 'OPENAI')).rejects.toBeInstanceOf(CredentialUnavailableError)
+  })
+
+  it('updates only the owner and exact saved Garmin key after API verification or rejection', async () => {
+    const a = ownerA()
+    const b = ownerB()
+    await saveProviderApiKey(a, 'GARMIN', fakeKey)
+    const original = await readProviderApiKeySnapshot(a, 'GARMIN')
+    expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('KEY_SAVED')
+    await recordProviderApiKeyAccess(b, 'GARMIN', original.nonce, 'REJECTED')
+    expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('KEY_SAVED')
+    await recordProviderApiKeyAccess(a, 'GARMIN', original.nonce, 'VERIFIED')
+    expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('CONNECTED')
+
+    await saveProviderApiKey(a, 'GARMIN', 'replacement-garmin-key')
+    const replacement = await readProviderApiKeySnapshot(a, 'GARMIN')
+    expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('KEY_SAVED')
+    await recordProviderApiKeyAccess(a, 'GARMIN', original.nonce, 'REJECTED')
+    expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('KEY_SAVED')
+    await recordProviderApiKeyAccess(a, 'GARMIN', replacement.nonce, 'REJECTED')
+    expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('ERROR')
+    await expect(readProviderApiKey(a, 'GARMIN')).rejects.toBeInstanceOf(CredentialUnavailableError)
   })
 })

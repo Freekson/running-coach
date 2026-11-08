@@ -5,6 +5,7 @@ import {
   canonicalActivitySchema,
   canonicalLapSchema,
   type ActivitySource,
+  type ActivityNormalizationOptions,
   type CanonicalLap,
 } from '@/server/activity/normalization'
 import {
@@ -102,7 +103,12 @@ function localWallEpoch(instant: string, zone: string): number {
 
 function validateLocalWall(instant: string, local: string, zone: string): void {
   const localAsUtc = utcInstant(local)
-  if (localWallEpoch(instant, zone) !== Date.parse(localAsUtc))
+  const fractionalDigits = local.match(/\.(\d{1,3})$/)?.[1].length ?? 0
+  const precisionMs = 10 ** (3 - fractionalDigits)
+  if (
+    Math.floor(localWallEpoch(instant, zone) / precisionMs) !==
+    Math.floor(Date.parse(localAsUtc) / precisionMs)
+  )
     throw new Error('Garmin local time does not match source time zone')
 }
 
@@ -114,17 +120,22 @@ function toMilliseconds(seconds: number | null | undefined): number | null {
   return Math.round(milliseconds)
 }
 
+export class FitActivityIdentityError extends Error {}
+
+export class FitLapUnavailableError extends Error {}
+
 function normalizeFitLaps(
   bytes: Buffer,
   activityStartedAt: string,
   activityDistanceMeters: number | null,
   activityElapsedMs: number | null,
-): CanonicalLap[] {
+): CanonicalLap[] | null {
   const { messages } = decodeFitDownload(bytes)
   const sessions = messages.sessionMesgs ?? []
   const fileType = messages.fileIdMesgs?.[0]?.type
-  if (fileType !== 'activity' || sessions.length === 0 || activityDistanceMeters === null)
-    throw new Error('Cannot verify FIT activity identity')
+  if (fileType !== 'activity' || sessions.length === 0)
+    throw new FitActivityIdentityError('Cannot verify FIT activity identity')
+  if (activityDistanceMeters === null) return null
   const bounds: { startMs: number; endMs: number; distanceMeters: number }[] = []
   let firstStart = Number.POSITIVE_INFINITY
   let lastEnd = Number.NEGATIVE_INFINITY
@@ -139,11 +150,11 @@ function normalizeFitLaps(
       !(end instanceof Date) ||
       Number.isNaN(end.getTime()) ||
       end.getTime() < start.getTime() ||
-      typeof distance !== 'number' ||
-      !Number.isFinite(distance) ||
-      distance < 0
+      (distance !== undefined &&
+        (typeof distance !== 'number' || !Number.isFinite(distance) || distance < 0))
     )
-      throw new Error('Cannot verify FIT activity identity')
+      throw new FitActivityIdentityError('Cannot verify FIT activity identity')
+    if (distance === undefined) return null
     const startMs = start.getTime()
     const endMs = end.getTime()
     bounds.push({ startMs, endMs, distanceMeters: distance })
@@ -160,8 +171,9 @@ function normalizeFitLaps(
       Math.abs(fitElapsedMs - activityElapsedMs) >
         Math.max(60_000, Math.max(fitElapsedMs, activityElapsedMs) * 0.05))
   )
-    throw new Error('FIT session does not match Garmin activity')
+    throw new FitActivityIdentityError('FIT session does not match Garmin activity')
   const laps = messages.lapMesgs ?? []
+  if (laps.length === 0) return null
   const parsedLaps = laps
     .map((lap, index) => {
       const start = lap.startTime
@@ -173,17 +185,28 @@ function normalizeFitLaps(
         Number.isNaN(end.getTime()) ||
         end.getTime() < start.getTime()
       )
-        throw new Error('Invalid FIT lap bounds')
+        throw new FitLapUnavailableError('Invalid FIT lap bounds')
       const startMs = start.getTime()
       const endMs = end.getTime()
       const sessionIndex = bounds.findIndex(
         (session) => startMs >= session.startMs - 2_000 && endMs <= session.endMs + 2_000,
       )
-      if (sessionIndex < 0) throw new Error('FIT lap is outside its session')
-      const elapsedMs = toMilliseconds(optionalMetric.parse(lap.totalElapsedTime))
+      if (sessionIndex < 0) throw new FitLapUnavailableError('FIT lap is outside its session')
+      const elapsed = optionalMetric.safeParse(lap.totalElapsedTime)
+      if (
+        !elapsed.success ||
+        (elapsed.data != null && elapsed.data * 1000 > Number.MAX_SAFE_INTEGER)
+      )
+        throw new FitLapUnavailableError('Invalid FIT lap duration')
+      const elapsedMs = toMilliseconds(elapsed.data)
       if (elapsedMs !== null && Math.abs(elapsedMs - (endMs - startMs)) > 2_000)
-        throw new Error('FIT lap duration does not match its timestamps')
-      const distanceMeters = optionalMetric.parse(lap.totalDistance) ?? null
+        throw new FitLapUnavailableError('FIT lap duration does not match its timestamps')
+      const distance = optionalMetric.safeParse(lap.totalDistance)
+      const heartRate = optionalCount.safeParse(lap.avgHeartRate)
+      const speed = optionalMetric.safeParse(lap.avgSpeed)
+      if (!distance.success || !heartRate.success || !speed.success)
+        throw new FitLapUnavailableError('Invalid FIT lap metrics')
+      const distanceMeters = distance.data ?? null
       return {
         startMs,
         endMs,
@@ -195,8 +218,8 @@ function normalizeFitLaps(
           distanceMeters,
           elapsedMs,
           movingMs: null,
-          avgHrBpm: optionalCount.parse(lap.avgHeartRate) ?? null,
-          avgSpeedMps: optionalMetric.parse(lap.avgSpeed) ?? null,
+          avgHrBpm: heartRate.data ?? null,
+          avgSpeedMps: speed.data ?? null,
           cadenceStepsPerMinute: null,
           sourceRecordType: 'FIT_LAP',
         }),
@@ -206,13 +229,13 @@ function normalizeFitLaps(
   const distanceBySession = bounds.map(() => 0)
   let previousEnd = Number.NEGATIVE_INFINITY
   for (const lap of parsedLaps) {
-    if (lap.startMs < previousEnd - 2_000) throw new Error('Overlapping FIT laps')
+    if (lap.startMs < previousEnd - 2_000) throw new FitLapUnavailableError('Overlapping FIT laps')
     previousEnd = Math.max(previousEnd, lap.endMs)
     if (lap.distanceMeters !== null) {
       const total = distanceBySession[lap.sessionIndex] + lap.distanceMeters
       const sessionDistance = bounds[lap.sessionIndex].distanceMeters
       if (total > sessionDistance + Math.max(100, sessionDistance * 0.02))
-        throw new Error('FIT laps exceed session distance')
+        throw new FitLapUnavailableError('FIT laps exceed session distance')
       distanceBySession[lap.sessionIndex] = total
     }
   }
@@ -221,7 +244,7 @@ function normalizeFitLaps(
 
 export const garminActivitySource = {
   provider: 'GARMIN',
-  normalizeActivity(owner: OwnerContext, payload: unknown, fitDownload?: Buffer) {
+  normalizeActivity(owner: OwnerContext, payload: unknown, options?: ActivityNormalizationOptions) {
     const userId = ownerId(owner)
     const input = garminActivitySchema.parse(payload)
     const startedAt = utcInstant(input.summaryDTO.startTimeGMT)
@@ -252,10 +275,10 @@ export const garminActivitySource = {
       elevationGainMeters: input.summaryDTO.elevationGain ?? null,
       elevationLossMeters: input.summaryDTO.elevationLoss ?? null,
       laps:
-        fitDownload === undefined
+        options?.sourceFile === undefined
           ? null
           : normalizeFitLaps(
-              fitDownload,
+              options.sourceFile,
               startedAt,
               input.summaryDTO.distance ?? null,
               toMilliseconds(input.summaryDTO.elapsedDuration),
@@ -313,7 +336,7 @@ export function normalizeGarminSleep(
     )
       throw new Error('Garmin sleep local timestamp does not match source time zone')
   } else if (sleepData.sleepStartTimestampLocal != null) {
-    throw new Error('Garmin sleep local timestamp has no UTC instant')
+    epochMs(sleepData.sleepStartTimestampLocal)
   }
   return dailyHealthObservationSchema.parse({
     ...base,

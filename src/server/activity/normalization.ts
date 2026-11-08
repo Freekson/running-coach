@@ -54,9 +54,17 @@ export type CanonicalActivity = z.infer<typeof canonicalActivitySchema>
 export type CanonicalLap = z.infer<typeof canonicalLapSchema>
 export type ActivitySourceIdentity = z.infer<typeof activitySourceIdentitySchema>
 
+export interface ActivityNormalizationOptions {
+  readonly sourceFile?: Buffer
+}
+
 export interface ActivitySource {
   readonly provider: ActivitySourceIdentity['provider']
-  normalizeActivity(owner: OwnerContext, payload: unknown): CanonicalActivity
+  normalizeActivity(
+    owner: OwnerContext,
+    payload: unknown,
+    options?: ActivityNormalizationOptions,
+  ): CanonicalActivity
 }
 
 /** Only an owner/provider/external ID tuple can be used for automatic same-provider upsert. */
@@ -85,22 +93,21 @@ export function isCrossProviderDuplicateCandidate(
     second.distanceMeters === null
   )
     return false
-  if (
-    first.distanceMeters === 0 ||
-    second.distanceMeters === 0 ||
-    first.elapsedMs === null ||
-    second.elapsedMs === null ||
-    first.elapsedMs === 0 ||
-    second.elapsedMs === 0
-  )
-    return false
+  if (first.distanceMeters === 0 || second.distanceMeters === 0) return false
   const startGap = Math.abs(Date.parse(first.startedAt) - Date.parse(second.startedAt))
   const distanceGap = Math.abs(first.distanceMeters - second.distanceMeters)
-  const elapsedGap = Math.abs(first.elapsedMs - second.elapsedMs)
+  // Missing elapsed time should not hide a plausible match from human review.
+  const durationMatches =
+    first.elapsedMs === null ||
+    second.elapsedMs === null ||
+    (first.elapsedMs > 0 &&
+      second.elapsedMs > 0 &&
+      Math.abs(first.elapsedMs - second.elapsedMs) <=
+        Math.max(60_000, Math.max(first.elapsedMs, second.elapsedMs) * 0.05))
   return (
     startGap <= 120_000 &&
     distanceGap <= Math.max(100, Math.max(first.distanceMeters, second.distanceMeters) * 0.02) &&
-    elapsedGap <= Math.max(60_000, Math.max(first.elapsedMs, second.elapsedMs) * 0.05)
+    durationMatches
   )
 }
 

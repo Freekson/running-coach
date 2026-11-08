@@ -106,7 +106,7 @@ function activityIdFrom(value: unknown): string | null {
     : null
 }
 
-async function requestJson(
+export async function requestJson(
   fetcher: typeof fetch,
   path: string,
   authorization: string,
@@ -154,7 +154,7 @@ async function requestJson(
   }
 }
 
-async function requestFit(
+export async function requestFit(
   fetcher: typeof fetch,
   path: string,
   authorization: string,

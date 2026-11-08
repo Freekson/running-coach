@@ -10,6 +10,7 @@ import {
   isCrossProviderDuplicateCandidate,
   paceSecondsPerKm,
   canonicalActivitySchema,
+  type ActivitySource,
 } from '@/server/activity/normalization'
 import { getOwnerContext } from '@/server/authorization/ownership'
 import {
@@ -50,13 +51,15 @@ function fitWithLap({
   lapElapsedSeconds = elapsedSeconds,
   lapStartOffsetMs = 0,
   lapDistance = sessionDistance,
+  includeLap = true,
 }: {
   startTime?: string
-  sessionDistance?: number
+  sessionDistance?: number | null
   elapsedSeconds?: number
   lapElapsedSeconds?: number
   lapStartOffsetMs?: number
-  lapDistance?: number
+  lapDistance?: number | null
+  includeLap?: boolean
 } = {}): Buffer {
   const encoder = new Encoder()
   const sessionStart = new Date(startTime)
@@ -73,17 +76,17 @@ function fitWithLap({
     startTime: lapStart,
     timestamp: lapEnd,
     totalElapsedTime: lapElapsedSeconds,
-    totalDistance: lapDistance,
+    ...(lapDistance === null ? {} : { totalDistance: lapDistance }),
     avgHeartRate: 140,
   }
   const session: SessionMesg = {
     startTime: sessionStart,
     timestamp: sessionEnd,
     totalElapsedTime: elapsedSeconds,
-    totalDistance: sessionDistance,
+    ...(sessionDistance === null ? {} : { totalDistance: sessionDistance }),
   }
   encoder.onMesg(Profile.MesgNum.FILE_ID, fileId)
-  encoder.onMesg(Profile.MesgNum.LAP, lap)
+  if (includeLap) encoder.onMesg(Profile.MesgNum.LAP, lap)
   encoder.onMesg(Profile.MesgNum.SESSION, session)
   return Buffer.from(encoder.close())
 }
@@ -120,7 +123,8 @@ function fitWithTwoSessions(): Buffer {
 
 describe('Garmin activity normalization', () => {
   it('converts verified units, preserves provenance and optional FIT laps', () => {
-    const result = garminActivitySource.normalizeActivity(ownerA, activity, fitWithLap())
+    const source: ActivitySource = garminActivitySource
+    const result = source.normalizeActivity(ownerA, activity, { sourceFile: fitWithLap() })
     expect(result.source).toEqual({
       userId: ownerAId,
       provider: 'GARMIN',
@@ -201,7 +205,7 @@ describe('Garmin activity normalization', () => {
           elapsedDuration: 1.001,
         },
       },
-      fitWithLap({ elapsedSeconds: 1.001 }),
+      { sourceFile: fitWithLap({ elapsedSeconds: 1.001 }) },
     )
     expect(result.totalMs).toBe(1001)
     expect(result.elapsedMs).toBe(1001)
@@ -214,62 +218,93 @@ describe('Garmin activity normalization', () => {
     ).toBe(1001)
   })
 
-  it('rejects FIT laps from another activity or without a verifiable distance', () => {
-    expect(() =>
-      garminActivitySource.normalizeActivity(
-        ownerA,
-        activity,
-        fitWithLap({ startTime: '2026-11-02T06:30:00Z' }),
-      ),
-    ).toThrow('FIT session does not match Garmin activity')
-    expect(() =>
-      garminActivitySource.normalizeActivity(
-        ownerA,
-        activity,
-        fitWithLap({ sessionDistance: 8000 }),
-      ),
-    ).toThrow('FIT session does not match Garmin activity')
-    expect(() =>
-      garminActivitySource.normalizeActivity(ownerA, activity, fitWithLap({ elapsedSeconds: 300 })),
-    ).toThrow('FIT session does not match Garmin activity')
-    expect(() =>
-      garminActivitySource.normalizeActivity(
-        ownerA,
-        {
-          ...activity,
-          summaryDTO: { ...activity.summaryDTO, distance: null },
+  it('checks local wall time at its supplied precision during the repeated DST hour', () => {
+    for (const startTimeGMT of ['2026-11-01 05:30:00.500', '2026-11-01 06:30:00.500']) {
+      const result = garminActivitySource.normalizeActivity(ownerA, {
+        ...activity,
+        summaryDTO: { ...activity.summaryDTO, startTimeGMT },
+      })
+      expect(result.startedAt).toBe(`${startTimeGMT.replace(' ', 'T')}Z`)
+    }
+    expect(
+      garminActivitySource.normalizeActivity(ownerA, {
+        ...activity,
+        summaryDTO: {
+          ...activity.summaryDTO,
+          startTimeGMT: '2026-11-01 06:30:00.500',
+          startTimeLocal: '2026-11-01 01:30:00.5',
         },
-        fitWithLap(),
-      ),
-    ).toThrow('Cannot verify FIT activity identity')
+      }).startedAt,
+    ).toBe('2026-11-01T06:30:00.500Z')
+    expect(() =>
+      garminActivitySource.normalizeActivity(ownerA, {
+        ...activity,
+        summaryDTO: {
+          ...activity.summaryDTO,
+          startTimeGMT: '2026-11-01 06:30:00.500',
+          startTimeLocal: '2026-11-01 01:30:00.4',
+        },
+      }),
+    ).toThrow('Garmin local time does not match source time zone')
+  })
+
+  it('rejects mismatched FIT sessions but keeps activities when optional distance evidence is absent', () => {
+    expect(() =>
+      garminActivitySource.normalizeActivity(ownerA, activity, {
+        sourceFile: fitWithLap({ startTime: '2026-11-02T06:30:00Z' }),
+      }),
+    ).toThrow('FIT session does not match Garmin activity')
+    expect(() =>
+      garminActivitySource.normalizeActivity(ownerA, activity, {
+        sourceFile: fitWithLap({ sessionDistance: 8000 }),
+      }),
+    ).toThrow('FIT session does not match Garmin activity')
+    expect(() =>
+      garminActivitySource.normalizeActivity(ownerA, activity, {
+        sourceFile: fitWithLap({ elapsedSeconds: 300 }),
+      }),
+    ).toThrow('FIT session does not match Garmin activity')
+    const noJsonDistance = garminActivitySource.normalizeActivity(
+      ownerA,
+      { ...activity, summaryDTO: { ...activity.summaryDTO, distance: null } },
+      { sourceFile: fitWithLap() },
+    )
+    expect(noJsonDistance.laps).toBeNull()
+    const noSessionDistance = garminActivitySource.normalizeActivity(ownerA, activity, {
+      sourceFile: fitWithLap({ sessionDistance: null }),
+    })
+    expect(noSessionDistance.laps).toBeNull()
+    expect(
+      garminActivitySource.normalizeActivity(ownerA, activity, {
+        sourceFile: fitWithLap({ includeLap: false }),
+      }).laps,
+    ).toBeNull()
   })
 
   it('checks summed distance across multiple FIT sessions before attaching laps', () => {
     const result = garminActivitySource.normalizeActivity(
       ownerA,
       { ...activity, summaryDTO: { ...activity.summaryDTO, elapsedDuration: 1200 } },
-      fitWithTwoSessions(),
+      { sourceFile: fitWithTwoSessions() },
     )
     expect(result.laps?.map((lap) => lap.distanceMeters)).toEqual([2000, 3000])
   })
 
   it('rejects laps outside the matched session or exceeding its distance', () => {
     expect(() =>
-      garminActivitySource.normalizeActivity(
-        ownerA,
-        activity,
-        fitWithLap({ lapStartOffsetMs: 3_600_000 }),
-      ),
+      garminActivitySource.normalizeActivity(ownerA, activity, {
+        sourceFile: fitWithLap({ lapStartOffsetMs: 3_600_000 }),
+      }),
     ).toThrow('FIT lap is outside its session')
     expect(() =>
-      garminActivitySource.normalizeActivity(ownerA, activity, fitWithLap({ lapDistance: 7000 })),
+      garminActivitySource.normalizeActivity(ownerA, activity, {
+        sourceFile: fitWithLap({ lapDistance: 7000 }),
+      }),
     ).toThrow('FIT laps exceed session distance')
     expect(() =>
-      garminActivitySource.normalizeActivity(
-        ownerA,
-        activity,
-        fitWithLap({ lapElapsedSeconds: 300 }),
-      ),
+      garminActivitySource.normalizeActivity(ownerA, activity, {
+        sourceFile: fitWithLap({ lapElapsedSeconds: 300 }),
+      }),
     ).toThrow('FIT lap duration does not match its timestamps')
   })
 })
@@ -311,6 +346,14 @@ describe('identity and duplicate candidates', () => {
       startedAt: '2026-11-01T06:31:00.000Z',
     })
     expect(isCrossProviderDuplicateCandidate(first, second)).toBe(true)
+    expect(isCrossProviderDuplicateCandidate(first, { ...second, elapsedMs: null })).toBe(true)
+    expect(
+      isCrossProviderDuplicateCandidate(first, {
+        ...second,
+        elapsedMs: null,
+        distanceMeters: 6000,
+      }),
+    ).toBe(false)
     expect(
       isCrossProviderDuplicateCandidate(first, {
         ...second,
@@ -369,6 +412,16 @@ describe('Garmin health normalization', () => {
     }
   })
 
+  it('retains measured sleep duration without inventing a UTC instant from a local-only timestamp', () => {
+    const sleep = normalizeGarminSleep(ownerA, 'America/New_York', {
+      calendarDate: '2026-11-01',
+      sleepTimeSeconds: 3600,
+      sleepStartTimestampLocal: Date.parse('2026-11-01T01:30:00Z'),
+    })
+    expect(sleep.sleepDurationMs).toBe(3_600_000)
+    expect(sleep.sleepStartedAt).toBeNull()
+  })
+
   it('does not invent values and rejects unverified timestamp forms', () => {
     const summary = { calendarDate: '2026-11-01' }
     expect(normalizeGarminDailySummary(ownerA, 'UTC', summary).restingHrBpm).toBeNull()
@@ -385,7 +438,7 @@ describe('Garmin health normalization', () => {
     expect(() =>
       normalizeGarminSleep(ownerA, 'UTC', {
         calendarDate: '2026-11-01',
-        sleepStartTimestampLocal: Date.now(),
+        sleepStartTimestampLocal: 1234,
       }),
     ).toThrow()
     expect(() =>

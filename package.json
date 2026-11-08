@@ -20,7 +20,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:db": "vitest run src/server/db/client.integration.test.ts src/server/auth/auth.integration.test.ts src/server/athlete/profile.integration.test.ts src/server/provider/vault.integration.test.ts",
+    "test:db": "vitest run src/server/db/client.integration.test.ts src/server/auth/auth.integration.test.ts src/server/athlete/profile.integration.test.ts src/server/provider/vault.integration.test.ts src/server/activity/import.integration.test.ts src/server/garmin/import-rate-limit.integration.test.ts",
     "auth:invite": "node scripts/auth/auth-operator.mjs invite",
     "auth:bootstrap-admin": "node scripts/auth/auth-operator.mjs bootstrap-admin",
     "credentials:rotate": "node scripts/auth/rotate-provider-credentials.mjs",

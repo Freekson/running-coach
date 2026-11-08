@@ -15,8 +15,9 @@ export default async function SettingsPage() {
   const cookieStore = await cookies()
   const savedPeriod = cookieStore.get(chartPeriodCookie)?.value
   const period = chartPeriods.find((option) => option === savedPeriod) ?? '7D'
-  const [settings, openaiConnection] = await Promise.all([
+  const [settings, garminConnection, openaiConnection] = await Promise.all([
     getAthleteSettings(owner, period),
+    getProviderConnectionStatus(owner, 'GARMIN'),
     getProviderConnectionStatus(owner, 'OPENAI'),
   ])
   return (
@@ -26,6 +27,7 @@ export default async function SettingsPage() {
         initial={settings}
         initialChartPeriod={period}
         registrationName={user.name ?? null}
+        garminConnection={garminConnection}
         openaiConnection={openaiConnection}
       />
     </AppShell>

@@ -52,6 +52,7 @@ describe.skipIf(!runDatabaseTest)('Prisma on an isolated PostgreSQL database', (
           externalActivityId,
           sportType: 'RUN',
           startedAt: new Date('2026-10-01T00:00:00Z'),
+          listStartedAt: new Date('2026-10-01T00:00:00Z'),
         },
       })
     }
@@ -81,6 +82,7 @@ describe.skipIf(!runDatabaseTest)('Prisma on an isolated PostgreSQL database', (
             sourceProvider: 'MANUAL',
             sportType: 'RUN',
             startedAt: new Date('2026-10-02T00:00:00Z'),
+            listStartedAt: new Date('2026-10-02T00:00:00Z'),
           },
         })
         throw new Error('rollback probe')

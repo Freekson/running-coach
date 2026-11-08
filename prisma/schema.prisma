@@ -74,12 +74,14 @@ model User {
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  profile                AthleteProfile?
-  bodyMeasurements       BodyMeasurement[]
-  integrationConnections IntegrationConnection[]
-  activities             Activity[]
-  dailyHealthMetrics     DailyHealthMetric[]
-  syncRuns               SyncRun[]
+  profile                     AthleteProfile?
+  bodyMeasurements            BodyMeasurement[]
+  integrationConnections      IntegrationConnection[]
+  activities                  Activity[]
+  activityDuplicateCandidates ActivityDuplicateCandidate[]
+  garminImportRateLimit        GarminImportRateLimit?
+  dailyHealthMetrics          DailyHealthMetric[]
+  syncRuns                    SyncRun[]
 
   @@index([status])
   @@map("users")
@@ -174,6 +176,16 @@ model AuthRateLimit {
 
   @@index([lastRequest])
   @@map("auth_rate_limits")
+}
+
+model GarminImportRateLimit {
+  userId          String   @id @map("user_id") @db.Uuid
+  count           Int
+  windowStartedAt DateTime @map("window_started_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("garmin_import_rate_limits")
 }
 
 model AthleteProfile {
@@ -300,34 +312,84 @@ model SyncRun {
 }
 
 model Activity {
-  id                  String         @id @default(uuid()) @db.Uuid
-  userId              String         @map("user_id") @db.Uuid
-  sourceProvider      ActivitySource @map("source_provider")
-  externalActivityId  String?        @map("external_activity_id")
-  sportType           String         @map("sport_type")
-  surfaceType         String?        @map("surface_type")
-  startedAt           DateTime       @map("started_at") @db.Timestamptz(6)
-  sourceTimezone      String?        @map("source_timezone")
-  distanceMeters      Int?           @map("distance_meters")
-  elapsedMs           BigInt?        @map("elapsed_ms")
-  movingMs            BigInt?        @map("moving_ms")
-  avgHrBpm            Int?           @map("avg_hr_bpm")
-  maxHrBpm            Int?           @map("max_hr_bpm")
-  cadence             Decimal?       @db.Decimal(7, 2)
-  elevationGainMeters Decimal?       @map("elevation_gain_meters") @db.Decimal(9, 2)
-  elevationLossMeters Decimal?       @map("elevation_loss_meters") @db.Decimal(9, 2)
-  calories            Int?
-  activityTitle       String?        @map("activity_title")
-  rawObjectRef        String?        @map("raw_object_ref")
-  externalModifiedAt  DateTime?      @map("external_modified_at") @db.Timestamptz(6)
-  importedAt          DateTime       @default(now()) @map("imported_at") @db.Timestamptz(6)
-  updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                   String         @id @default(uuid()) @db.Uuid
+  userId               String         @map("user_id") @db.Uuid
+  sourceProvider       ActivitySource @map("source_provider")
+  externalActivityId   String?        @map("external_activity_id")
+  externalActivityUuid String?        @map("external_activity_uuid")
+  sourceRecordType     String         @default("API_ACTIVITY") @map("source_record_type")
+  sportType            String         @map("sport_type")
+  sourceSportType      String?        @map("source_sport_type")
+  surfaceType          String?        @map("surface_type")
+  startedAt            DateTime       @map("started_at") @db.Timestamptz(6)
+  listStartedAt        DateTime       @map("list_started_at") @db.Timestamptz(6)
+  sourceTimezone       String?        @map("source_timezone")
+  distanceMeters       Decimal?       @map("distance_meters") @db.Decimal(12, 3)
+  totalMs              BigInt?        @map("total_ms")
+  elapsedMs            BigInt?        @map("elapsed_ms")
+  movingMs             BigInt?        @map("moving_ms")
+  avgSpeedMps          Decimal?       @map("avg_speed_mps") @db.Decimal(12, 6)
+  avgHrBpm             Int?           @map("avg_hr_bpm")
+  maxHrBpm             Int?           @map("max_hr_bpm")
+  cadence              Decimal?       @db.Decimal(7, 2)
+  elevationGainMeters  Decimal?       @map("elevation_gain_meters") @db.Decimal(9, 2)
+  elevationLossMeters  Decimal?       @map("elevation_loss_meters") @db.Decimal(9, 2)
+  calories             Int?
+  activityTitle        String?        @map("activity_title")
+  rawObjectRef         String?        @map("raw_object_ref")
+  gpsAssetRef          String?        @map("gps_asset_ref")
+  lapImportStatus      String         @default("UNAVAILABLE") @map("lap_import_status") @db.VarChar(24)
+  sourceObservedAt     DateTime?      @map("source_observed_at") @db.Timestamptz(6)
+  externalModifiedAt   DateTime?      @map("external_modified_at") @db.Timestamptz(6)
+  importedAt           DateTime       @default(now()) @map("imported_at") @db.Timestamptz(6)
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                        User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  laps                        ActivityLap[]
+  duplicateCandidatesAsFirst  ActivityDuplicateCandidate[] @relation("DuplicateFirst")
+  duplicateCandidatesAsSecond ActivityDuplicateCandidate[] @relation("DuplicateSecond")
 
+  @@unique([userId, id])
   @@unique([userId, sourceProvider, externalActivityId])
-  @@index([userId, startedAt(sort: Desc)])
+  @@index([userId, listStartedAt(sort: Desc), id(sort: Desc)])
   @@map("activities")
+}
+
+model ActivityLap {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @map("user_id") @db.Uuid
+  activityId            String    @map("activity_id") @db.Uuid
+  lapIndex              Int       @map("lap_index")
+  sourceRecordType      String    @map("source_record_type") @db.VarChar(32)
+  startedAt             DateTime? @map("started_at") @db.Timestamptz(6)
+  distanceMeters        Decimal?  @map("distance_meters") @db.Decimal(12, 3)
+  elapsedMs             BigInt?   @map("elapsed_ms")
+  movingMs              BigInt?   @map("moving_ms")
+  avgHrBpm              Int?      @map("avg_hr_bpm")
+  avgSpeedMps           Decimal?  @map("avg_speed_mps") @db.Decimal(12, 6)
+  cadenceStepsPerMinute Decimal?  @map("cadence_steps_per_minute") @db.Decimal(7, 2)
+
+  activity Activity @relation(fields: [userId, activityId], references: [userId, id], onDelete: Cascade)
+
+  @@unique([activityId, lapIndex])
+  @@index([userId, activityId])
+  @@map("activity_laps")
+}
+
+model ActivityDuplicateCandidate {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  firstActivityId  String   @map("first_activity_id") @db.Uuid
+  secondActivityId String   @map("second_activity_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  first  Activity @relation("DuplicateFirst", fields: [userId, firstActivityId], references: [userId, id], onDelete: Cascade)
+  second Activity @relation("DuplicateSecond", fields: [userId, secondActivityId], references: [userId, id], onDelete: Cascade)
+
+  @@unique([firstActivityId, secondActivityId], map: "activity_duplicate_candidates_pair_key")
+  @@index([userId, secondActivityId])
+  @@map("activity_duplicate_candidates")
 }
 
 model DailyHealthMetric {

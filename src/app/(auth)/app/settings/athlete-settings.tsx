@@ -60,11 +60,13 @@ export function AthleteSettingsRoute({
   initial,
   initialChartPeriod,
   registrationName,
+  garminConnection,
   openaiConnection,
 }: {
   initial: Settings
   initialChartPeriod: ChartPeriod
   registrationName: string | null
+  garminConnection: ProviderConnectionStatus
   openaiConnection: ProviderConnectionStatus
 }) {
   const router = useRouter()
@@ -73,6 +75,7 @@ export function AthleteSettingsRoute({
       initial={initial}
       initialChartPeriod={initialChartPeriod}
       registrationName={registrationName}
+      garminConnection={garminConnection}
       openaiConnection={openaiConnection}
       onProfileSaved={() => router.refresh()}
     />
@@ -83,12 +86,14 @@ export function AthleteSettings({
   initial,
   initialChartPeriod = '7D',
   registrationName,
+  garminConnection,
   openaiConnection,
   onProfileSaved,
 }: {
   initial: Settings
   initialChartPeriod?: ChartPeriod
   registrationName?: string | null
+  garminConnection?: ProviderConnectionStatus
   openaiConnection?: ProviderConnectionStatus
   onProfileSaved?: () => void
 }) {
@@ -484,8 +489,6 @@ export function AthleteSettings({
         {profileMessage}
       </p>
 
-      <ProviderCredentials initial={openaiConnection} />
-
       <WeightHistoryPanel
         initialPeriod={initialChartPeriod}
         recentWeights={weights}
@@ -561,6 +564,8 @@ export function AthleteSettings({
           </div>
         </dl>
       </Card>
+
+      <ProviderCredentials initial={garminConnection} openaiInitial={openaiConnection} />
 
       <Dialog
         open={unsavedOpen}

@@ -32,6 +32,7 @@ function publicStatus(
   connection: {
     provider: IntegrationProvider
     status: string
+    lastSuccessAt: Date | null
     createdAt: Date
     updatedAt: Date
     credential: { connectionId: string } | null
@@ -42,7 +43,11 @@ function publicStatus(
   const status = !connection.credential
     ? 'DISCONNECTED'
     : connection.status === 'CONNECTED'
-      ? 'CONNECTED'
+      ? provider === 'GARMIN'
+        ? connection.lastSuccessAt === null
+          ? 'KEY_SAVED'
+          : 'CONNECTED'
+        : 'CONNECTED'
       : connection.status === 'EXPIRED'
         ? 'EXPIRED'
         : 'ERROR'
@@ -64,6 +69,7 @@ export async function getProviderConnectionStatus(
     select: {
       provider: true,
       status: true,
+      lastSuccessAt: true,
       createdAt: true,
       updatedAt: true,
       credential: { select: { connectionId: true } },
@@ -106,17 +112,17 @@ export async function saveProviderApiKey(
     })
     await tx.integrationConnection.update({
       where: { userId_id: { userId, id: connection.id } },
-      data: { status: 'CONNECTED' },
+      data: { status: 'CONNECTED', lastSuccessAt: null, lastFailureAt: null },
     })
   })
   return getProviderConnectionStatus(owner, provider)
 }
 
 // Future provider adapters call this only inside server modules.
-export async function readProviderApiKey(
+export async function readProviderApiKeySnapshot(
   owner: OwnerContext,
   provider: IntegrationProvider,
-): Promise<string> {
+): Promise<{ key: string; nonce: Uint8Array }> {
   const prisma = await getPrismaClient()
   const connection = await prisma.integrationConnection.findUnique({
     where: { userId_provider: { userId: ownerId(owner), provider } },
@@ -145,7 +151,39 @@ export async function readProviderApiKey(
     credential.connectionId !== connection.id
   )
     throw new CredentialUnavailableError()
-  return decryptCredential(credential, ownerId(owner), connection.id, provider)
+  return {
+    key: decryptCredential(credential, ownerId(owner), connection.id, provider),
+    nonce: credential.nonce,
+  }
+}
+
+export async function readProviderApiKey(
+  owner: OwnerContext,
+  provider: IntegrationProvider,
+): Promise<string> {
+  return (await readProviderApiKeySnapshot(owner, provider)).key
+}
+
+/** The encrypted credential nonce changes on replacement, so an old request cannot update a new key. */
+export async function recordProviderApiKeyAccess(
+  owner: OwnerContext,
+  provider: IntegrationProvider,
+  nonce: Uint8Array,
+  result: 'VERIFIED' | 'REJECTED',
+): Promise<void> {
+  const prisma = await getPrismaClient()
+  await prisma.integrationConnection.updateMany({
+    where: {
+      userId: ownerId(owner),
+      provider,
+      status: 'CONNECTED',
+      credential: { is: { userId: ownerId(owner), nonce: Uint8Array.from(nonce) } },
+    },
+    data:
+      result === 'VERIFIED'
+        ? { lastSuccessAt: new Date(), lastFailureAt: null }
+        : { status: 'ERROR', lastFailureAt: new Date() },
+  })
 }
 
 export async function disconnectProvider(owner: OwnerContext, provider: IntegrationProvider) {

@@ -45,8 +45,8 @@ vi.mock('@/server/athlete/profile', () => ({
   })),
 }))
 vi.mock('@/server/provider/vault', () => ({
-  getProviderConnectionStatus: vi.fn(async () => ({
-    provider: 'OPENAI',
+  getProviderConnectionStatus: vi.fn(async (_owner: unknown, provider: 'OPENAI' | 'GARMIN') => ({
+    provider,
     status: 'DISCONNECTED',
     createdAt: null,
     updatedAt: null,
@@ -72,6 +72,7 @@ import { AppShell } from './app-shell'
 import { AccountUnavailable } from './account-unavailable'
 import { AccountUnavailableError } from '@/server/auth/current-user'
 import { getAthleteSettings, getMeasurementSystem } from '@/server/athlete/profile'
+import { getProviderConnectionStatus } from '@/server/provider/vault'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -148,6 +149,8 @@ describe('authenticated /app routes', () => {
     expect(settings.props.children.props.initial.weights).toEqual([])
     expect(settings.props.children.props.initialChartPeriod).toBe('7D')
     expect(getAthleteSettings).toHaveBeenCalledWith({ userId: 'user-a' }, '7D')
+    expect(getProviderConnectionStatus).toHaveBeenCalledWith({ userId: 'user-a' }, 'GARMIN')
+    expect(getProviderConnectionStatus).toHaveBeenCalledWith({ userId: 'user-a' }, 'OPENAI')
   })
 
   it('restores a valid chart period and ignores an invalid cookie', async () => {

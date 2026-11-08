@@ -23,6 +23,12 @@ const meta = {
   ),
   args: {
     registrationName: 'Avery Runner',
+    garminConnection: {
+      provider: 'GARMIN',
+      status: 'KEY_SAVED',
+      createdAt: '2026-11-08T00:00:00.000Z',
+      updatedAt: '2026-11-08T00:00:00.000Z',
+    },
     initial: {
       profile: {
         displayName: null,

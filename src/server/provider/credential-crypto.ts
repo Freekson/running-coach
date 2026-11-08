@@ -8,19 +8,26 @@ export class CredentialUnavailableError extends Error {
   }
 }
 
+export class CredentialConfigurationError extends CredentialUnavailableError {
+  constructor() {
+    super()
+    this.name = 'CredentialConfigurationError'
+  }
+}
+
 function keyForVersion(version: number): Buffer {
   const encoded = process.env[`CREDENTIAL_ENCRYPTION_KEY_V${version}`]
-  if (!encoded || !/^[A-Za-z0-9+/]{43}=$/.test(encoded)) throw new CredentialUnavailableError()
+  if (!encoded || !/^[A-Za-z0-9+/]{43}=$/.test(encoded)) throw new CredentialConfigurationError()
   const key = Buffer.from(encoded, 'base64')
   if (key.length !== 32 || key.toString('base64') !== encoded)
-    throw new CredentialUnavailableError()
+    throw new CredentialConfigurationError()
   return key
 }
 
 export function activeKeyVersion(): number {
   const value = process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION
   const version = value && /^[1-9]\d*$/.test(value) ? Number(value) : NaN
-  if (!Number.isSafeInteger(version)) throw new CredentialUnavailableError()
+  if (!Number.isSafeInteger(version)) throw new CredentialConfigurationError()
   keyForVersion(version)
   return version
 }

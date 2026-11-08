@@ -17,6 +17,8 @@ import {
   disconnectProvider,
   getProviderConnectionStatus,
   readProviderApiKey,
+  readProviderApiKeySnapshot,
+  recordProviderApiKeyAccess,
   saveProviderApiKey,
 } from './vault'
 import { CredentialUnavailableError } from './credential-crypto'
@@ -79,6 +81,26 @@ describe.skipIf(!enabled)('provider vault on isolated PostgreSQL', () => {
     await expect(readProviderApiKey(ownerB, 'OPENAI')).rejects.toBeInstanceOf(
       CredentialUnavailableError,
     )
+    await saveProviderApiKey(ownerA, 'GARMIN', 'synthetic-garmin-key-database-test')
+    expect((await getProviderConnectionStatus(ownerA, 'GARMIN')).status).toBe('KEY_SAVED')
+    expect(await readProviderApiKey(ownerA, 'GARMIN')).toBe('synthetic-garmin-key-database-test')
+    await expect(readProviderApiKey(ownerB, 'GARMIN')).rejects.toBeInstanceOf(
+      CredentialUnavailableError,
+    )
+    const originalGarmin = await readProviderApiKeySnapshot(ownerA, 'GARMIN')
+    await recordProviderApiKeyAccess(ownerB, 'GARMIN', originalGarmin.nonce, 'REJECTED')
+    expect((await getProviderConnectionStatus(ownerA, 'GARMIN')).status).toBe('KEY_SAVED')
+    await recordProviderApiKeyAccess(ownerA, 'GARMIN', originalGarmin.nonce, 'VERIFIED')
+    expect((await getProviderConnectionStatus(ownerA, 'GARMIN')).status).toBe('CONNECTED')
+    await saveProviderApiKey(ownerA, 'GARMIN', 'replacement-garmin-database-key')
+    const replacementGarmin = await readProviderApiKeySnapshot(ownerA, 'GARMIN')
+    await recordProviderApiKeyAccess(ownerA, 'GARMIN', originalGarmin.nonce, 'REJECTED')
+    expect((await getProviderConnectionStatus(ownerA, 'GARMIN')).status).toBe('KEY_SAVED')
+    await recordProviderApiKeyAccess(ownerA, 'GARMIN', replacementGarmin.nonce, 'REJECTED')
+    expect((await getProviderConnectionStatus(ownerA, 'GARMIN')).status).toBe('ERROR')
+    await expect(readProviderApiKey(ownerA, 'GARMIN')).rejects.toBeInstanceOf(
+      CredentialUnavailableError,
+    )
     const uncredentialedConnection = await prisma.integrationConnection.create({
       data: { userId: a.id, provider: 'INTERVALS', authMethod: 'API_KEY' },
     })
@@ -113,8 +135,12 @@ describe.skipIf(!enabled)('provider vault on isolated PostgreSQL', () => {
     await disconnectProvider(ownerB, 'OPENAI')
     expect(await readProviderApiKey(ownerA, 'OPENAI')).toBe('replacement-database-test')
     await disconnectProvider(ownerA, 'OPENAI')
+    await disconnectProvider(ownerA, 'GARMIN')
     expect(await prisma.integrationCredential.count({ where: { userId: a.id } })).toBe(0)
     await expect(readProviderApiKey(ownerA, 'OPENAI')).rejects.toBeInstanceOf(
+      CredentialUnavailableError,
+    )
+    await expect(readProviderApiKey(ownerA, 'GARMIN')).rejects.toBeInstanceOf(
       CredentialUnavailableError,
     )
   })

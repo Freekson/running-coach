@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { timingSafeEqual } from 'node:crypto'
 import { getPrismaClient } from '@/server/db/client'
 import { isVerifiedCurrentUser, type CurrentUser } from '@/server/auth/current-user'
 
@@ -12,6 +13,24 @@ export function getOwnerContext(user: CurrentUser): OwnerContext {
   const owner = Object.freeze({ userId: user.id })
   issuedContexts.add(owner)
   return owner
+}
+
+/** Only the secret-authenticated scheduled trigger can issue an owner for a DB-selected connection. */
+export function getScheduledOwnerContext(userId: string, bearer: string): OwnerContext {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId))
+    throw new InvalidOwnerContextError()
+  if (!isScheduledBearer(bearer)) throw new InvalidOwnerContextError()
+  const owner = Object.freeze({ userId })
+  issuedContexts.add(owner)
+  return owner
+}
+
+export function isScheduledBearer(bearer: string): boolean {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false
+  const expected = Buffer.from(`Bearer ${secret}`)
+  const received = Buffer.from(bearer)
+  return expected.length === received.length && timingSafeEqual(expected, received)
 }
 
 export class InvalidOwnerContextError extends Error {

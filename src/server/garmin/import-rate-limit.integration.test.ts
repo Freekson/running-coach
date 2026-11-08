@@ -8,7 +8,11 @@ vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: () => true
 
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
-import { allowGarminImport } from './import-rate-limit'
+import {
+  allowGarminImport,
+  getGarminProviderPauseUntil,
+  pauseGarminProviderUntil,
+} from './import-rate-limit'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
 if (requested) config()
@@ -61,5 +65,56 @@ describe.skipIf(!enabled)('shared Garmin import limit on isolated PostgreSQL', (
     expect(
       await prisma.garminImportRateLimit.findUnique({ where: { userId: ownerB.userId } }),
     ).not.toBeNull()
+  })
+
+  it('shares a provider pause without spending manual attempts or affecting another owner', async () => {
+    const pausedUser = await prisma.user.create({ data: { authSubject: `${prefix}-paused` } })
+    const otherUser = await prisma.user.create({ data: { authSubject: `${prefix}-other` } })
+    const pausedOwner = getOwnerContext({ id: pausedUser.id, role: 'USER', email: null })
+    const otherOwner = getOwnerContext({ id: otherUser.id, role: 'USER', email: null })
+    const connection = await prisma.integrationConnection.create({
+      data: {
+        userId: pausedUser.id,
+        provider: 'GARMIN',
+        authMethod: 'API_KEY',
+        status: 'CONNECTED',
+      },
+    })
+    const nonce = Buffer.alloc(12, 11)
+    await prisma.integrationCredential.create({
+      data: {
+        userId: pausedUser.id,
+        connectionId: connection.id,
+        ciphertext: Buffer.from([1]),
+        nonce,
+        authTag: Buffer.alloc(16),
+        encryptionKeyVersion: 1,
+      },
+    })
+    const until = new Date(Date.now() + 300_000)
+    await pauseGarminProviderUntil(pausedOwner, until, nonce)
+    expect(await getGarminProviderPauseUntil(pausedOwner)).toEqual(until)
+    expect(await allowGarminImport(pausedOwner)).toBe(false)
+    expect(
+      (
+        await prisma.garminImportRateLimit.findUniqueOrThrow({
+          where: { userId: pausedUser.id },
+        })
+      ).count,
+    ).toBe(1)
+    expect(await allowGarminImport(otherOwner)).toBe(true)
+    await pauseGarminProviderUntil(pausedOwner, new Date(Date.now() + 60_000), nonce)
+    expect(await getGarminProviderPauseUntil(pausedOwner)).toEqual(until)
+    await prisma.garminImportRateLimit.update({
+      where: { userId: pausedUser.id },
+      data: { providerRetryAt: new Date(Date.now() - 1_000) },
+    })
+    expect(await allowGarminImport(pausedOwner)).toBe(true)
+    await prisma.integrationCredential.update({
+      where: { connectionId: connection.id },
+      data: { nonce: Buffer.alloc(12, 12) },
+    })
+    await pauseGarminProviderUntil(pausedOwner, new Date(Date.now() + 600_000), nonce)
+    expect((await getGarminProviderPauseUntil(pausedOwner))?.getTime()).toBeLessThan(Date.now())
   })
 })

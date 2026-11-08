@@ -5,6 +5,7 @@ import { AppShell } from '../app-shell'
 import { getAthleteSettings } from '@/server/athlete/profile'
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { getProviderConnectionStatus } from '@/server/provider/vault'
+import { getGarminSyncState } from '@/server/garmin/sync'
 import { AthleteSettingsRoute } from './athlete-settings'
 import { chartPeriodCookie, chartPeriods } from './weight-history'
 
@@ -15,10 +16,11 @@ export default async function SettingsPage() {
   const cookieStore = await cookies()
   const savedPeriod = cookieStore.get(chartPeriodCookie)?.value
   const period = chartPeriods.find((option) => option === savedPeriod) ?? '7D'
-  const [settings, garminConnection, openaiConnection] = await Promise.all([
+  const [settings, garminConnection, openaiConnection, garminSync] = await Promise.all([
     getAthleteSettings(owner, period),
     getProviderConnectionStatus(owner, 'GARMIN'),
     getProviderConnectionStatus(owner, 'OPENAI'),
+    getGarminSyncState(owner),
   ])
   return (
     <AppShell user={user} measurementSystem={settings.profile.measurementSystem}>
@@ -29,6 +31,7 @@ export default async function SettingsPage() {
         registrationName={user.name ?? null}
         garminConnection={garminConnection}
         openaiConnection={openaiConnection}
+        garminSync={garminSync}
       />
     </AppShell>
   )

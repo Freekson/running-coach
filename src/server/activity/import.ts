@@ -31,6 +31,7 @@ const encodedCursorSchema = z
   .max(512)
   .regex(/^[A-Za-z0-9_-]+$/)
 export type LapImportStatus = 'IMPORTED' | 'RETAINED' | 'UNAVAILABLE'
+const FIT_REFRESH_MS = 24 * 60 * 60 * 1000
 
 function encodeActivityCursor(userId: string, row: { listStartedAt: Date; id: string }) {
   return Buffer.from(
@@ -121,6 +122,42 @@ function sameActivitySummary(existing: Activity, fields: ReturnType<typeof activ
   )
 }
 
+/** Skip FIT when unchanged laps are retained or FIT was checked recently. */
+export async function canSkipFitDownload(
+  owner: OwnerContext,
+  untrustedActivity: unknown,
+  options: { refresh?: boolean; observedAt?: Date } = {},
+): Promise<boolean> {
+  const userId = ownerId(owner)
+  const activity = canonicalActivitySchema.parse(untrustedActivity)
+  if (activity.source.userId !== userId || !activity.source.externalActivityId)
+    throw new InvalidActivityImportError()
+  const prisma = await getPrismaClient()
+  const existing = await prisma.activity.findUnique({
+    where: {
+      userId_sourceProvider_externalActivityId: {
+        userId,
+        sourceProvider: activity.source.provider,
+        externalActivityId: activity.source.externalActivityId,
+      },
+    },
+  })
+  const observedAt = options.observedAt ?? new Date()
+  if (options.refresh && !Number.isFinite(observedAt.getTime()))
+    throw new InvalidActivityImportError()
+  const fitAge = existing?.fitCheckedAt
+    ? observedAt.getTime() - existing.fitCheckedAt.getTime()
+    : null
+  const fitRecentlyChecked = fitAge !== null && fitAge >= 0 && fitAge < FIT_REFRESH_MS
+  return Boolean(
+    existing &&
+    sameActivitySummary(existing, activityFields(activity, 'UNAVAILABLE', observedAt)) &&
+    (fitRecentlyChecked ||
+      (!options.refresh &&
+        (existing.lapImportStatus === 'IMPORTED' || existing.lapImportStatus === 'RETAINED'))),
+  )
+}
+
 function lapStatus(value: string): LapImportStatus {
   if (value === 'IMPORTED' || value === 'RETAINED' || value === 'UNAVAILABLE') return value
   throw new InvalidActivityImportError()
@@ -200,7 +237,11 @@ function stableLapRows(
 export async function importCanonicalActivity(
   owner: OwnerContext,
   untrustedActivity: unknown,
-  options: { sourceObservedAt?: Date } = {},
+  options: {
+    sourceObservedAt?: Date
+    fitCheckedAt?: Date
+    beforeWrite?: (tx: Prisma.TransactionClient) => Promise<void>
+  } = {},
 ): Promise<{ id: string; lapImportStatus: LapImportStatus }> {
   const userId = ownerId(owner)
   const activity = canonicalActivitySchema.parse(untrustedActivity)
@@ -209,6 +250,11 @@ export async function importCanonicalActivity(
     throw new InvalidActivityImportError()
   const sourceObservedAt = options.sourceObservedAt ?? new Date()
   if (!(sourceObservedAt instanceof Date) || !Number.isFinite(sourceObservedAt.getTime()))
+    throw new InvalidActivityImportError()
+  if (
+    options.fitCheckedAt !== undefined &&
+    (!(options.fitCheckedAt instanceof Date) || !Number.isFinite(options.fitCheckedAt.getTime()))
+  )
     throw new InvalidActivityImportError()
   const identity = {
     userId,
@@ -220,6 +266,7 @@ export async function importCanonicalActivity(
     try {
       return await prisma.$transaction(
         async (tx) => {
+          await options.beforeWrite?.(tx)
           const existing = await tx.activity.findUnique({
             where: { userId_sourceProvider_externalActivityId: identity },
           })
@@ -229,11 +276,11 @@ export async function importCanonicalActivity(
           )
             return { id: existing.id, lapImportStatus: lapStatus(existing.lapImportStatus) }
           const comparison = activityFields(activity, 'UNAVAILABLE', sourceObservedAt)
+          const summaryMatches = existing !== null && sameActivitySummary(existing, comparison)
           const retainLaps =
             activity.laps === null &&
-            existing !== null &&
-            sameActivitySummary(existing, comparison) &&
-            (existing.lapImportStatus === 'IMPORTED' || existing.lapImportStatus === 'RETAINED')
+            summaryMatches &&
+            (existing?.lapImportStatus === 'IMPORTED' || existing?.lapImportStatus === 'RETAINED')
           const lapImportStatus: LapImportStatus =
             activity.laps !== null ? 'IMPORTED' : retainLaps ? 'RETAINED' : 'UNAVAILABLE'
           const fields = { ...comparison, lapImportStatus }
@@ -244,9 +291,13 @@ export async function importCanonicalActivity(
             create: {
               ...identity,
               ...fields,
+              fitCheckedAt: options.fitCheckedAt,
               listStartedAt: new Date(activity.startedAt),
             },
-            update: fields,
+            update: {
+              ...fields,
+              fitCheckedAt: options.fitCheckedAt ?? (summaryMatches ? undefined : null),
+            },
             select: { id: true },
           })
           if (!retainLaps) {

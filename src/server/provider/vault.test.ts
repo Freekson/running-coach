@@ -133,6 +133,15 @@ const prisma = {
       if (row?.userId === where.userId) credentials.delete(where.connectionId)
     }),
   },
+  syncCursor: {
+    deleteMany: vi.fn(async () => ({ count: 0 })),
+  },
+  syncRun: {
+    updateMany: vi.fn(async () => ({ count: 0 })),
+  },
+  garminImportRateLimit: {
+    updateMany: vi.fn(async () => ({ count: 0 })),
+  },
   $transaction: vi.fn(async (operation: (tx: typeof prisma) => Promise<void>) => operation(prisma)),
 }
 

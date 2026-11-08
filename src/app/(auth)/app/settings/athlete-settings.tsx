@@ -11,6 +11,7 @@ import { FormField } from '@/components/ui/FormField'
 import { useToast } from '@/components/ui/Toast'
 import type { MeasurementSystem } from '@/lib/measurement-system'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
+import type { GarminSyncState } from '@/lib/garmin-sync-state'
 import { weightUnitFor } from '@/lib/measurement-system'
 import type { ProfilePatch } from '@/server/athlete/profile'
 import { useMeasurementSystem } from '../measurement-system-provider'
@@ -62,12 +63,14 @@ export function AthleteSettingsRoute({
   registrationName,
   garminConnection,
   openaiConnection,
+  garminSync,
 }: {
   initial: Settings
   initialChartPeriod: ChartPeriod
   registrationName: string | null
   garminConnection: ProviderConnectionStatus
   openaiConnection: ProviderConnectionStatus
+  garminSync: GarminSyncState
 }) {
   const router = useRouter()
   return (
@@ -77,6 +80,7 @@ export function AthleteSettingsRoute({
       registrationName={registrationName}
       garminConnection={garminConnection}
       openaiConnection={openaiConnection}
+      garminSync={garminSync}
       onProfileSaved={() => router.refresh()}
     />
   )
@@ -88,6 +92,7 @@ export function AthleteSettings({
   registrationName,
   garminConnection,
   openaiConnection,
+  garminSync,
   onProfileSaved,
 }: {
   initial: Settings
@@ -95,6 +100,7 @@ export function AthleteSettings({
   registrationName?: string | null
   garminConnection?: ProviderConnectionStatus
   openaiConnection?: ProviderConnectionStatus
+  garminSync?: GarminSyncState
   onProfileSaved?: () => void
 }) {
   const { system, setSystem } = useMeasurementSystem()
@@ -565,7 +571,11 @@ export function AthleteSettings({
         </dl>
       </Card>
 
-      <ProviderCredentials initial={garminConnection} openaiInitial={openaiConnection} />
+      <ProviderCredentials
+        initial={garminConnection}
+        openaiInitial={openaiConnection}
+        initialSync={garminSync}
+      />
 
       <Dialog
         open={unsavedOpen}

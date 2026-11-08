@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 const {
   readProviderApiKeySnapshot,
   recordProviderApiKeyAccess,
+  assertProviderApiKeySnapshotCurrent,
+  pauseGarminProviderUntil,
   importCanonicalActivity,
+  canSkipFitDownload,
   isVerifiedCurrentUser,
 } = vi.hoisted(() => ({
   readProviderApiKeySnapshot: vi.fn(async () => ({
@@ -12,12 +15,17 @@ const {
     nonce: new Uint8Array([1, 2, 3]),
   })),
   recordProviderApiKeyAccess: vi.fn(async () => {}),
+  assertProviderApiKeySnapshotCurrent: vi.fn(async () => {}),
+  pauseGarminProviderUntil: vi.fn<
+    (owner: unknown, until: Date, nonce: Uint8Array) => Promise<void>
+  >(async () => {}),
   importCanonicalActivity: vi.fn<
     (owner: unknown, activity: unknown) => Promise<{ id: string; lapImportStatus: string }>
   >(async () => ({
     id: 'stored-id',
     lapImportStatus: 'IMPORTED',
   })),
+  canSkipFitDownload: vi.fn(async () => false),
   isVerifiedCurrentUser: vi.fn(() => true),
 }))
 vi.mock('server-only', () => ({}))
@@ -27,11 +35,17 @@ vi.mock('@/server/provider/vault', async () => ({
   apiKeySchema: (await import('zod')).z.string().min(8),
   readProviderApiKeySnapshot,
   recordProviderApiKeyAccess,
+  assertProviderApiKeySnapshotCurrent,
 }))
-vi.mock('@/server/activity/import', () => ({ importCanonicalActivity }))
+vi.mock('@/server/activity/import', () => ({ importCanonicalActivity, canSkipFitDownload }))
+vi.mock('./import-rate-limit', () => ({ pauseGarminProviderUntil }))
 
 import { getOwnerContext } from '@/server/authorization/ownership'
-import { GarminImportError, importGarminActivitiesForDate } from './activity-import'
+import {
+  GarminImportError,
+  importGarminActivitiesForDate,
+  importGarminActivityPage,
+} from './activity-import'
 
 const owner = getOwnerContext({
   id: '00000000-0000-4000-8000-000000000001',
@@ -81,9 +95,13 @@ function fetcher(
     date?: string
     tokenStatus?: number
     searchStatus?: number
+    retryAfter?: string
+    searchLimit?: string
+    onRequest?: () => void
   } = {},
 ): typeof fetch {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    options.onRequest?.()
     const url = new URL(String(input))
     expect(init?.cache).toBe('no-store')
     expect(init?.redirect).toBe('error')
@@ -95,9 +113,13 @@ function fetcher(
     }
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer synthetic-bearer' })
     if (url.pathname.includes('/search/activities')) {
-      expect(url.searchParams.get('limit')).toBe('4')
+      expect(url.searchParams.get('limit')).toBe(options.searchLimit ?? '4')
       expect(url.searchParams.get('startDate')).toBe(options.date ?? '2026-11-08')
-      if (options.searchStatus === 403) return new Response(null, { status: 403 })
+      if (options.searchStatus && options.searchStatus !== 200)
+        return new Response(null, {
+          status: options.searchStatus,
+          headers: options.retryAfter ? { 'retry-after': options.retryAfter } : undefined,
+        })
       return Response.json(options.list ?? [{ activityId: 321 }])
     }
     if (url.pathname.includes('/activity-service/activity/'))
@@ -113,6 +135,58 @@ function fetcher(
 }
 
 describe('bounded Garmin activity import', () => {
+  it('checkpoints one completed activity when a two-activity page nears its deadline', async () => {
+    vi.clearAllMocks()
+    let elapsed = 0
+    const network = fetcher({
+      searchLimit: '3',
+      list: [{ activityId: 321 }, { activityId: 322 }],
+      onRequest: () => {
+        elapsed += 4_000
+      },
+    })
+    const result = await importGarminActivityPage(
+      owner,
+      { startDate: '2026-11-08', endDate: '2026-11-08', start: 0, pageSize: 2 },
+      {
+        fetcher: network,
+        pause: async (milliseconds) => {
+          elapsed += milliseconds
+        },
+        deadlineAt: 20_000,
+        timeNow: () => elapsed,
+      },
+    )
+    expect(result).toMatchObject({
+      providerIds: ['321'],
+      hasMore: true,
+      nextStart: 1,
+    })
+    expect(result.imported).toHaveLength(1)
+    expect(network).toHaveBeenCalledTimes(4)
+  })
+
+  it('stops before a detail request when the shared run deadline is exhausted', async () => {
+    vi.clearAllMocks()
+    let elapsed = 0
+    const network = fetcher()
+    await expect(
+      importGarminActivityPage(
+        owner,
+        { startDate: '2026-11-08', endDate: '2026-11-08', start: 0 },
+        {
+          fetcher: network,
+          pause: async (milliseconds) => {
+            elapsed += milliseconds + 100
+          },
+          deadlineAt: 2_000,
+          timeNow: () => elapsed,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'TIMEOUT' })
+    expect(network).toHaveBeenCalledTimes(2)
+    expect(importCanonicalActivity).not.toHaveBeenCalled()
+  })
   it('uses the owner vault and verifies detail plus FIT before persistence', async () => {
     vi.clearAllMocks()
     const result = await importGarminActivitiesForDate(owner, '2026-11-08', {
@@ -135,6 +209,47 @@ describe('bounded Garmin activity import', () => {
     expect(result.imported).toHaveLength(1)
   })
 
+  it('skips recent FIT laps in historical pages and refreshes stale laps on incremental pages', async () => {
+    vi.clearAllMocks()
+    const observedAt = new Date('2026-11-08T12:00:00Z')
+    canSkipFitDownload.mockResolvedValueOnce(true)
+    const historicalNetwork = fetcher()
+    await importGarminActivityPage(
+      owner,
+      { startDate: '2026-11-08', endDate: '2026-11-08', start: 0, refreshLaps: false },
+      { fetcher: historicalNetwork, pause: async () => {}, observedAt: () => observedAt },
+    )
+    expect(historicalNetwork).toHaveBeenCalledTimes(3)
+    expect(canSkipFitDownload).toHaveBeenCalledWith(owner, expect.anything(), {
+      refresh: false,
+      observedAt,
+    })
+    expect(importCanonicalActivity).toHaveBeenCalledWith(
+      owner,
+      expect.anything(),
+      expect.objectContaining({ fitCheckedAt: undefined }),
+    )
+
+    vi.clearAllMocks()
+    canSkipFitDownload.mockResolvedValueOnce(false)
+    const incrementalNetwork = fetcher()
+    await importGarminActivityPage(
+      owner,
+      { startDate: '2026-11-08', endDate: '2026-11-08', start: 0, refreshLaps: true },
+      { fetcher: incrementalNetwork, pause: async () => {}, observedAt: () => observedAt },
+    )
+    expect(incrementalNetwork).toHaveBeenCalledTimes(4)
+    expect(canSkipFitDownload).toHaveBeenCalledWith(owner, expect.anything(), {
+      refresh: true,
+      observedAt,
+    })
+    expect(importCanonicalActivity).toHaveBeenCalledWith(
+      owner,
+      expect.objectContaining({ laps: expect.any(Array) }),
+      expect.objectContaining({ fitCheckedAt: observedAt }),
+    )
+  })
+
   it('keeps valid JSON when FIT is unavailable', async () => {
     vi.clearAllMocks()
     await importGarminActivitiesForDate(owner, '2026-11-08', {
@@ -143,6 +258,42 @@ describe('bounded Garmin activity import', () => {
       now: new Date('2026-11-08T12:00:00Z'),
     })
     expect(importCanonicalActivity.mock.calls[0][1]).toMatchObject({ laps: null })
+  })
+
+  it('persists JSON but retries a transient FIT failure before advancing a sync page', async () => {
+    vi.clearAllMocks()
+    await expect(
+      importGarminActivitiesForDate(owner, '2026-11-08', {
+        fetcher: fetcher({ fitStatus: 503 }),
+        pause: async () => {},
+        now: new Date('2026-11-08T12:00:00Z'),
+      }),
+    ).rejects.toMatchObject({ code: 'UNAVAILABLE', persistedCount: 1 })
+    expect(importCanonicalActivity).toHaveBeenCalledOnce()
+    expect(importCanonicalActivity).toHaveBeenCalledWith(
+      owner,
+      expect.anything(),
+      expect.objectContaining({ fitCheckedAt: undefined }),
+    )
+  })
+
+  it.each([
+    { status: 408, code: 'TIMEOUT' },
+    { status: 400, code: 'INVALID_RESPONSE' },
+  ])('does not complete a page after FIT returns $status', async ({ status, code }) => {
+    vi.clearAllMocks()
+    await expect(
+      importGarminActivityPage(
+        owner,
+        { startDate: '2026-11-08', endDate: '2026-11-08', start: 0, pageSize: 1 },
+        { fetcher: fetcher({ fitStatus: status, searchLimit: '2' }), pause: async () => {} },
+      ),
+    ).rejects.toMatchObject({ code, persistedCount: 1 })
+    expect(importCanonicalActivity).toHaveBeenCalledWith(
+      owner,
+      expect.objectContaining({ laps: null }),
+      expect.objectContaining({ fitCheckedAt: undefined }),
+    )
   })
 
   it('saves verified JSON then stops before a second activity when Garmin rate-limits FIT', async () => {
@@ -161,6 +312,31 @@ describe('bounded Garmin activity import', () => {
     expect(network).toHaveBeenCalledTimes(4)
     expect(importCanonicalActivity).toHaveBeenCalledOnce()
     expect(importCanonicalActivity.mock.calls[0][1]).toMatchObject({ laps: null })
+    expect(pauseGarminProviderUntil).toHaveBeenCalledWith(
+      owner,
+      expect.any(Date),
+      new Uint8Array([1, 2, 3]),
+    )
+  })
+
+  it('records Garmin Retry-After on a search rate limit before importing a page', async () => {
+    vi.clearAllMocks()
+    const started = Date.now()
+    await expect(
+      importGarminActivitiesForDate(owner, '2026-11-08', {
+        fetcher: fetcher({ searchStatus: 429, retryAfter: '300' }),
+        pause: async () => {},
+        now: new Date('2026-11-08T12:00:00Z'),
+      }),
+    ).rejects.toMatchObject({ code: 'RATE_LIMITED' })
+    expect(importCanonicalActivity).not.toHaveBeenCalled()
+    expect(pauseGarminProviderUntil).toHaveBeenCalledWith(
+      owner,
+      expect.any(Date),
+      new Uint8Array([1, 2, 3]),
+    )
+    const until = pauseGarminProviderUntil.mock.calls[0][1] as Date
+    expect(until.getTime()).toBeGreaterThanOrEqual(started + 300_000)
   })
 
   it('reports a rejected saved key without mislabeling it as an activity identity mismatch', async () => {
@@ -207,6 +383,19 @@ describe('bounded Garmin activity import', () => {
     expect(importCanonicalActivity).not.toHaveBeenCalled()
   })
 
+  it('retries a rejected short-lived token without rejecting the saved API key', async () => {
+    vi.clearAllMocks()
+    await expect(
+      importGarminActivitiesForDate(owner, '2026-11-08', {
+        fetcher: fetcher({ searchStatus: 401 }),
+        pause: async () => {},
+        now: new Date('2026-11-08T12:00:00Z'),
+      }),
+    ).rejects.toMatchObject({ code: 'TOKEN_REJECTED' })
+    expect(recordProviderApiKeyAccess).not.toHaveBeenCalled()
+    expect(importCanonicalActivity).not.toHaveBeenCalled()
+  })
+
   it('keeps verified JSON when only FIT Lap data is unusable', async () => {
     vi.clearAllMocks()
     const observedAt = new Date('2026-11-08T12:00:00Z')
@@ -219,7 +408,7 @@ describe('bounded Garmin activity import', () => {
     expect(importCanonicalActivity).toHaveBeenCalledWith(
       owner,
       expect.objectContaining({ laps: null }),
-      { sourceObservedAt: observedAt },
+      { sourceObservedAt: observedAt, fitCheckedAt: observedAt, beforeWrite: expect.any(Function) },
     )
   })
 

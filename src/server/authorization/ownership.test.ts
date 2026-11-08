@@ -12,6 +12,7 @@ vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser }))
 
 import {
   getOwnerContext,
+  getScheduledOwnerContext,
   InvalidOwnerContextError,
   ownedIdWhere,
   ownedWhere,
@@ -78,5 +79,21 @@ describe('owner-scoped access', () => {
     await expect(requireOwnedConnection(ownerA, 'connection-a')).resolves.toEqual({
       id: 'connection-a',
     })
+  })
+
+  it('issues scheduled owner context only for a valid UUID and Cron bearer secret', () => {
+    process.env.CRON_SECRET = 'synthetic-cron-secret'
+    const userId = '00000000-0000-4000-8000-000000000002'
+    try {
+      expect(() => getScheduledOwnerContext(userId, 'Bearer wrong')).toThrow(
+        InvalidOwnerContextError,
+      )
+      expect(() => getScheduledOwnerContext('athlete-b', 'Bearer synthetic-cron-secret')).toThrow(
+        InvalidOwnerContextError,
+      )
+      expect(ownerId(getScheduledOwnerContext(userId, 'Bearer synthetic-cron-secret'))).toBe(userId)
+    } finally {
+      delete process.env.CRON_SECRET
+    }
   })
 })

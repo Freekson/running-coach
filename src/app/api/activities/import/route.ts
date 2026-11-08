@@ -3,6 +3,7 @@ import { AccountUnavailableError, getCurrentUser } from '@/server/auth/current-u
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { GarminImportError, importGarminActivitiesForDate } from '@/server/garmin/activity-import'
 import { allowGarminImport } from '@/server/garmin/import-rate-limit'
+import { isGarminImportAllowed } from '@/server/garmin/sync-policy'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 
 const privateHeaders = { 'Cache-Control': 'private, no-store' }
@@ -56,6 +57,11 @@ export async function POST(request: Request) {
       return Response.json(
         { error: 'Invalid import date' },
         { status: 400, headers: privateHeaders },
+      )
+    if (!isGarminImportAllowed())
+      return Response.json(
+        { error: 'Garmin import unavailable' },
+        { status: 403, headers: privateHeaders },
       )
     const owner = getOwnerContext(user)
     if (!(await allowGarminImport(owner)))

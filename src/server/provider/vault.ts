@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { randomUUID } from 'node:crypto'
-import { type IntegrationProvider } from '@prisma/client'
+import { type IntegrationProvider, type Prisma } from '@prisma/client'
 import { z } from 'zod'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
 import { getPrismaClient } from '@/server/db/client'
@@ -114,6 +114,21 @@ export async function saveProviderApiKey(
       where: { userId_id: { userId, id: connection.id } },
       data: { status: 'CONNECTED', lastSuccessAt: null, lastFailureAt: null },
     })
+    await tx.syncCursor.deleteMany({ where: { userId, connectionId: connection.id } })
+    if (provider === 'GARMIN')
+      await tx.garminImportRateLimit.updateMany({
+        where: { userId },
+        data: { providerRetryAt: null },
+      })
+    await tx.syncRun.updateMany({
+      where: { userId, connectionId: connection.id, status: 'RUNNING' },
+      data: {
+        status: 'FAILED',
+        finishedAt: new Date(),
+        errorCode: 'CREDENTIAL_REPLACED',
+        errorSafeMessage: 'Credential changed',
+      },
+    })
   })
   return getProviderConnectionStatus(owner, provider)
 }
@@ -164,6 +179,29 @@ export async function readProviderApiKey(
   return (await readProviderApiKeySnapshot(owner, provider)).key
 }
 
+/** Lock the connection while a fetched provider record is persisted. */
+export async function assertProviderApiKeySnapshotCurrent(
+  tx: Prisma.TransactionClient,
+  owner: OwnerContext,
+  provider: IntegrationProvider,
+  nonce: Uint8Array,
+): Promise<void> {
+  const userId = ownerId(owner)
+  const rows = await tx.$queryRaw<{ id: string }[]>`
+    SELECT connection.id
+    FROM integration_connections AS connection
+    JOIN integration_credentials AS credential
+      ON credential.connection_id = connection.id
+      AND credential.user_id = connection.user_id
+    WHERE connection.user_id = ${userId}::uuid
+      AND connection.provider::text = ${provider}
+      AND connection.status = 'CONNECTED'
+      AND credential.nonce = ${nonce}
+    FOR UPDATE OF connection
+  `
+  if (rows.length !== 1) throw new CredentialUnavailableError()
+}
+
 /** The encrypted credential nonce changes on replacement, so an old request cannot update a new key. */
 export async function recordProviderApiKeyAccess(
   owner: OwnerContext,
@@ -201,5 +239,20 @@ export async function disconnectProvider(owner: OwnerContext, provider: Integrat
       data: { status: 'REVOKED' },
     })
     await tx.integrationCredential.deleteMany({ where: { userId, connectionId: connection.id } })
+    await tx.syncCursor.deleteMany({ where: { userId, connectionId: connection.id } })
+    if (provider === 'GARMIN')
+      await tx.garminImportRateLimit.updateMany({
+        where: { userId },
+        data: { providerRetryAt: null },
+      })
+    await tx.syncRun.updateMany({
+      where: { userId, connectionId: connection.id, status: 'RUNNING' },
+      data: {
+        status: 'FAILED',
+        finishedAt: new Date(),
+        errorCode: 'CONNECTION_REMOVED',
+        errorSafeMessage: 'Connection removed',
+      },
+    })
   })
 }

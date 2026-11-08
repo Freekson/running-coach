@@ -112,7 +112,8 @@ export async function requestJson(
   authorization: string,
   method: 'GET' | 'POST' = 'GET',
   responseKind: 'json' | 'token' = 'json',
-): Promise<{ status: GarminProbeResult['status']; value?: unknown }> {
+  timeoutMs = TIMEOUT_MS,
+): Promise<{ status: GarminProbeResult['status']; value?: unknown; retryAfterMs?: number }> {
   try {
     const response = await fetcher(new URL(path, BASE_URL), {
       method,
@@ -120,13 +121,24 @@ export async function requestJson(
         Authorization: authorization,
         Accept: responseKind === 'token' ? '*/*' : 'application/json',
       },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       cache: 'no-store',
       redirect: 'error',
     })
     if (!response.ok) {
+      const retryAfter = response.headers.get('retry-after')
+      const seconds = retryAfter === null ? NaN : Number(retryAfter)
+      const date = retryAfter === null ? NaN : Date.parse(retryAfter)
+      const retryAfterMs =
+        response.status === 429
+          ? Number.isFinite(seconds) && seconds >= 0
+            ? seconds * 1000
+            : Number.isFinite(date)
+              ? Math.max(0, date - Date.now())
+              : undefined
+          : undefined
       await response.body?.cancel()
-      return { status: response.status }
+      return { status: response.status, retryAfterMs }
     }
     try {
       return {
@@ -158,18 +170,30 @@ export async function requestFit(
   fetcher: typeof fetch,
   path: string,
   authorization: string,
-): Promise<{ status: GarminProbeResult['status']; bytes?: Buffer }> {
+  timeoutMs = TIMEOUT_MS,
+): Promise<{ status: GarminProbeResult['status']; bytes?: Buffer; retryAfterMs?: number }> {
   try {
     const response = await fetcher(new URL(path, BASE_URL), {
       method: 'GET',
       headers: { Authorization: authorization, Accept: '*/*' },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       cache: 'no-store',
       redirect: 'error',
     })
     if (!response.ok) {
+      const retryAfter = response.headers.get('retry-after')
+      const seconds = retryAfter === null ? NaN : Number(retryAfter)
+      const date = retryAfter === null ? NaN : Date.parse(retryAfter)
+      const retryAfterMs =
+        response.status === 429
+          ? Number.isFinite(seconds) && seconds >= 0
+            ? seconds * 1000
+            : Number.isFinite(date)
+              ? Math.max(0, date - Date.now())
+              : undefined
+          : undefined
       await response.body?.cancel()
-      return { status: response.status }
+      return { status: response.status, retryAfterMs }
     }
     try {
       return { status: response.status, bytes: await boundedBytes(response, MAX_ZIP_BYTES) }

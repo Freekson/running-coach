@@ -52,6 +52,18 @@ vi.mock('@/server/provider/vault', () => ({
     updatedAt: null,
   })),
 }))
+vi.mock('@/server/garmin/sync', () => ({
+  getGarminSyncState: vi.fn(async () => ({
+    status: 'NOT_CONNECTED',
+    lastAttemptAt: null,
+    lastSuccessAt: null,
+    nextAttemptAt: null,
+    window: null,
+    nextDate: null,
+    processed: 0,
+    errorCode: null,
+  })),
+}))
 const { notFound } = vi.hoisted(() => ({
   notFound: vi.fn(() => {
     throw new Error('Not found')

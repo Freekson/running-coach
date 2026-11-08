@@ -8,8 +8,15 @@ vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: () => true
 
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
+import {
+  assertProviderApiKeySnapshotCurrent,
+  disconnectProvider,
+  readProviderApiKeySnapshot,
+  saveProviderApiKey,
+} from '@/server/provider/vault'
+import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 import { canonicalActivitySchema } from './normalization'
-import { getActivity, importCanonicalActivity, listActivities } from './import'
+import { getActivity, canSkipFitDownload, importCanonicalActivity, listActivities } from './import'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
 if (requested) config()
@@ -72,6 +79,50 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
       elevationLossMeters: null,
       laps: null,
     })
+
+  it('rejects a fetched activity after its Garmin credential is replaced or removed', async () => {
+    const priorVersion = process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION
+    const priorKey = process.env.CREDENTIAL_ENCRYPTION_KEY_V1
+    process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION = '1'
+    process.env.CREDENTIAL_ENCRYPTION_KEY_V1 = Buffer.alloc(32, 47).toString('base64')
+    try {
+      await saveProviderApiKey(ownerA, 'GARMIN', 'synthetic-original-garmin-key')
+      const old = await readProviderApiKeySnapshot(ownerA, 'GARMIN')
+      await saveProviderApiKey(ownerA, 'GARMIN', 'synthetic-replacement-garmin-key')
+      const activity = makeActivity(ownerA.userId, 'GARMIN', 'credential-rotation')
+      await expect(
+        importCanonicalActivity(ownerA, activity, {
+          beforeWrite: (tx) => assertProviderApiKeySnapshotCurrent(tx, ownerA, 'GARMIN', old.nonce),
+        }),
+      ).rejects.toBeInstanceOf(CredentialUnavailableError)
+      expect(
+        await prisma.activity.count({
+          where: { userId: ownerA.userId, externalActivityId: 'credential-rotation' },
+        }),
+      ).toBe(0)
+      const current = await readProviderApiKeySnapshot(ownerA, 'GARMIN')
+      await importCanonicalActivity(ownerA, activity, {
+        beforeWrite: (tx) =>
+          assertProviderApiKeySnapshotCurrent(tx, ownerA, 'GARMIN', current.nonce),
+      })
+      await disconnectProvider(ownerA, 'GARMIN')
+      await expect(
+        importCanonicalActivity(
+          ownerA,
+          makeActivity(ownerA.userId, 'GARMIN', 'credential-removed'),
+          {
+            beforeWrite: (tx) =>
+              assertProviderApiKeySnapshotCurrent(tx, ownerA, 'GARMIN', current.nonce),
+          },
+        ),
+      ).rejects.toBeInstanceOf(CredentialUnavailableError)
+    } finally {
+      if (priorVersion === undefined) delete process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION
+      else process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION = priorVersion
+      if (priorKey === undefined) delete process.env.CREDENTIAL_ENCRYPTION_KEY_V1
+      else process.env.CREDENTIAL_ENCRYPTION_KEY_V1 = priorKey
+    }
+  })
 
   it('upserts modified activities and stable laps, rolling back a failed child write', async () => {
     const sparse = makeActivity(ownerA.userId, 'GARMIN', 'synthetic-1')
@@ -144,6 +195,13 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
       ],
     })
     const saved = await importCanonicalActivity(ownerA, withLap)
+    expect(await canSkipFitDownload(ownerA, base)).toBe(true)
+    expect(
+      await canSkipFitDownload(ownerB, {
+        ...base,
+        source: { ...base.source, userId: ownerB.userId },
+      }),
+    ).toBe(false)
     const before = await prisma.activityLap.findFirstOrThrow({
       where: { userId: ownerA.userId, activityId: saved.id },
     })
@@ -157,12 +215,159 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
       ).id,
     ).toBe(before.id)
     const changed = await importCanonicalActivity(ownerA, { ...base, distanceMeters: 5100 })
+    expect(await canSkipFitDownload(ownerA, { ...base, distanceMeters: 5100 })).toBe(false)
     expect(changed.lapImportStatus).toBe('UNAVAILABLE')
     expect(
       await prisma.activityLap.count({
         where: { userId: ownerA.userId, activityId: saved.id },
       }),
     ).toBe(0)
+  })
+
+  it('refreshes stale FIT laps even when the activity summary is unchanged', async () => {
+    const base = makeActivity(ownerA.userId, 'GARMIN', 'synthetic-lap-correction')
+    const firstLap = {
+      lapIndex: 0,
+      sourceRecordType: 'FIT_LAP',
+      startedAt: base.startedAt,
+      distanceMeters: 5000,
+      elapsedMs: 1800000,
+      movingMs: null,
+      avgHrBpm: 140,
+      avgSpeedMps: null,
+      cadenceStepsPerMinute: null,
+    }
+    const checkedAt = new Date('2026-11-08T08:00:00Z')
+    const correctedAt = new Date('2026-11-09T09:00:00Z')
+    const saved = await importCanonicalActivity(
+      ownerA,
+      { ...base, laps: [firstLap] },
+      {
+        sourceObservedAt: checkedAt,
+        fitCheckedAt: checkedAt,
+      },
+    )
+    expect(
+      await canSkipFitDownload(ownerA, base, {
+        refresh: true,
+        observedAt: new Date('2026-11-08T20:00:00Z'),
+      }),
+    ).toBe(true)
+    expect(await canSkipFitDownload(ownerA, base, { refresh: true, observedAt: correctedAt })).toBe(
+      false,
+    )
+    await importCanonicalActivity(
+      ownerA,
+      {
+        ...base,
+        laps: [{ ...firstLap, avgHrBpm: 150 }],
+      },
+      { sourceObservedAt: correctedAt, fitCheckedAt: correctedAt },
+    )
+    expect(
+      await prisma.activityLap.findFirstOrThrow({
+        where: { userId: ownerA.userId, activityId: saved.id },
+      }),
+    ).toMatchObject({ avgHrBpm: 150 })
+    expect(await prisma.activity.findUniqueOrThrow({ where: { id: saved.id } })).toMatchObject({
+      fitCheckedAt: correctedAt,
+    })
+  })
+
+  it('does not recheck a missing FIT on each recent sync pass', async () => {
+    const base = makeActivity(ownerA.userId, 'GARMIN', 'synthetic-missing-fit')
+    const checkedAt = new Date('2026-11-08T08:00:00Z')
+    const nextPass = new Date('2026-11-08T20:00:00Z')
+    const afterRefresh = new Date('2026-11-09T09:00:00Z')
+    const saved = await importCanonicalActivity(ownerA, base, {
+      sourceObservedAt: checkedAt,
+      fitCheckedAt: checkedAt,
+    })
+    expect(saved.lapImportStatus).toBe('UNAVAILABLE')
+    expect(await canSkipFitDownload(ownerA, base, { observedAt: nextPass })).toBe(true)
+    expect(await canSkipFitDownload(ownerA, base, { refresh: true, observedAt: nextPass })).toBe(
+      true,
+    )
+    await importCanonicalActivity(ownerA, base, { sourceObservedAt: nextPass })
+    expect(await prisma.activity.findUniqueOrThrow({ where: { id: saved.id } })).toMatchObject({
+      fitCheckedAt: checkedAt,
+      lapImportStatus: 'UNAVAILABLE',
+    })
+    expect(
+      await canSkipFitDownload(ownerA, base, { refresh: true, observedAt: afterRefresh }),
+    ).toBe(false)
+    expect(
+      await canSkipFitDownload(
+        ownerA,
+        { ...base, distanceMeters: 5100 },
+        {
+          refresh: true,
+          observedAt: nextPass,
+        },
+      ),
+    ).toBe(false)
+    expect(
+      await canSkipFitDownload(
+        ownerB,
+        {
+          ...base,
+          source: { ...base.source, userId: ownerB.userId },
+        },
+        { refresh: true, observedAt: nextPass },
+      ),
+    ).toBe(false)
+  })
+
+  it('retries FIT after changed JSON is saved without a successful FIT check', async () => {
+    const base = makeActivity(ownerA.userId, 'GARMIN', 'synthetic-changed-fit-retry')
+    const firstLap = {
+      lapIndex: 0,
+      sourceRecordType: 'FIT_LAP',
+      startedAt: base.startedAt,
+      distanceMeters: 5000,
+      elapsedMs: 1800000,
+      movingMs: null,
+      avgHrBpm: 140,
+      avgSpeedMps: null,
+      cadenceStepsPerMinute: null,
+    }
+    const checkedAt = new Date('2026-11-08T08:00:00Z')
+    const failedAt = new Date('2026-11-08T09:00:00Z')
+    const retryAt = new Date('2026-11-08T10:00:00Z')
+    const saved = await importCanonicalActivity(
+      ownerA,
+      { ...base, laps: [firstLap] },
+      {
+        sourceObservedAt: checkedAt,
+        fitCheckedAt: checkedAt,
+      },
+    )
+    const changed = { ...base, distanceMeters: 5100 }
+    expect(await canSkipFitDownload(ownerA, changed, { refresh: true, observedAt: failedAt })).toBe(
+      false,
+    )
+    const incomplete = await importCanonicalActivity(ownerA, changed, {
+      sourceObservedAt: failedAt,
+    })
+    expect(incomplete).toMatchObject({ id: saved.id, lapImportStatus: 'UNAVAILABLE' })
+    expect(await prisma.activity.findUniqueOrThrow({ where: { id: saved.id } })).toMatchObject({
+      fitCheckedAt: null,
+      lapImportStatus: 'UNAVAILABLE',
+    })
+    expect(await canSkipFitDownload(ownerA, changed, { refresh: true, observedAt: retryAt })).toBe(
+      false,
+    )
+    await importCanonicalActivity(
+      ownerA,
+      { ...changed, laps: [{ ...firstLap, distanceMeters: 5100 }] },
+      { sourceObservedAt: retryAt, fitCheckedAt: retryAt },
+    )
+    expect(await canSkipFitDownload(ownerA, changed, { refresh: true, observedAt: retryAt })).toBe(
+      true,
+    )
+    expect(
+      await prisma.activityLap.count({ where: { userId: ownerA.userId, activityId: saved.id } }),
+    ).toBe(1)
   })
 
   it('keeps lap IDs with their source starts and rejects an older provider observation', async () => {

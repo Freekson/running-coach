@@ -157,6 +157,145 @@ it('renders verified, invalid and expired connection states', async () => {
   expect(host.textContent).toContain('Expired')
 })
 
+it('refreshes the connection badge after a successful sync', async () => {
+  const initial = {
+    provider: 'GARMIN' as const,
+    status: 'KEY_SAVED' as const,
+    createdAt: null,
+    updatedAt: null,
+  }
+  await act(async () => root.render(<ProviderCredentials initial={initial} />))
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      status: 'PARTIAL',
+      lastAttemptAt: '2026-11-08T00:00:00.000Z',
+      lastSuccessAt: null,
+      nextAttemptAt: null,
+      window: { start: '2026-08-17', end: '2026-11-08' },
+      nextDate: '2026-08-18',
+      processed: 1,
+      errorCode: null,
+    }),
+  })
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ ...initial, status: 'CONNECTED' }),
+  })
+  await act(async () => button('Sync now').click())
+  expect(host.textContent).toContain('Connected')
+  expect(notify).toHaveBeenCalledWith(
+    'success',
+    'Sync checkpoint saved. Continue when ready.',
+    'garmin-sync',
+  )
+})
+
+it('shows an invalid-key sync as an error and refreshes the connection badge', async () => {
+  const initial = {
+    provider: 'GARMIN' as const,
+    status: 'CONNECTED' as const,
+    createdAt: null,
+    updatedAt: null,
+  }
+  await act(async () => root.render(<ProviderCredentials initial={initial} />))
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      status: 'ACTION_REQUIRED',
+      lastAttemptAt: '2026-11-08T00:00:00.000Z',
+      lastSuccessAt: null,
+      nextAttemptAt: null,
+      window: null,
+      nextDate: null,
+      processed: 0,
+      errorCode: 'INVALID_KEY',
+    }),
+  })
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ ...initial, status: 'ERROR' }),
+  })
+  await act(async () => button('Sync now').click())
+  expect(host.textContent).toContain('Invalid key')
+  expect(button('Sync now').hasAttribute('disabled')).toBe(true)
+  expect(notify).toHaveBeenCalledWith(
+    'error',
+    'Replace your Garmin key to resume sync.',
+    'garmin-sync',
+  )
+})
+
+it('keeps a verified key connected when Garmin denies activity access', async () => {
+  const initial = {
+    provider: 'GARMIN' as const,
+    status: 'CONNECTED' as const,
+    createdAt: null,
+    updatedAt: null,
+  }
+  await act(async () => root.render(<ProviderCredentials initial={initial} />))
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      status: 'ACTION_REQUIRED',
+      lastAttemptAt: '2026-11-08T00:00:00.000Z',
+      lastSuccessAt: null,
+      nextAttemptAt: null,
+      window: null,
+      nextDate: null,
+      processed: 0,
+      errorCode: 'ACCESS_DENIED',
+    }),
+  })
+  fetchMock.mockResolvedValueOnce({ ok: true, json: async () => initial })
+  await act(async () => button('Sync now').click())
+  expect(host.textContent).toContain('Connected')
+  expect(host.textContent).toContain('Garmin denied activity access')
+  expect(host.textContent).not.toContain('Invalid key')
+  expect(notify).toHaveBeenCalledWith(
+    'error',
+    'Garmin denied activity access. Check your permissions.',
+    'garmin-sync',
+  )
+})
+
+it('refreshes a paused sync after its retry time and enables the button', async () => {
+  vi.useFakeTimers()
+  try {
+    const initial = {
+      provider: 'GARMIN' as const,
+      status: 'CONNECTED' as const,
+      createdAt: null,
+      updatedAt: null,
+    }
+    const paused = {
+      status: 'PAUSED' as const,
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      nextAttemptAt: new Date(Date.now() + 5_000).toISOString(),
+      window: null,
+      nextDate: null,
+      processed: 0,
+      errorCode: 'RATE_LIMITED',
+    }
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => paused })
+    await act(async () =>
+      root.render(<ProviderCredentials initial={initial} initialSync={paused} />),
+    )
+    expect(button('Sync now').hasAttribute('disabled')).toBe(true)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ...paused, status: 'PARTIAL', nextAttemptAt: null }),
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6_000)
+    })
+    expect(button('Continue sync').hasAttribute('disabled')).toBe(false)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 it('keeps cleanup available for a previously saved OpenAI key without offering new OpenAI saves', async () => {
   await act(async () =>
     root.render(

@@ -182,6 +182,7 @@ model GarminImportRateLimit {
   userId          String   @id @map("user_id") @db.Uuid
   count           Int
   windowStartedAt DateTime @map("window_started_at") @db.Timestamptz(6)
+  providerRetryAt DateTime? @map("provider_retry_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -278,6 +279,10 @@ model SyncCursor {
   dataType           String    @map("data_type")
   cursorOrCheckpoint Json      @map("cursor_or_checkpoint")
   lastSyncedAt       DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  leaseToken          String?   @map("lease_token") @db.Uuid
+  leaseExpiresAt      DateTime? @map("lease_expires_at") @db.Timestamptz(6)
+  nextAttemptAt       DateTime? @map("next_attempt_at") @db.Timestamptz(6)
+  consecutiveFailures Int      @default(0) @map("consecutive_failures")
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   connection IntegrationConnection @relation(fields: [userId, connectionId], references: [userId, id], onDelete: Cascade)
@@ -339,6 +344,7 @@ model Activity {
   rawObjectRef         String?        @map("raw_object_ref")
   gpsAssetRef          String?        @map("gps_asset_ref")
   lapImportStatus      String         @default("UNAVAILABLE") @map("lap_import_status") @db.VarChar(24)
+  fitCheckedAt         DateTime?      @map("fit_checked_at") @db.Timestamptz(6)
   sourceObservedAt     DateTime?      @map("source_observed_at") @db.Timestamptz(6)
   externalModifiedAt   DateTime?      @map("external_modified_at") @db.Timestamptz(6)
   importedAt           DateTime       @default(now()) @map("imported_at") @db.Timestamptz(6)

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   getCurrentUser,
@@ -48,6 +48,7 @@ beforeEach(() => {
   importGarminActivitiesForDate.mockResolvedValue({ imported: [], hasMore: false, nextStart: null })
   allowGarminImport.mockResolvedValue(true)
 })
+afterEach(() => vi.unstubAllEnvs())
 
 describe('activity routes', () => {
   it('uses only the session owner for paginated list and detail reads', async () => {
@@ -137,6 +138,36 @@ describe('activity routes', () => {
       '2026-11-08',
       { start: 3 },
     )
+  })
+
+  it('keeps the older manual import route gated on hosted deployments', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+    vi.stubEnv('GARMIN_SHARED_SYNC_APPROVED', undefined)
+    const response = await importActivities(
+      new Request('https://coach.example.test/api/activities/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: '2026-11-08' }),
+      }),
+    )
+    expect(response.status).toBe(403)
+    expect(allowGarminImport).not.toHaveBeenCalled()
+    expect(importGarminActivitiesForDate).not.toHaveBeenCalled()
+  })
+
+  it('fails closed in production when the Vercel environment marker is missing', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('VERCEL_ENV', undefined)
+    vi.stubEnv('GARMIN_SHARED_SYNC_APPROVED', undefined)
+    const response = await importActivities(
+      new Request('https://coach.example.test/api/activities/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: '2026-11-08' }),
+      }),
+    )
+    expect(response.status).toBe(403)
+    expect(importGarminActivitiesForDate).not.toHaveBeenCalled()
   })
 
   it('rejects oversized import bodies before consuming the owner rate limit', async () => {

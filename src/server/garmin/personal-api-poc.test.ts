@@ -12,6 +12,8 @@ import {
   probeGarminDataContractsForOwner,
   probeGarminForOwner,
   probeGarminPersonalApi,
+  requestFit,
+  requestJson,
 } from './personal-api-poc'
 
 function responses(...items: Response[]) {
@@ -25,6 +27,22 @@ const json = (value: unknown, status = 200) => Response.json(value, { status })
 beforeEach(() => vi.clearAllMocks())
 
 describe('Garmin Personal API PoC', () => {
+  it('passes a numeric Retry-After through both bounded request helpers', async () => {
+    const fetcher = responses(
+      new Response(null, { status: 429, headers: { 'Retry-After': '120' } }),
+      new Response(null, { status: 429, headers: { 'Retry-After': '120' } }),
+    )
+    expect(
+      await requestJson(
+        fetcher,
+        '/activitylist-service/activities/search/activities',
+        'Bearer synthetic',
+      ),
+    ).toMatchObject({ status: 429, retryAfterMs: 120_000 })
+    expect(
+      await requestFit(fetcher, '/download-service/files/activity/1', 'Bearer synthetic'),
+    ).toMatchObject({ status: 429, retryAfterMs: 120_000 })
+  })
   it('bounds requests and returns structure without records, IDs or credentials', async () => {
     const fetcher = responses(
       new Response('secret-token'),

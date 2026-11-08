@@ -69,6 +69,19 @@ function extractFit(bytes: Buffer): { format: 'FIT' | 'ZIP'; fit: Buffer } {
   throw new Error('FIT ZIP contains no FIT entry')
 }
 
+/** Shared, bounded decoder for the structural probe and activity normalization. */
+export function decodeFitDownload(bytes: Buffer) {
+  const { format, fit } = extractFit(bytes)
+  const decoder = new Decoder(Stream.fromBuffer(fit))
+  if (!decoder.checkIntegrity()) throw new Error('Invalid FIT integrity')
+  const { messages, errors } = decoder.read({
+    includeUnknownData: false,
+    decodeMemoGlobs: false,
+  })
+  if (errors.length > 0) throw new Error('Invalid FIT messages')
+  return { format, messages }
+}
+
 /** Decodes in memory; returns structural evidence only, never FIT messages or values. */
 export function inspectFitDownload(bytes: Buffer, summaryLapCount: number | null): FitProbeReport {
   const { format, fit } = extractFit(bytes)

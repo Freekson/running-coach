@@ -15,6 +15,7 @@ vi.mock('@/server/garmin/import-rate-limit', () => ({ allowGarminImport }))
 vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: vi.fn() }))
 
 import { ownerId } from '@/server/authorization/ownership'
+import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 import { GET } from './route'
 
 const url = 'https://running.example/api/internal/garmin-sync'
@@ -56,6 +57,12 @@ describe('prepared Garmin scheduled trigger', () => {
 
   it('does not start a scheduled job after the owner uses the shared attempt limit', async () => {
     allowGarminImport.mockResolvedValueOnce(false)
+    expect((await GET(request('synthetic-cron-secret'))).status).toBe(204)
+    expect(runGarminSync).not.toHaveBeenCalled()
+  })
+
+  it('skips an owner whose Garmin key was disconnected after selection', async () => {
+    allowGarminImport.mockRejectedValueOnce(new CredentialUnavailableError())
     expect((await GET(request('synthetic-cron-secret'))).status).toBe(204)
     expect(runGarminSync).not.toHaveBeenCalled()
   })

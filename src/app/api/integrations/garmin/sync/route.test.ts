@@ -7,16 +7,18 @@ const {
   runGarminSync,
   isVerifiedCurrentUser,
   allowGarminImport,
+  verifySavedGarminAccount,
 } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
-  getGarminSyncState: vi.fn<(owner: OwnerContext) => Promise<{ status: string }>>(async () => ({
-    status: 'IDLE',
-  })),
+  getGarminSyncState: vi.fn<
+    (owner: OwnerContext) => Promise<{ status: string; errorCode?: string | null }>
+  >(async () => ({ status: 'IDLE' })),
   runGarminSync: vi.fn<(owner: OwnerContext) => Promise<{ status: string }>>(async () => ({
     status: 'PARTIAL',
   })),
   isVerifiedCurrentUser: vi.fn(() => true),
   allowGarminImport: vi.fn(async () => true),
+  verifySavedGarminAccount: vi.fn<(owner: OwnerContext) => Promise<void>>(async () => {}),
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({
@@ -31,6 +33,10 @@ vi.mock('@/server/garmin/sync', () => ({
 }))
 vi.mock('@/server/db/client', () => ({ getPrismaClient: vi.fn() }))
 vi.mock('@/server/garmin/import-rate-limit', () => ({ allowGarminImport }))
+vi.mock('@/server/garmin/account-identity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/garmin/account-identity')>()),
+  verifySavedGarminAccount,
+}))
 
 import { ownerId } from '@/server/authorization/ownership'
 import { GET, POST } from './route'
@@ -64,7 +70,26 @@ describe('Garmin sync route authorization', () => {
     expect(ownerId(runGarminSync.mock.calls[0][0])).toBe(admin.id)
     getCurrentUser.mockResolvedValueOnce(user)
     expect((await GET()).status).toBe(200)
-    expect(ownerId(getGarminSyncState.mock.calls[0][0])).toBe(user.id)
+    expect(ownerId(getGarminSyncState.mock.calls.at(-1)![0])).toBe(user.id)
+  })
+
+  it('verifies a saved legacy key before importing activities', async () => {
+    getGarminSyncState.mockResolvedValueOnce({
+      status: 'ACTION_REQUIRED',
+      errorCode: 'ACCOUNT_VERIFICATION_REQUIRED',
+    })
+    expect((await POST(post())).status).toBe(200)
+    expect(ownerId(verifySavedGarminAccount.mock.calls[0][0])).toBe(user.id)
+    expect(verifySavedGarminAccount.mock.invocationCallOrder[0]).toBeLessThan(
+      runGarminSync.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('does not verify a saved key while the shared request limit is active', async () => {
+    allowGarminImport.mockResolvedValueOnce(false)
+    expect((await POST(post())).status).toBe(429)
+    expect(verifySavedGarminAccount).not.toHaveBeenCalled()
+    expect(runGarminSync).not.toHaveBeenCalled()
   })
 
   it('rejects oversized or invalid extension requests', async () => {

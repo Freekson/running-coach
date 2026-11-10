@@ -383,6 +383,31 @@ describe('identity and duplicate candidates', () => {
 })
 
 describe('Garmin health normalization', () => {
+  it('retains dated batch placeholders without inventing measurements', () => {
+    const records = [
+      { calendarDate: '2026-11-06', heartRate: { restingValue: 53 } },
+      { calendarDate: '2026-11-07', heartRate: { restingValue: null } },
+      { calendarDate: '2026-11-08', heartRate: null },
+    ]
+    const normalized = records.map((record) => normalizeGarminDailySummary(ownerA, 'UTC', record))
+    expect(normalized.map((record) => record.localDate)).toEqual([
+      '2026-11-06',
+      '2026-11-07',
+      '2026-11-08',
+    ])
+    expect(normalized.map((record) => record.restingHrBpm)).toEqual([53, null, null])
+    expect(normalized.filter((record) => record.restingHrBpm !== null)).toHaveLength(1)
+    expect(
+      normalizeGarminSleep(ownerA, 'UTC', {
+        calendarDate: '2026-11-07',
+        sleepTimeSeconds: null,
+      }).sleepDurationMs,
+    ).toBeNull()
+    expect(() =>
+      normalizeGarminSleep(ownerA, 'UTC', { calendarDate: null, sleepTimeSeconds: null }),
+    ).toThrow()
+  })
+
   it('normalizes daily summary and sleep separately at both sides of DST', () => {
     const summary = normalizeGarminDailySummary(ownerA, 'America/New_York', {
       calendarDate: '2026-11-01',
@@ -422,10 +447,78 @@ describe('Garmin health normalization', () => {
     expect(sleep.sleepStartedAt).toBeNull()
   })
 
+  it('normalizes verified sleep stage totals, score and end time without inventing a timeline', () => {
+    const sleep = normalizeGarminSleep(ownerA, 'UTC', {
+      calendarDate: '2026-11-07',
+      sleepTimeSeconds: 25_200,
+      lightSleepSeconds: 14_400,
+      deepSleepSeconds: 5_400,
+      remSleepSeconds: 5_400,
+      awakeSleepSeconds: 1_200,
+      sleepScores: { overall: { value: 82 } },
+      sleepStartTimestampGMT: Date.parse('2026-11-06T22:00:00Z'),
+      sleepEndTimestampGMT: Date.parse('2026-11-07T05:20:00Z'),
+    })
+    expect(sleep).toMatchObject({
+      sleepDurationMs: 25_200_000,
+      sleepLightMs: 14_400_000,
+      sleepDeepMs: 5_400_000,
+      sleepRemMs: 5_400_000,
+      sleepAwakeMs: 1_200_000,
+      sleepScore: 82,
+      sleepEndedAt: '2026-11-07T05:20:00.000Z',
+    })
+    expect(() =>
+      normalizeGarminSleep(ownerA, 'UTC', {
+        calendarDate: '2026-11-07',
+        sleepStartTimestampGMT: Date.parse('2026-11-07T05:20:00Z'),
+        sleepEndTimestampGMT: Date.parse('2026-11-06T22:00:00Z'),
+      }),
+    ).toThrow('Garmin sleep end precedes start')
+    expect(() =>
+      normalizeGarminSleep(ownerA, 'UTC', {
+        calendarDate: '2026-11-07',
+        sleepScores: { overall: { value: 120 } },
+      }),
+    ).toThrow()
+  })
+
+  it('keeps sleep duration when an inferred IANA zone differs from Garmin local time', () => {
+    const sleep = normalizeGarminSleep(ownerA, 'America/New_York', {
+      calendarDate: '2026-11-07',
+      sleepTimeSeconds: 25_200,
+      sleepStartTimestampGMT: Date.parse('2026-11-07T12:00:00Z'),
+      sleepStartTimestampLocal: Date.parse('2026-11-07T21:00:00Z'),
+    })
+    expect(sleep.sleepDurationMs).toBe(25_200_000)
+    expect(sleep.sleepStartedAt).toBe('2026-11-07T12:00:00.000Z')
+    expect(sleep.sourceTimezone).toBe('America/New_York')
+    expect(() =>
+      normalizeGarminSleep(ownerA, 'America/New_York', {
+        calendarDate: '2026-11-07',
+        sleepTimeSeconds: 25_200,
+        sleepStartTimestampGMT: Date.parse('2026-11-07T12:00:00Z'),
+        sleepStartTimestampLocal: 1234,
+      }),
+    ).toThrow('Invalid Garmin epoch-millisecond timestamp')
+  })
+
   it('does not invent values and rejects unverified timestamp forms', () => {
     const summary = { calendarDate: '2026-11-01' }
     expect(normalizeGarminDailySummary(ownerA, 'UTC', summary).restingHrBpm).toBeNull()
     expect(normalizeGarminSleep(ownerA, 'UTC', summary).sleepDurationMs).toBeNull()
+    expect(
+      normalizeGarminDailySummary(ownerA, 'UTC', {
+        calendarDate: '2026-11-01',
+        heartRate: { restingValue: 0 },
+      }).restingHrBpm,
+    ).toBeNull()
+    expect(
+      normalizeGarminSleep(ownerA, 'UTC', {
+        calendarDate: '2026-11-01',
+        sleepTimeSeconds: 0,
+      }).sleepDurationMs,
+    ).toBeNull()
     expect(() => normalizeGarminSleep({ userId: ownerAId }, 'UTC', summary)).toThrow(
       'Verified owner context required',
     )

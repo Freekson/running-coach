@@ -133,6 +133,7 @@ beforeEach(() => {
   getPrismaClient.mockResolvedValue({
     $transaction: transaction,
     activity: { findFirst: findOne, findMany },
+    integrationConnection: { findUnique: vi.fn(async () => ({ externalAccountId: '123456' })) },
   })
 })
 
@@ -142,10 +143,11 @@ describe('owner-scoped activity persistence', () => {
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          userId_sourceProvider_externalActivityId: {
+          userId_sourceProvider_externalActivityId_garminAccountId: {
             userId: userA,
             sourceProvider: 'GARMIN',
             externalActivityId: 'synthetic-1',
+            garminAccountId: 'LEGACY_UNVERIFIED',
           },
         },
         update: expect.objectContaining({ distanceMeters: 5000.125, totalMs: BigInt(1800000) }),
@@ -283,14 +285,14 @@ describe('owner-scoped activity persistence', () => {
   it('scopes detail and cursor reads to the owner', async () => {
     expect(await getActivity(ownerB, savedId)).toBeNull()
     expect(findOne).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: userB, id: savedId } }),
+      expect.objectContaining({ where: expect.objectContaining({ userId: userB, id: savedId }) }),
     )
     await expect(listActivities(ownerB, 2, savedId)).rejects.toThrow('Invalid activity import')
     expect(findMany).not.toHaveBeenCalled()
     await listActivities(ownerA, 2)
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: userA },
+        where: expect.objectContaining({ userId: userA }),
         take: 3,
         orderBy: [{ listStartedAt: 'desc' }, { id: 'desc' }],
       }),
@@ -316,13 +318,17 @@ describe('owner-scoped activity persistence', () => {
     await listActivities(ownerA, 1, first.nextCursor ?? undefined)
     expect(findMany).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        where: {
+        where: expect.objectContaining({
           userId: userA,
-          OR: [
-            { listStartedAt: { lt: new Date(input.startedAt) } },
-            { listStartedAt: new Date(input.startedAt), id: { lt: savedId } },
+          AND: [
+            {
+              OR: [
+                { listStartedAt: { lt: new Date(input.startedAt) } },
+                { listStartedAt: new Date(input.startedAt), id: { lt: savedId } },
+              ],
+            },
           ],
-        },
+        }),
         take: 2,
       }),
     )

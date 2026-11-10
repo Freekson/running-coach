@@ -25,7 +25,7 @@ beforeEach(() => usePathname.mockReturnValue('/app/dashboard'))
 describe('app navigation', () => {
   it('shows only existing user routes and marks the active section', () => {
     const markup = renderToStaticMarkup(<AppNavigation role="USER" />)
-    for (const route of ['dashboard', 'training', 'calendar', 'goals', 'settings']) {
+    for (const route of ['dashboard', 'training', 'calendar', 'goals', 'health', 'settings']) {
       expect(markup).toContain(`href="/app/${route}"`)
     }
     expect(markup).not.toContain('/app/admin')

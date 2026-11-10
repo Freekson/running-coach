@@ -27,6 +27,16 @@ const json = (value: unknown, status = 200) => Response.json(value, { status })
 beforeEach(() => vi.clearAllMocks())
 
 describe('Garmin Personal API PoC', () => {
+  it.each([200, 204])('returns null for a successful empty JSON response (%i)', async (status) => {
+    const fetcher = responses(new Response(null, { status }))
+    expect(
+      await requestJson(
+        fetcher,
+        '/sleep-service/sleep/dailySleep?date=2026-11-07',
+        'Bearer synthetic',
+      ),
+    ).toEqual({ status, value: null })
+  })
   it('passes a numeric Retry-After through both bounded request helpers', async () => {
     const fetcher = responses(
       new Response(null, { status: 429, headers: { 'Retry-After': '120' } }),

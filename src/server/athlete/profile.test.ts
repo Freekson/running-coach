@@ -34,6 +34,7 @@ vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser }))
 
 import {
   addWeight,
+  getAthleteProfile,
   getAthleteSettings,
   getWeightChartReadings,
   getWeightHistoryPage,
@@ -60,6 +61,7 @@ beforeEach(() => {
 describe('athlete profile', () => {
   it('rejects an unissued owner context before any database access', async () => {
     const forged = { userId: ownerB.userId }
+    await expect(getAthleteProfile(forged)).rejects.toBeInstanceOf(InvalidOwnerContextError)
     await expect(getAthleteSettings(forged)).rejects.toBeInstanceOf(InvalidOwnerContextError)
     await expect(getMeasurementSystem(forged)).rejects.toBeInstanceOf(InvalidOwnerContextError)
     await expect(getWeightChartReadings(forged, 'ALL')).rejects.toBeInstanceOf(
@@ -97,6 +99,17 @@ describe('athlete profile', () => {
     expect(findMany.mock.calls.every(([args]) => args.where.measurementType === 'WEIGHT')).toBe(
       true,
     )
+  })
+
+  it('loads only the owner profile for Settings without querying weight history', async () => {
+    findUnique.mockResolvedValue(null)
+    expect((await getAthleteProfile(ownerA)).measurementSystem).toBe('METRIC')
+    expect((await getAthleteProfile(ownerB)).measurementSystem).toBe('METRIC')
+    expect(findUnique.mock.calls.map(([args]) => args.where.userId)).toEqual([
+      ownerA.userId,
+      ownerB.userId,
+    ])
+    expect(findMany).not.toHaveBeenCalled()
   })
 
   it('loads seven days by default and the requested period when supplied', async () => {

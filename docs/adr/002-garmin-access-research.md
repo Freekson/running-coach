@@ -189,6 +189,14 @@ recommends surveying multiple files and sorting summaries by start time rather
 than message order. The PoC established a usable lap extraction path, while
 RUN-23 should keep lap support optional until more private samples are tested.
 
+### Sleep stage summary follow-up, 2026-11-09
+
+A bounded read-only check used one token and one GET each for `dailySleep?date=...` and `dailySleepSummariesByDate?startDate=...&endDate=...` on the same measured date. Both returned HTTP 200. The single-day response was an object; the range response was an array of objects. Both had numeric `sleepTimeSeconds`, `lightSleepSeconds`, `deepSleepSeconds`, `remSleepSeconds`, `awakeSleepSeconds`, `sleepScores.overall.value`, `sleepStartTimestampGMT`, `sleepStartTimestampLocal`, `sleepEndTimestampGMT`, and `sleepEndTimestampLocal`. The range paths have an `[]` prefix. The inspected responses contained no `sleepLevels` or equivalent timestamped sleep-stage array. Stage totals can support a daily stacked duration bar, but not a stage timeline over the hours of a night. No measurement values, raw bodies, credentials or personal timestamps were retained.
+
+### Garmin account identity follow-up, 2026-11-09
+
+One separately authorized read-only structural probe used exactly three requests: a token exchange, `GET /usersummary-service/usersummary/daily?calendarDate=...`, and `GET /usersummary-service/v2/dailysummaries?startDate=...&endDate=...` for the same day. All returned HTTP 200. The legacy response was an object with root `userProfileId` of type number, a positive safe integer, and root `calendarDate` of type string. The v2 response was an object with a `data` array; the sampled first record had a string `calendarDate` and no `userProfileId`. No ID value, measurement, timestamp, raw body or credential was printed or retained. The legacy root ID is suitable as an account binding only when a current key returns a valid ID for the explicitly requested date. Missing, malformed or inconsistent identity must fail closed; measurements must never identify an account.
+
 ### Units and timezones
 
 These are **schema statements**, not values inferred from the sampled athlete.

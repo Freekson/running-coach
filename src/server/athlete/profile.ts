@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { Prisma } from '@prisma/client'
+import { Prisma, type AthleteProfile } from '@prisma/client'
 import { z } from 'zod'
 import { getPrismaClient } from '@/server/db/client'
 import { ownedWhere, ownerId, type OwnerContext } from '@/server/authorization/ownership'
@@ -149,11 +149,34 @@ export async function getMeasurementSystem(owner: OwnerContext): Promise<Measure
   return normalizeMeasurementSystem(profile?.measurementSystem)
 }
 
+function serializeAthleteProfile(profile: AthleteProfile | null) {
+  const weekdays = z
+    .array(z.number().int().min(0).max(6))
+    .safeParse(profile?.defaultAvailableWeekdays)
+  return {
+    displayName: profile?.displayName ?? null,
+    birthDate: profile?.birthDate?.toISOString().slice(0, 10) ?? null,
+    sex: profile?.sex ?? null,
+    heightCm: profile?.heightCm?.toNumber() ?? null,
+    experienceLevel: experienceLevel.catch('BEGINNER').parse(profile?.experienceLevel),
+    measurementSystem: normalizeMeasurementSystem(profile?.measurementSystem),
+    defaultTrainingDaysPerWeek: profile?.defaultTrainingDaysPerWeek ?? null,
+    defaultAvailableWeekdays: weekdays.success ? weekdays.data : null,
+  }
+}
+
+export async function getAthleteProfile(owner: OwnerContext) {
+  ownerId(owner)
+  const prisma = await getPrismaClient()
+  const profile = await prisma.athleteProfile.findUnique({ where: ownedWhere(owner, {}) })
+  return serializeAthleteProfile(profile)
+}
+
 export async function getAthleteSettings(owner: OwnerContext, period: WeightChartPeriod = '7D') {
   ownerId(owner)
   const prisma = await getPrismaClient()
   const [profile, measurements, chartWeights] = await Promise.all([
-    prisma.athleteProfile.findUnique({ where: ownedWhere(owner, {}) }),
+    getAthleteProfile(owner),
     prisma.bodyMeasurement.findMany({
       where: ownedWhere(owner, { measurementType: 'WEIGHT' }),
       orderBy: weightOrder,
@@ -162,20 +185,8 @@ export async function getAthleteSettings(owner: OwnerContext, period: WeightChar
     }),
     getWeightChartReadings(owner, period),
   ])
-  const weekdays = z
-    .array(z.number().int().min(0).max(6))
-    .safeParse(profile?.defaultAvailableWeekdays)
   return {
-    profile: {
-      displayName: profile?.displayName ?? null,
-      birthDate: profile?.birthDate?.toISOString().slice(0, 10) ?? null,
-      sex: profile?.sex ?? null,
-      heightCm: profile?.heightCm?.toNumber() ?? null,
-      experienceLevel: experienceLevel.catch('BEGINNER').parse(profile?.experienceLevel),
-      measurementSystem: normalizeMeasurementSystem(profile?.measurementSystem),
-      defaultTrainingDaysPerWeek: profile?.defaultTrainingDaysPerWeek ?? null,
-      defaultAvailableWeekdays: weekdays.success ? weekdays.data : null,
-    },
+    profile,
     weights: measurements.map(serializeWeight),
     chartWeights,
   }

@@ -6,12 +6,14 @@ const {
   getProviderConnectionStatus,
   saveProviderApiKey,
   disconnectProvider,
+  verifyGarminApiKeyAccount,
 } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   isVerifiedCurrentUser: vi.fn(() => true),
   getProviderConnectionStatus: vi.fn(),
   saveProviderApiKey: vi.fn(),
   disconnectProvider: vi.fn(),
+  verifyGarminApiKeyAccount: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -26,10 +28,16 @@ vi.mock('@/server/provider/vault', async (importOriginal) => ({
   saveProviderApiKey,
   disconnectProvider,
 }))
+vi.mock('@/server/garmin/account-identity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/garmin/account-identity')>()),
+  verifyGarminApiKeyAccount,
+}))
 
 import { DELETE, GET, PUT } from './route'
 import { AccountUnavailableError } from '@/server/auth/current-user'
 import { CredentialConfigurationError } from '@/server/provider/credential-crypto'
+import { GarminAccountIdentityError } from '@/server/garmin/account-identity'
+import { GarminAccountMismatchError } from '@/server/provider/vault'
 
 const status = {
   provider: 'GARMIN',
@@ -51,6 +59,7 @@ beforeEach(() => {
   getCurrentUser.mockResolvedValue({ id: 'owner-a', role: 'USER', email: null })
   getProviderConnectionStatus.mockResolvedValue(status)
   saveProviderApiKey.mockResolvedValue(status)
+  verifyGarminApiKeyAccount.mockResolvedValue('123456')
 })
 
 describe('Garmin credential API', () => {
@@ -59,7 +68,9 @@ describe('Garmin credential API', () => {
     expect(saved.status).toBe(200)
     expect(saved.headers.get('Cache-Control')).toBe('private, no-store')
     expect(await saved.json()).toEqual(status)
-    expect(saveProviderApiKey).toHaveBeenCalledWith({ userId: 'owner-a' }, 'GARMIN', fakeKey)
+    expect(saveProviderApiKey).toHaveBeenCalledWith({ userId: 'owner-a' }, 'GARMIN', fakeKey, {
+      verifiedGarminAccountId: '123456',
+    })
     getCurrentUser.mockResolvedValue({ id: 'owner-b', role: 'ADMIN', email: null })
     const viewed = await GET()
     expect(await viewed.json()).toEqual(status)
@@ -97,5 +108,17 @@ describe('Garmin credential API', () => {
     const failed = await PUT(request('PUT', { apiKey: fakeKey }))
     expect(failed.status).toBe(503)
     expect(await failed.json()).toEqual({ code: 'KEY_STORAGE_UNCONFIGURED' })
+  })
+
+  it('rejects a different or unverifiable account before changing the credential', async () => {
+    saveProviderApiKey.mockRejectedValueOnce(new GarminAccountMismatchError('ACCOUNT_MISMATCH'))
+    const mismatch = await PUT(request('PUT', { apiKey: fakeKey }))
+    expect(mismatch.status).toBe(409)
+    expect(await mismatch.json()).toEqual({ code: 'ACCOUNT_MISMATCH' })
+    verifyGarminApiKeyAccount.mockRejectedValueOnce(new GarminAccountIdentityError('UNVERIFIABLE'))
+    const unverifiable = await PUT(request('PUT', { apiKey: fakeKey }))
+    expect(unverifiable.status).toBe(422)
+    expect(await unverifiable.json()).toEqual({ code: 'UNVERIFIABLE' })
+    expect(saveProviderApiKey).toHaveBeenCalledTimes(1)
   })
 })

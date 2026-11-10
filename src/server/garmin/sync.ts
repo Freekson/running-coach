@@ -7,8 +7,13 @@ import type { GarminSyncState } from '@/lib/garmin-sync-state'
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
 import { GarminImportError, importGarminActivityPage } from './activity-import'
-import { getGarminProviderPauseUntil, pauseGarminProviderUntil } from './import-rate-limit'
+import {
+  boundedGarminRetryAt,
+  getGarminProviderPauseUntil,
+  pauseGarminProviderUntil,
+} from './import-rate-limit'
 import { isGarminImportAllowed } from './sync-policy'
+import { claimGarminProviderLease, releaseGarminProviderLease } from './provider-lease'
 
 const DAY_MS = 86_400_000
 const LEASE_MS = 100_000
@@ -128,7 +133,12 @@ export async function getGarminSyncState(
   const prisma = await getPrismaClient()
   const connection = await prisma.integrationConnection.findUnique({
     where: { userId_provider: { userId, provider: 'GARMIN' } },
-    select: { id: true, status: true, credential: { select: { connectionId: true } } },
+    select: {
+      id: true,
+      status: true,
+      externalAccountId: true,
+      credential: { select: { connectionId: true, rotatedAt: true } },
+    },
   })
   if (!connection?.credential)
     return {
@@ -140,6 +150,22 @@ export async function getGarminSyncState(
       nextDate: null,
       processed: 0,
       errorCode: null,
+    }
+  const importAllowed = isGarminImportAllowed()
+  if (!connection.externalAccountId)
+    return {
+      status: importAllowed ? 'ACTION_REQUIRED' : 'UNAVAILABLE',
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      nextAttemptAt: null,
+      window: null,
+      nextDate: null,
+      processed: 0,
+      errorCode: !importAllowed
+        ? null
+        : connection.status === 'CONNECTED'
+          ? 'ACCOUNT_VERIFICATION_REQUIRED'
+          : 'INVALID_KEY',
     }
   const [cursor, run, providerPauseUntil] = await Promise.all([
     prisma.syncCursor.findUnique({
@@ -153,8 +179,8 @@ export async function getGarminSyncState(
   ])
   const parsed = checkpointSchema.safeParse(cursor?.cursorOrCheckpoint)
   const checkpoint = parsed.success ? parsed.data : null
-  const currentRun = cursor ? run : null
-  const status: GarminSyncState['status'] = !isGarminImportAllowed()
+  const currentRun = cursor && run && run.startedAt >= connection.credential.rotatedAt ? run : null
+  const status: GarminSyncState['status'] = !importAllowed
     ? 'UNAVAILABLE'
     : connection.status !== 'CONNECTED'
       ? 'ACTION_REQUIRED'
@@ -216,9 +242,14 @@ export async function runGarminSync(
   const prisma = await getPrismaClient()
   const connection = await prisma.integrationConnection.findUnique({
     where: { userId_provider: { userId, provider: 'GARMIN' } },
-    select: { id: true, status: true, credential: { select: { connectionId: true, nonce: true } } },
+    select: {
+      id: true,
+      status: true,
+      externalAccountId: true,
+      credential: { select: { connectionId: true, nonce: true } },
+    },
   })
-  if (!connection?.credential || connection.status !== 'CONNECTED')
+  if (!connection?.credential || !connection.externalAccountId || connection.status !== 'CONNECTED')
     throw new GarminSyncUnavailableError('NOT_CONNECTED')
   const sharedPauseUntil = await getGarminProviderPauseUntil(owner)
   if (sharedPauseUntil && sharedPauseUntil > started) throw new GarminSyncUnavailableError('PAUSED')
@@ -243,8 +274,11 @@ export async function runGarminSync(
     throw new GarminSyncUnavailableError(state.status === 'PAUSED' ? 'PAUSED' : 'BUSY')
   }
   let run: { id: string } | null = null
+  let providerLeaseToken: string | null = null
   let processed = 0
   try {
+    providerLeaseToken = await claimGarminProviderLease(owner, connection.id, started)
+    if (!providerLeaseToken) throw new GarminSyncUnavailableError('BUSY')
     await prisma.syncRun.updateMany({
       where: {
         userId,
@@ -296,6 +330,15 @@ export async function runGarminSync(
         status: 'RUNNING',
       },
     })
+    // Persist a newly selected window while this lease is held. A failure on its
+    // first page must resume the requested extension on the next ordinary run.
+    if (parsed.data.nextDate === null) {
+      const saved = await prisma.syncCursor.updateMany({
+        where: { userId, ...cursorKey, leaseToken: token, leaseExpiresAt: { gt: now() } },
+        data: { cursorOrCheckpoint: checkpoint as Prisma.InputJsonValue },
+      })
+      if (saved.count !== 1) throw new GarminImportError('STORAGE_UNAVAILABLE')
+    }
     for (let page = 0; page < maxPages && checkpoint.nextDate !== null; page++) {
       if (now().getTime() - started.getTime() >= runBudgetMs) break
       const result = await (dependencies.importPage ?? importGarminActivityPage)(
@@ -381,7 +424,11 @@ export async function runGarminSync(
     if (!run || error instanceof GarminSyncUnavailableError) throw error
     if (error instanceof GarminImportError) processed += error.persistedCount
     const code = error instanceof GarminImportError ? error.code : 'UNAVAILABLE'
-    const actionRequired = code === 'INVALID_KEY' || code === 'ACCESS_DENIED'
+    const actionRequired =
+      code === 'INVALID_KEY' ||
+      code === 'ACCESS_DENIED' ||
+      code === 'ACCOUNT_MISMATCH' ||
+      code === 'ACCOUNT_UNVERIFIABLE'
     if (code === 'INVALID_KEY')
       await prisma.integrationConnection.updateMany({
         where: {
@@ -404,9 +451,7 @@ export async function runGarminSync(
     const providerDelay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 0
     const retryAt = actionRequired
       ? null
-      : new Date(
-          Math.min(8_640_000_000_000_000, now().getTime() + Math.max(backoff, providerDelay)),
-        )
+      : boundedGarminRetryAt(now(), Math.max(backoff, providerDelay))
     if (retryAt) await pauseGarminProviderUntil(owner, retryAt, connection.credential.nonce)
     await prisma.syncCursor.updateMany({
       where: { userId, ...cursorKey, leaseToken: token },
@@ -432,6 +477,8 @@ export async function runGarminSync(
       },
     })
   } finally {
+    if (providerLeaseToken)
+      await releaseGarminProviderLease(owner, connection.id, providerLeaseToken)
     await prisma.syncCursor.updateMany({
       where: { userId, ...cursorKey, leaseToken: token },
       data: { leaseToken: null, leaseExpiresAt: null },

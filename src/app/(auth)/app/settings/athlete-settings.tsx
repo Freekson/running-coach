@@ -8,18 +8,15 @@ import { Card } from '@/components/ui/Card'
 import { Dialog } from '@/components/ui/Dialog'
 import { DateField } from '@/components/ui/DateField'
 import { FormField } from '@/components/ui/FormField'
+import { SectionHeading } from '@/components/ui/SectionHeading'
 import { useToast } from '@/components/ui/Toast'
 import type { MeasurementSystem } from '@/lib/measurement-system'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
-import type { GarminSyncState } from '@/lib/garmin-sync-state'
-import { weightUnitFor } from '@/lib/measurement-system'
 import type { ProfilePatch } from '@/server/athlete/profile'
 import { useMeasurementSystem } from '../measurement-system-provider'
 import { useNavigationGuard } from '../navigation-guard'
 import { TrainingExperienceSelect, type TrainingExperience } from './training-experience-select'
-import { WeightHistoryPanel } from './weight-history-panel'
-import { sortWeightReadings, type ChartPeriod, type WeightReading } from './weight-history'
-import { useClientReady } from './use-client-ready'
+import { useClientReady } from '@/lib/use-client-ready'
 import { ProviderCredentials } from './provider-credentials'
 import styles from './athlete-settings.module.scss'
 
@@ -33,7 +30,7 @@ type Profile = {
   defaultTrainingDaysPerWeek: number | null
   defaultAvailableWeekdays: number[] | null
 }
-type Settings = { profile: Profile; weights: WeightReading[]; chartWeights: WeightReading[] }
+type Settings = { profile: Profile }
 
 const weekdays = [
   { value: 1, label: 'Mon', full: 'Monday' },
@@ -52,35 +49,24 @@ function todayLocal() {
   return `${now.getFullYear()}-${month}-${day}`
 }
 
-function localOffsetMinutes(date: string) {
-  const [year, month, day] = date.split('-').map(Number)
-  return new Date(year, month - 1, day, 12).getTimezoneOffset()
-}
-
 export function AthleteSettingsRoute({
   initial,
-  initialChartPeriod,
   registrationName,
   garminConnection,
   openaiConnection,
-  garminSync,
 }: {
   initial: Settings
-  initialChartPeriod: ChartPeriod
   registrationName: string | null
   garminConnection: ProviderConnectionStatus
   openaiConnection: ProviderConnectionStatus
-  garminSync: GarminSyncState
 }) {
   const router = useRouter()
   return (
     <AthleteSettings
       initial={initial}
-      initialChartPeriod={initialChartPeriod}
       registrationName={registrationName}
       garminConnection={garminConnection}
       openaiConnection={openaiConnection}
-      garminSync={garminSync}
       onProfileSaved={() => router.refresh()}
     />
   )
@@ -88,27 +74,21 @@ export function AthleteSettingsRoute({
 
 export function AthleteSettings({
   initial,
-  initialChartPeriod = '7D',
   registrationName,
   garminConnection,
   openaiConnection,
-  garminSync,
   onProfileSaved,
 }: {
   initial: Settings
-  initialChartPeriod?: ChartPeriod
   registrationName?: string | null
   garminConnection?: ProviderConnectionStatus
   openaiConnection?: ProviderConnectionStatus
-  garminSync?: GarminSyncState
   onProfileSaved?: () => void
 }) {
   const { system, setSystem } = useMeasurementSystem()
   const { registerBlocker } = useNavigationGuard()
   const toast = useToast()
   const [profile, setProfile] = useState(initial.profile)
-  const [weights, setWeights] = useState(initial.weights)
-  const [addedWeights, setAddedWeights] = useState<WeightReading[]>([])
   const [patch, setPatch] = useState<ProfilePatch>({})
   const [unsavedOpen, setUnsavedOpen] = useState(false)
   const [formVersion, setFormVersion] = useState(0)
@@ -116,21 +96,8 @@ export function AthleteSettings({
   const [profileMessage, setProfileMessage] = useState('')
   const [unitPending, setUnitPending] = useState(false)
   const [unitMessage, setUnitMessage] = useState('')
-  const [weightOpen, setWeightOpen] = useState(false)
-  const [weightPending, setWeightPending] = useState(false)
-  const [weightMessage, setWeightMessage] = useState('')
-  const [weightValue, setWeightValue] = useState('')
-  const [weightDate, setWeightDate] = useState<string | null>(null)
   const clientReady = useClientReady()
   const localToday = clientReady ? todayLocal() : ''
-  const selectedWeightDate = weightDate ?? localToday
-  const weightAttempt = useRef<{
-    id: string
-    value: number
-    unit: 'KG' | 'LB'
-    measuredOn: string
-    timezoneOffsetMinutes: number
-  } | null>(null)
   const pendingNavigation = useRef<(() => void) | null>(null)
   const allowUnload = useRef(false)
   const current = { ...profile, ...patch }
@@ -148,7 +115,6 @@ export function AthleteSettings({
       ? (patch.displayName ?? '')
       : (profile.displayName ?? registrationName ?? '')
   const selectedDays = current.defaultAvailableWeekdays ?? []
-  const unit = weightUnitFor(system)
 
   useEffect(() => {
     if (!hasUnsavedChanges) return
@@ -258,66 +224,12 @@ export function AthleteSettings({
     }
   }
 
-  async function saveWeight(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (weightPending || !selectedWeightDate || !weightValue) return
-    const value = Number(weightValue)
-    const timezoneOffsetMinutes = localOffsetMinutes(selectedWeightDate)
-    const attempt =
-      weightAttempt.current?.value === value &&
-      weightAttempt.current.unit === unit &&
-      weightAttempt.current.measuredOn === selectedWeightDate &&
-      weightAttempt.current.timezoneOffsetMinutes === timezoneOffsetMinutes
-        ? weightAttempt.current
-        : {
-            id: crypto.randomUUID(),
-            value,
-            unit,
-            measuredOn: selectedWeightDate,
-            timezoneOffsetMinutes,
-          }
-    weightAttempt.current = attempt
-    setWeightPending(true)
-    setWeightMessage('')
-    try {
-      const response = await fetch('/api/athlete/weight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          value,
-          unit,
-          measuredOn: selectedWeightDate,
-          timezoneOffsetMinutes,
-          requestId: attempt.id,
-        }),
-      })
-      if (!response.ok) throw new Error('Save failed')
-      const item: WeightReading = await response.json()
-      setWeights((previousWeights) =>
-        sortWeightReadings([
-          item,
-          ...previousWeights.filter((reading) => reading.id !== item.id),
-        ]).slice(0, 3),
-      )
-      setAddedWeights((previousWeights) =>
-        sortWeightReadings([item, ...previousWeights.filter((reading) => reading.id !== item.id)]),
-      )
-      weightAttempt.current = null
-      setWeightValue('')
-      setWeightOpen(false)
-    } catch {
-      setWeightMessage('Weight could not be saved. Try again.')
-    } finally {
-      setWeightPending(false)
-    }
-  }
-
   return (
     <main className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
           <h1>Athlete settings</h1>
-          <p>Your profile, training preferences and measurements.</p>
+          <p>Your profile, training preferences and integrations.</p>
         </div>
         <Button
           type="submit"
@@ -333,12 +245,7 @@ export function AthleteSettings({
       <form id="athlete-profile-form" onSubmit={saveProfile} className={styles.profileForm}>
         <fieldset className={styles.profileFields} disabled={profilePending}>
           <Card as="section" className={styles.section} aria-labelledby="personal-heading">
-            <div className={styles.sectionHeading}>
-              <span className={styles.sectionIcon}>
-                <UserRound size={20} strokeWidth={2} aria-hidden="true" />
-              </span>
-              <h2 id="personal-heading">Personal information</h2>
-            </div>
+            <SectionHeading icon={UserRound} id="personal-heading" title="Personal information" />
             <div className={styles.fields}>
               <FormField
                 id="profile-name"
@@ -408,12 +315,7 @@ export function AthleteSettings({
           </Card>
 
           <Card as="section" className={styles.section} aria-labelledby="training-heading">
-            <div className={styles.sectionHeading}>
-              <span className={styles.sectionIcon}>
-                <Dumbbell size={20} strokeWidth={2} aria-hidden="true" />
-              </span>
-              <h2 id="training-heading">Training preferences</h2>
-            </div>
+            <SectionHeading icon={Dumbbell} id="training-heading" title="Training preferences" />
             <div className={styles.fields}>
               <TrainingExperienceSelect
                 value={current.experienceLevel}
@@ -495,43 +397,22 @@ export function AthleteSettings({
         {profileMessage}
       </p>
 
-      <WeightHistoryPanel
-        initialPeriod={initialChartPeriod}
-        recentWeights={weights}
-        addedWeights={addedWeights}
-        initialChartWeights={initial.chartWeights}
-        system={system}
-        notice={weightOpen ? '' : weightMessage}
-        onAdd={() => {
-          setWeightDate(todayLocal())
-          setWeightMessage('')
-          setWeightOpen(true)
-        }}
-      />
-
       <Card as="section" className={styles.section} aria-labelledby="units-heading">
         <div className={`${styles.sectionHeadingWithAction} ${styles.unitsHeading}`}>
-          <div className={styles.sectionHeading}>
-            <span className={styles.sectionIcon}>
-              <Ruler size={20} strokeWidth={2} aria-hidden="true" />
-            </span>
-            <div>
-              <h2 id="units-heading">Units &amp; measurements</h2>
-              <p>
-                Choose one measurement system for your entire account. Changes apply across the app.
-              </p>
-            </div>
-          </div>
+          <SectionHeading
+            icon={Ruler}
+            id="units-heading"
+            title="Units & measurements"
+            subtitle="Choose one measurement system for your entire account. Changes apply across the app."
+            className={styles.unitsTitle}
+          />
           {unitMessage && (
             <p className={styles.unitStatus} role="status" aria-live="polite">
               {unitMessage}
             </p>
           )}
         </div>
-        <fieldset
-          className={styles.choiceField}
-          disabled={unitPending || weightOpen || profilePending}
-        >
+        <fieldset className={styles.choiceField} disabled={unitPending || profilePending}>
           <legend>Measurement system</legend>
           <div className={styles.choiceGrid}>
             {(['METRIC', 'IMPERIAL'] as const).map((value) => (
@@ -571,11 +452,7 @@ export function AthleteSettings({
         </dl>
       </Card>
 
-      <ProviderCredentials
-        initial={garminConnection}
-        openaiInitial={openaiConnection}
-        initialSync={garminSync}
-      />
+      <ProviderCredentials initial={garminConnection} openaiInitial={openaiConnection} />
 
       <Dialog
         open={unsavedOpen}
@@ -599,59 +476,6 @@ export function AthleteSettings({
             {profileMessage}
           </p>
         )}
-      </Dialog>
-
-      <Dialog
-        open={weightOpen}
-        title="Add weight reading"
-        onClose={() => setWeightOpen(false)}
-        pending={weightPending}
-        actions={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setWeightOpen(false)}
-              disabled={weightPending}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" form="weight-reading-form" loading={weightPending}>
-              Save reading
-            </Button>
-          </>
-        }
-      >
-        <form id="weight-reading-form" onSubmit={saveWeight} className={styles.weightForm}>
-          <div className={styles.weightInput}>
-            <FormField
-              id="weight-value"
-              label="Weight"
-              placeholder="Enter weight"
-              type="number"
-              min="0.1"
-              max="1000"
-              step="0.01"
-              required
-              value={weightValue}
-              onChange={(event) => setWeightValue(event.target.value)}
-              disabled={weightPending}
-            />
-            <span>{unit.toLowerCase()}</span>
-          </div>
-          <DateField
-            id="weight-date"
-            label="Measurement date"
-            max={localToday || undefined}
-            value={selectedWeightDate}
-            onChange={setWeightDate}
-            disabled={weightPending}
-          />
-          {weightMessage && (
-            <p className={styles.error} role="alert">
-              {weightMessage}
-            </p>
-          )}
-        </form>
       </Dialog>
     </main>
   )

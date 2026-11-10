@@ -59,8 +59,17 @@ const dailySummarySchema = z.object({
 const sleepSchema = z.object({
   calendarDate: z.iso.date(),
   sleepTimeSeconds: optionalMetric,
+  lightSleepSeconds: optionalMetric,
+  deepSleepSeconds: optionalMetric,
+  remSleepSeconds: optionalMetric,
+  awakeSleepSeconds: optionalMetric,
+  sleepScores: z
+    .object({ overall: z.object({ value: z.number().int().min(0).max(100).nullish() }).nullish() })
+    .nullish(),
   sleepStartTimestampGMT: z.number().int().nullish(),
   sleepStartTimestampLocal: z.number().int().nullish(),
+  sleepEndTimestampGMT: z.number().int().nullish(),
+  sleepEndTimestampLocal: z.number().int().nullish(),
 })
 
 function epochMs(value: number): string {
@@ -297,6 +306,11 @@ function healthBase(owner: OwnerContext, sourceTimezone: string) {
     hrvMs: null,
     sleepDurationMs: null,
     sleepStartedAt: null,
+    sleepEndedAt: null,
+    sleepLightMs: null,
+    sleepDeepMs: null,
+    sleepRemMs: null,
+    sleepAwakeMs: null,
     sleepScore: null,
     steps: null,
     stress: null,
@@ -315,7 +329,7 @@ export function normalizeGarminDailySummary(
     ...base,
     sourceRecordType: 'API_DAILY_SUMMARY',
     localDate: summary.calendarDate,
-    restingHrBpm: summary.heartRate?.restingValue ?? null,
+    restingHrBpm: summary.heartRate?.restingValue || null,
   })
 }
 
@@ -329,20 +343,29 @@ export function normalizeGarminSleep(
   let sleepStartedAt: string | null = null
   if (sleepData.sleepStartTimestampGMT != null) {
     sleepStartedAt = epochMs(sleepData.sleepStartTimestampGMT)
-    if (
-      sleepData.sleepStartTimestampLocal != null &&
-      localWallEpoch(sleepStartedAt, base.sourceTimezone) !==
-        Date.parse(epochMs(sleepData.sleepStartTimestampLocal))
-    )
-      throw new Error('Garmin sleep local timestamp does not match source time zone')
+    // The supplied IANA zone is inferred. The local clock cannot validate it
+    // across travel, so only validate the local timestamp's numeric form.
+    if (sleepData.sleepStartTimestampLocal != null) epochMs(sleepData.sleepStartTimestampLocal)
   } else if (sleepData.sleepStartTimestampLocal != null) {
     epochMs(sleepData.sleepStartTimestampLocal)
   }
+  const sleepEndedAt =
+    sleepData.sleepEndTimestampGMT == null ? null : epochMs(sleepData.sleepEndTimestampGMT)
+  if (sleepData.sleepEndTimestampLocal != null) epochMs(sleepData.sleepEndTimestampLocal)
+  if (sleepStartedAt && sleepEndedAt && sleepEndedAt < sleepStartedAt)
+    throw new Error('Garmin sleep end precedes start')
   return dailyHealthObservationSchema.parse({
     ...base,
     sourceRecordType: 'API_SLEEP',
     localDate: sleepData.calendarDate,
-    sleepDurationMs: toMilliseconds(sleepData.sleepTimeSeconds),
+    sleepDurationMs:
+      sleepData.sleepTimeSeconds === 0 ? null : toMilliseconds(sleepData.sleepTimeSeconds),
     sleepStartedAt,
+    sleepEndedAt,
+    sleepLightMs: toMilliseconds(sleepData.lightSleepSeconds),
+    sleepDeepMs: toMilliseconds(sleepData.deepSleepSeconds),
+    sleepRemMs: toMilliseconds(sleepData.remSleepSeconds),
+    sleepAwakeMs: toMilliseconds(sleepData.awakeSleepSeconds),
+    sleepScore: sleepData.sleepScores?.overall?.value ?? null,
   })
 }

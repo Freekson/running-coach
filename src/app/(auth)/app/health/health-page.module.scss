@@ -1,0 +1,39 @@
+.page {
+  gap: 24px;
+}
+
+.loadingPage {
+  display: grid;
+  grid-template-rows: auto minmax(240px, 1fr);
+  gap: 24px;
+  min-height: calc(100vh - 2 * var(--content-padding));
+  min-height: calc(100dvh - 2 * var(--content-padding));
+}
+
+.loadingIndicator {
+  display: grid;
+  place-items: center;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+}
+
+.header p {
+  margin: 6px 0 0;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 600px) {
+  .loadingPage {
+    min-height: 60dvh;
+  }
+
+  .header {
+    flex-direction: column;
+  }
+}

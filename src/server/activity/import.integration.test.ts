@@ -1,3 +1,4 @@
+import { testGarminAccountId } from '@/server/garmin/test-identity'
 import { randomUUID } from 'node:crypto'
 import { config } from 'dotenv'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -16,7 +17,18 @@ import {
 } from '@/server/provider/vault'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 import { canonicalActivitySchema } from './normalization'
-import { getActivity, canSkipFitDownload, importCanonicalActivity, listActivities } from './import'
+import {
+  getActivity,
+  canSkipFitDownload as canSkipFitActivity,
+  importCanonicalActivity as importActivity,
+  listActivities,
+} from './import'
+
+const importCanonicalActivity: typeof importActivity = (owner, activity, options) =>
+  importActivity(owner, activity, { ...options, garminAccountId: testGarminAccountId(owner) })
+
+const canSkipFitDownload: typeof canSkipFitActivity = (owner, activity, options) =>
+  canSkipFitActivity(owner, activity, { ...options, garminAccountId: testGarminAccountId(owner) })
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
 if (requested) config()
@@ -86,9 +98,13 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
     process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION = '1'
     process.env.CREDENTIAL_ENCRYPTION_KEY_V1 = Buffer.alloc(32, 47).toString('base64')
     try {
-      await saveProviderApiKey(ownerA, 'GARMIN', 'synthetic-original-garmin-key')
+      await saveProviderApiKey(ownerA, 'GARMIN', 'synthetic-original-garmin-key', {
+        verifiedGarminAccountId: testGarminAccountId(ownerA),
+      })
       const old = await readProviderApiKeySnapshot(ownerA, 'GARMIN')
-      await saveProviderApiKey(ownerA, 'GARMIN', 'synthetic-replacement-garmin-key')
+      await saveProviderApiKey(ownerA, 'GARMIN', 'synthetic-replacement-garmin-key', {
+        verifiedGarminAccountId: testGarminAccountId(ownerA),
+      })
       const activity = makeActivity(ownerA.userId, 'GARMIN', 'credential-rotation')
       await expect(
         importCanonicalActivity(ownerA, activity, {
@@ -446,6 +462,15 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
     await expect(
       importCanonicalActivity(ownerB, makeActivity(ownerA.userId, 'GARMIN', 'foreign')),
     ).rejects.toThrow('Invalid activity import')
+    await prisma.integrationConnection.create({
+      data: {
+        userId: ownerB.userId,
+        provider: 'GARMIN',
+        authMethod: 'API_KEY',
+        status: 'REVOKED',
+        externalAccountId: testGarminAccountId(ownerB),
+      },
+    })
     const other = await importCanonicalActivity(
       ownerB,
       makeActivity(ownerB.userId, 'GARMIN', 'synthetic-2'),
@@ -473,6 +498,15 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
   it('keeps the original page boundary when the cursor activity start time changes', async () => {
     const user = await prisma.user.create({ data: { authSubject: `${prefix}-pagination` } })
     const owner = getOwnerContext({ id: user.id, role: 'USER', email: null })
+    await prisma.integrationConnection.create({
+      data: {
+        userId: owner.userId,
+        provider: 'GARMIN',
+        authMethod: 'API_KEY',
+        status: 'REVOKED',
+        externalAccountId: testGarminAccountId(owner),
+      },
+    })
     const base = makeActivity(owner.userId, 'GARMIN', 'pagination-a')
     const at = (externalActivityId: string, startedAt: string) =>
       canonicalActivitySchema.parse({
@@ -480,7 +514,9 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
         source: { ...base.source, externalActivityId },
         startedAt,
       })
-    const a = await importCanonicalActivity(owner, at('pagination-a', '2026-11-08T10:00:00Z'))
+    const a = await importCanonicalActivity(owner, at('pagination-a', '2026-11-08T10:00:00Z'), {
+      sourceObservedAt: new Date('2026-11-08T12:00:00Z'),
+    })
     const b = await importCanonicalActivity(owner, at('pagination-b', '2026-11-08T09:00:00Z'))
     const c = await importCanonicalActivity(owner, at('pagination-c', '2026-11-08T08:00:00Z'))
     const first = await listActivities(owner, 1)
@@ -530,5 +566,30 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
         where: { userId: ownerA.userId, activityId: results[0].id },
       }),
     ).toBe(1)
+  })
+
+  it('keeps unverified legacy Garmin rows separate from verified account imports', async () => {
+    const legacy = await prisma.activity.create({
+      data: {
+        userId: ownerA.userId,
+        sourceProvider: 'GARMIN',
+        externalActivityId: 'legacy-provenance-check',
+        sportType: 'RUNNING',
+        startedAt: new Date('2026-11-08T06:30:00Z'),
+        listStartedAt: new Date('2026-11-08T06:30:00Z'),
+      },
+    })
+    const verified = await importCanonicalActivity(
+      ownerA,
+      makeActivity(ownerA.userId, 'GARMIN', 'legacy-provenance-check'),
+    )
+    expect(verified.id).not.toBe(legacy.id)
+    expect(
+      await prisma.activity.count({
+        where: { userId: ownerA.userId, externalActivityId: 'legacy-provenance-check' },
+      }),
+    ).toBe(2)
+    expect(await getActivity(ownerA, legacy.id)).toBeNull()
+    expect((await getActivity(ownerA, verified.id))?.id).toBe(verified.id)
   })
 })

@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+﻿import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ToastProvider } from '@/components/ui/Toast'
 import { ProviderCredentials } from './provider-credentials'
 
@@ -34,6 +34,16 @@ export const KeySaved: Story = {
     },
   },
 }
+export const VerificationRequired: Story = {
+  args: {
+    initial: {
+      provider: 'GARMIN',
+      status: 'VERIFICATION_REQUIRED',
+      createdAt: '2026-11-08T00:00:00.000Z',
+      updatedAt: '2026-11-08T00:00:00.000Z',
+    },
+  },
+}
 export const Connected: Story = {
   args: {
     initial: {
@@ -44,37 +54,7 @@ export const Connected: Story = {
     },
   },
 }
-export const BackfillInProgress: Story = {
-  args: {
-    ...Connected.args,
-    initialSync: {
-      status: 'PARTIAL',
-      lastAttemptAt: '2026-11-08T00:00:00.000Z',
-      lastSuccessAt: null,
-      nextAttemptAt: null,
-      window: { start: '2026-08-17', end: '2026-11-08' },
-      nextDate: '2026-08-20',
-      processed: 2,
-      errorCode: null,
-    },
-  },
-}
-export const RateLimited: Story = {
-  args: {
-    ...Connected.args,
-    initialSync: {
-      status: 'PAUSED',
-      lastAttemptAt: '2026-11-08T00:00:00.000Z',
-      lastSuccessAt: null,
-      nextAttemptAt: '2026-11-08T00:05:00.000Z',
-      window: { start: '2026-08-17', end: '2026-11-08' },
-      nextDate: '2026-08-20',
-      processed: 1,
-      errorCode: 'RATE_LIMITED',
-    },
-  },
-}
-export const InvalidKey: Story = {
+export const ConnectionIssue: Story = {
   args: {
     initial: {
       provider: 'GARMIN',
@@ -82,33 +62,9 @@ export const InvalidKey: Story = {
       createdAt: '2026-11-08T00:00:00.000Z',
       updatedAt: '2026-11-08T00:00:00.000Z',
     },
-    initialSync: {
-      status: 'ACTION_REQUIRED',
-      lastAttemptAt: '2026-11-08T00:00:00.000Z',
-      lastSuccessAt: null,
-      nextAttemptAt: null,
-      window: { start: '2026-08-17', end: '2026-11-08' },
-      nextDate: '2026-08-17',
-      processed: 0,
-      errorCode: 'INVALID_KEY',
-    },
   },
 }
-export const AccessDenied: Story = {
-  args: {
-    ...Connected.args,
-    initialSync: {
-      status: 'ACTION_REQUIRED',
-      lastAttemptAt: '2026-11-08T00:00:00.000Z',
-      lastSuccessAt: null,
-      nextAttemptAt: null,
-      window: { start: '2026-08-17', end: '2026-11-08' },
-      nextDate: '2026-08-17',
-      processed: 0,
-      errorCode: 'ACCESS_DENIED',
-    },
-  },
-}
+
 export const Expired: Story = {
   args: {
     initial: {

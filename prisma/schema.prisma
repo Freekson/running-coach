@@ -179,10 +179,11 @@ model AuthRateLimit {
 }
 
 model GarminImportRateLimit {
-  userId          String   @id @map("user_id") @db.Uuid
-  count           Int
-  windowStartedAt DateTime @map("window_started_at") @db.Timestamptz(6)
-  providerRetryAt DateTime? @map("provider_retry_at") @db.Timestamptz(6)
+  userId                String    @id @map("user_id") @db.Uuid
+  count                 Int
+  windowStartedAt       DateTime  @map("window_started_at") @db.Timestamptz(6)
+  providerRetryAt       DateTime? @map("provider_retry_at") @db.Timestamptz(6)
+  healthAttemptSequence BigInt    @default(0) @map("health_attempt_sequence")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -320,6 +321,7 @@ model Activity {
   id                   String         @id @default(uuid()) @db.Uuid
   userId               String         @map("user_id") @db.Uuid
   sourceProvider       ActivitySource @map("source_provider")
+  garminAccountId      String         @default("LEGACY_UNVERIFIED") @map("garmin_account_id")
   externalActivityId   String?        @map("external_activity_id")
   externalActivityUuid String?        @map("external_activity_uuid")
   sourceRecordType     String         @default("API_ACTIVITY") @map("source_record_type")
@@ -356,7 +358,7 @@ model Activity {
   duplicateCandidatesAsSecond ActivityDuplicateCandidate[] @relation("DuplicateSecond")
 
   @@unique([userId, id])
-  @@unique([userId, sourceProvider, externalActivityId])
+  @@unique([userId, sourceProvider, externalActivityId, garminAccountId], map: "activities_owner_provider_external_account_key")
   @@index([userId, listStartedAt(sort: Desc), id(sort: Desc)])
   @@map("activities")
 }
@@ -399,24 +401,40 @@ model ActivityDuplicateCandidate {
 }
 
 model DailyHealthMetric {
-  id              String         @id @default(uuid()) @db.Uuid
-  userId          String         @map("user_id") @db.Uuid
-  sourceProvider  ActivitySource @map("source_provider")
-  localDate       DateTime       @map("local_date") @db.Date
-  sourceTimezone  String         @map("source_timezone")
-  restingHrBpm    Int?           @map("resting_hr_bpm")
-  hrvMs           Decimal?       @map("hrv_ms") @db.Decimal(9, 2)
-  sleepDurationMs BigInt?        @map("sleep_duration_ms")
-  sleepScore      Int?           @map("sleep_score")
-  steps           Int?
-  stress          Int?
-  bodyBattery     Int?           @map("body_battery")
-  rawMetadata     Json?          @map("raw_metadata")
-  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                     String         @id @default(uuid()) @db.Uuid
+  userId                 String         @map("user_id") @db.Uuid
+  sourceProvider         ActivitySource @map("source_provider")
+  garminAccountId        String?        @map("garmin_account_id")
+  localDate              DateTime       @map("local_date") @db.Date
+  sourceTimezone         String         @map("source_timezone")
+  credentialNonce        Bytes?         @map("credential_nonce")
+  sourceTimezoneBasis    String?        @map("source_timezone_basis")
+  restingHrBpm           Int?           @map("resting_hr_bpm")
+  hrvMs                  Decimal?       @map("hrv_ms") @db.Decimal(9, 2)
+  sleepDurationMs        BigInt?        @map("sleep_duration_ms")
+  sleepStartedAt         DateTime?      @map("sleep_started_at") @db.Timestamptz(6)
+  sleepEndedAt           DateTime?      @map("sleep_ended_at") @db.Timestamptz(6)
+  sleepLightMs           BigInt?        @map("sleep_light_ms")
+  sleepDeepMs            BigInt?        @map("sleep_deep_ms")
+  sleepRemMs             BigInt?        @map("sleep_rem_ms")
+  sleepAwakeMs           BigInt?        @map("sleep_awake_ms")
+  sleepSourceTimezone    String?        @map("sleep_source_timezone")
+  sleepTimezoneBasis     String?        @map("sleep_timezone_basis")
+  summaryFetchedAt       DateTime?      @map("summary_fetched_at") @db.Timestamptz(6)
+  sleepFetchedAt         DateTime?      @map("sleep_fetched_at") @db.Timestamptz(6)
+  summaryAttemptSequence BigInt?        @map("summary_attempt_sequence")
+  sleepAttemptSequence   BigInt?        @map("sleep_attempt_sequence")
+  sleepScore             Int?           @map("sleep_score")
+  steps                  Int?
+  stress                 Int?
+  bodyBattery            Int?           @map("body_battery")
+  rawMetadata            Json?          @map("raw_metadata")
+  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, sourceProvider, localDate])
+  @@unique([userId, sourceProvider, localDate, credentialNonce], map: "daily_health_metrics_owner_provider_date_nonce_key")
+  @@unique([userId, sourceProvider, localDate, garminAccountId], map: "daily_health_metrics_owner_provider_date_account_key")
   @@index([userId, localDate(sort: Desc)])
   @@map("daily_health_metrics")
 }

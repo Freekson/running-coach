@@ -27,6 +27,7 @@ type Connection = {
   provider: 'OPENAI' | 'INTERVALS' | 'GARMIN'
   authMethod: 'API_KEY'
   status: 'CONNECTED' | 'PENDING' | 'REVOKED' | 'ERROR'
+  externalAccountId?: string | null
   lastSuccessAt?: Date | null
   lastFailureAt?: Date | null
   createdAt: Date
@@ -122,6 +123,10 @@ const prisma = {
     ),
   },
   integrationCredential: {
+    findUnique: vi.fn(
+      async ({ where }: { where: { connectionId: string } }) =>
+        credentials.get(where.connectionId) ?? null,
+    ),
     upsert: vi.fn(async ({ create, update }: { create: Credential; update: Credential }) => {
       credentials.set(
         create.connectionId,
@@ -135,6 +140,8 @@ const prisma = {
   },
   syncCursor: {
     deleteMany: vi.fn(async () => ({ count: 0 })),
+    updateMany: vi.fn(async () => ({ count: 0 })),
+    findMany: vi.fn(async () => []),
   },
   syncRun: {
     updateMany: vi.fn(async () => ({ count: 0 })),
@@ -211,7 +218,7 @@ describe('owner-scoped provider vault', () => {
   it('updates only the owner and exact saved Garmin key after API verification or rejection', async () => {
     const a = ownerA()
     const b = ownerB()
-    await saveProviderApiKey(a, 'GARMIN', fakeKey)
+    await saveProviderApiKey(a, 'GARMIN', fakeKey, { verifiedGarminAccountId: '123456' })
     const original = await readProviderApiKeySnapshot(a, 'GARMIN')
     expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('KEY_SAVED')
     await recordProviderApiKeyAccess(b, 'GARMIN', original.nonce, 'REJECTED')
@@ -219,7 +226,9 @@ describe('owner-scoped provider vault', () => {
     await recordProviderApiKeyAccess(a, 'GARMIN', original.nonce, 'VERIFIED')
     expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('CONNECTED')
 
-    await saveProviderApiKey(a, 'GARMIN', 'replacement-garmin-key')
+    await saveProviderApiKey(a, 'GARMIN', 'replacement-garmin-key', {
+      verifiedGarminAccountId: '123456',
+    })
     const replacement = await readProviderApiKeySnapshot(a, 'GARMIN')
     expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('KEY_SAVED')
     await recordProviderApiKeyAccess(a, 'GARMIN', original.nonce, 'REJECTED')
@@ -227,5 +236,27 @@ describe('owner-scoped provider vault', () => {
     await recordProviderApiKeyAccess(a, 'GARMIN', replacement.nonce, 'REJECTED')
     expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('ERROR')
     await expect(readProviderApiKey(a, 'GARMIN')).rejects.toBeInstanceOf(CredentialUnavailableError)
+  })
+
+  it('identifies a saved legacy key and binds only the exact credential that was verified', async () => {
+    const a = ownerA()
+    await saveProviderApiKey(a, 'GARMIN', fakeKey, { verifiedGarminAccountId: '123456' })
+    const connection = connections.get('owner-a:GARMIN')!
+    connection.externalAccountId = null
+    expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('VERIFICATION_REQUIRED')
+    const saved = await readProviderApiKeySnapshot(a, 'GARMIN')
+    await expect(
+      saveProviderApiKey(a, 'GARMIN', saved.key, {
+        verifiedGarminAccountId: '123456',
+        expectedCredentialNonce: new Uint8Array([9]),
+      }),
+    ).rejects.toBeInstanceOf(CredentialUnavailableError)
+    expect((await readProviderApiKeySnapshot(a, 'GARMIN')).accountId).toBeNull()
+    await saveProviderApiKey(a, 'GARMIN', saved.key, {
+      verifiedGarminAccountId: '123456',
+      expectedCredentialNonce: saved.nonce,
+    })
+    expect((await getProviderConnectionStatus(a, 'GARMIN')).status).toBe('KEY_SAVED')
+    expect((await readProviderApiKeySnapshot(a, 'GARMIN')).accountId).toBe('123456')
   })
 })

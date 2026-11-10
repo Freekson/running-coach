@@ -1,0 +1,575 @@
+.history {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.heartCard,
+.nightCard,
+.trendCard {
+  min-width: 0;
+  padding: clamp(20px, 2.5vw, 28px);
+}
+
+.heartCard {
+  display: grid;
+  gap: 20px;
+}
+
+.heartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  min-width: 0;
+}
+
+.trendCard > .heartHeader {
+  align-items: flex-start;
+}
+
+.trendOverview {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  min-width: 0;
+}
+
+.heartMetrics span,
+.nightSummary span,
+.nightTimes span,
+.stageHeading span,
+.note,
+.trendSummary span,
+.chartDates {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-size-caption);
+}
+
+.sleepControls {
+  display: grid;
+  gap: 8px;
+  flex: 0 1 min(300px, 58%);
+  width: min(300px, 58%);
+  max-width: 100%;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.sleepControls > .periodSwitch,
+.sleepControls > .modeSwitch {
+  width: 100%;
+}
+
+.periodSwitch,
+.modeSwitch {
+  display: grid;
+  gap: 4px;
+  width: 300px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 4px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  background: var(--color-bg);
+}
+
+.periodSwitch {
+  grid-template-columns: repeat(5, minmax(40px, 1fr));
+}
+
+.modeSwitch {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.periodSwitch button,
+.modeSwitch button {
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--type-size-label);
+  font-weight: var(--type-weight-semibold);
+  cursor: pointer;
+}
+
+.periodSwitch button:hover,
+.periodSwitch button[aria-pressed='true'],
+.modeSwitch button:hover,
+.modeSwitch button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.periodSwitch button:focus-visible,
+.modeSwitch button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.heartMetrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.heartMetrics > div:first-child strong,
+.nightSummary strong,
+.trendSummary strong {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: clamp(28px, 3vw, 38px);
+  line-height: 1.15;
+}
+
+.heartMetrics > div:first-child > span {
+  margin-left: 6px;
+}
+
+.heartMetrics > div:nth-child(2) {
+  display: grid;
+  border-left: 1px solid var(--color-border);
+  padding-left: 20px;
+}
+
+.heartMetrics > div:nth-child(2) strong {
+  font-size: var(--type-size-body-large);
+}
+
+.plot {
+  position: relative;
+  height: 205px;
+  min-width: 0;
+}
+
+.plot > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.plot g[data-sleep-date]:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.sleepTooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 9px;
+  width: min(260px, 100%);
+  padding: 14px;
+  transform: translateY(calc(-100% - 14px));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  border-radius: 16px;
+  background: linear-gradient(145deg, var(--color-surface-raised), var(--color-surface));
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--color-bg) 80%, transparent);
+  color: var(--color-text);
+  font-size: var(--type-size-caption);
+  line-height: var(--type-leading-compact);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.sleepTooltip::after {
+  position: absolute;
+  bottom: -7px;
+  left: var(--tooltip-arrow-left);
+  width: 12px;
+  height: 12px;
+  transform: translateX(-50%) rotate(45deg);
+  border-right: 1px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  background: var(--color-surface);
+  content: '';
+}
+
+.tooltipDate,
+.tooltipTotal,
+.tooltipStages > div,
+.tooltipStages > div > span,
+.tooltipScore {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tooltipDate svg,
+.tooltipScore svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--color-primary);
+}
+
+.tooltipDate strong {
+  font-weight: var(--type-weight-semibold);
+}
+
+.tooltipTotal {
+  gap: 5px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tooltipTotal span,
+.tooltipUnavailable {
+  color: var(--color-text-muted);
+}
+
+.tooltipTotal strong {
+  font-size: var(--type-size-body);
+}
+
+.tooltipStages {
+  display: grid;
+  gap: 5px;
+}
+
+.tooltipStages > div {
+  justify-content: space-between;
+}
+
+.tooltipStages i {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  border-radius: 3px;
+}
+
+.tooltipStages strong {
+  font-weight: var(--type-weight-medium);
+}
+
+.tooltipUnavailable {
+  margin: 0;
+}
+
+.tooltipScore {
+  justify-content: center;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface-raised));
+}
+
+.tooltipScore strong {
+  color: var(--color-primary);
+}
+
+.gridLine {
+  stroke: var(--color-border);
+  stroke-width: 1;
+  stroke-dasharray: 4 8;
+}
+
+.line {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.scoreBar {
+  fill: var(--color-primary);
+}
+
+.heartPoint {
+  position: absolute;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+}
+
+.heartPoint:hover,
+.heartPoint:focus-visible {
+  z-index: 3;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.heartPoint:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 5px;
+}
+
+.heartPointTooltip {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  display: none;
+  width: max-content;
+  max-width: min(180px, 60vw);
+  padding: 8px 10px;
+  transform: translateX(-50%);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface-raised);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--color-bg) 70%, transparent);
+  color: var(--color-text);
+  font-size: var(--type-size-caption);
+  font-weight: var(--type-weight-regular);
+  line-height: var(--type-leading-compact);
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+
+.heartPointTooltip strong,
+.heartPointTooltip span {
+  display: block;
+}
+
+.heartPoint:hover .heartPointTooltip,
+.heartPoint:focus-visible .heartPointTooltip {
+  display: block;
+}
+
+.heartPoint[data-edge='first'] .heartPointTooltip {
+  left: 0;
+  transform: none;
+}
+
+.heartPoint[data-edge='last'] .heartPointTooltip {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.unsegmentedBar {
+  fill: var(--color-border-strong);
+}
+
+.scale {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--color-text-muted);
+  font-size: var(--type-size-caption);
+  pointer-events: none;
+}
+
+.chartDates {
+  display: flex;
+  justify-content: space-between;
+}
+
+.summaryCards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.nightCard,
+.trendCard {
+  display: grid;
+  align-content: start;
+  gap: 20px;
+}
+
+.nightSummary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.nightSummary > div:first-child,
+.trendSummary {
+  display: grid;
+  gap: 4px;
+}
+
+.scoreRing {
+  position: relative;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  width: 96px;
+  height: 96px;
+  flex: none;
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreRing svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.scoreTrack,
+.scoreProgress {
+  fill: none;
+  stroke-width: 8;
+}
+
+.scoreTrack {
+  stroke: var(--color-border);
+}
+.scoreProgress {
+  stroke: var(--color-primary);
+  stroke-linecap: round;
+}
+
+.scoreRing span {
+  color: var(--color-text);
+  font-size: 28px;
+  font-weight: var(--type-weight-bold);
+  line-height: var(--type-leading-tight);
+}
+
+.scoreRing small {
+  margin-top: -2px;
+  color: var(--color-text-muted);
+  line-height: var(--type-leading-tight);
+}
+
+.nightTimes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 20px 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.nightTimes div {
+  display: grid;
+  gap: 6px;
+}
+
+.nightTimes div:nth-child(2) {
+  text-align: right;
+}
+
+.nightTimes strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.stageHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.stageHeading h4 {
+  margin: 0;
+}
+
+.stageStrip {
+  display: flex;
+  gap: 2px;
+  height: 18px;
+  overflow: hidden;
+  border-radius: 5px;
+}
+
+.stageStrip > span {
+  min-width: 0;
+}
+
+.stageTiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.stageTiles > div {
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--color-surface-raised);
+  font-variant-numeric: tabular-nums;
+}
+
+.stageLabel,
+.stageLegend span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-text-muted);
+  font-size: var(--type-size-caption);
+}
+
+.stageLabel i,
+.stageLegend i {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 2px;
+}
+
+.stageTiles strong {
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.stageTiles small {
+  margin-left: 5px;
+  color: var(--color-text-muted);
+}
+
+.light {
+  background: var(--color-sleep-light);
+  fill: var(--color-sleep-light);
+}
+.deep {
+  background: var(--color-sleep-deep);
+  fill: var(--color-sleep-deep);
+}
+.rem {
+  background: var(--color-sleep-rem);
+  fill: var(--color-sleep-rem);
+}
+.awake {
+  background: var(--color-sleep-awake);
+  fill: var(--color-sleep-awake);
+}
+
+.stageLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+@media (max-width: 750px) {
+  .summaryCards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 470px) {
+  .heartHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .sleepControls,
+  .periodSwitch,
+  .modeSwitch {
+    max-width: 100%;
+  }
+  .stageHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

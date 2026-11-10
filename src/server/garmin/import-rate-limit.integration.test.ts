@@ -8,10 +8,14 @@ vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: () => true
 
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
+import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
+import { deleteAllImportedGarminData } from '@/server/provider/vault'
 import {
   allowGarminImport,
+  getGarminImportBlock,
   getGarminProviderPauseUntil,
   pauseGarminProviderUntil,
+  reserveGarminHealthAttempt,
 } from './import-rate-limit'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
@@ -31,12 +35,31 @@ describe.skipIf(!enabled)('shared Garmin import limit on isolated PostgreSQL', (
   let ownerB: ReturnType<typeof getOwnerContext>
   const prefix = `run24-rate-${randomUUID()}`
 
+  async function connect(userId: string, nonce: Buffer<ArrayBuffer> = Buffer.alloc(12, 11)) {
+    const connection = await prisma.integrationConnection.create({
+      data: { userId, provider: 'GARMIN', authMethod: 'API_KEY', status: 'CONNECTED' },
+    })
+    await prisma.integrationCredential.create({
+      data: {
+        userId,
+        connectionId: connection.id,
+        ciphertext: Buffer.from([1]),
+        nonce,
+        authTag: Buffer.alloc(16),
+        encryptionKeyVersion: 1,
+      },
+    })
+    return connection
+  }
+
   beforeAll(async () => {
     prisma = await getPrismaClient()
     const a = await prisma.user.create({ data: { authSubject: `${prefix}-a` } })
     const b = await prisma.user.create({ data: { authSubject: `${prefix}-b` } })
     ownerA = getOwnerContext({ id: a.id, role: 'USER', email: null })
     ownerB = getOwnerContext({ id: b.id, role: 'USER', email: null })
+    await connect(a.id)
+    await connect(b.id)
   })
 
   afterAll(async () => {
@@ -49,6 +72,8 @@ describe.skipIf(!enabled)('shared Garmin import limit on isolated PostgreSQL', (
     const attempts = await Promise.all(Array.from({ length: 5 }, () => allowGarminImport(ownerA)))
     expect(attempts.filter(Boolean)).toHaveLength(3)
     expect(attempts.filter((allowed) => !allowed)).toHaveLength(2)
+    expect(await getGarminImportBlock(ownerA)).toMatchObject({ code: 'APP_RATE_LIMITED' })
+    expect(await getGarminImportBlock(ownerB)).toBeNull()
     expect(await allowGarminImport(ownerB)).toBe(true)
     await prisma.garminImportRateLimit.update({
       where: { userId: ownerA.userId },
@@ -72,6 +97,7 @@ describe.skipIf(!enabled)('shared Garmin import limit on isolated PostgreSQL', (
     const otherUser = await prisma.user.create({ data: { authSubject: `${prefix}-other` } })
     const pausedOwner = getOwnerContext({ id: pausedUser.id, role: 'USER', email: null })
     const otherOwner = getOwnerContext({ id: otherUser.id, role: 'USER', email: null })
+    await connect(otherUser.id)
     const connection = await prisma.integrationConnection.create({
       data: {
         userId: pausedUser.id,
@@ -94,6 +120,10 @@ describe.skipIf(!enabled)('shared Garmin import limit on isolated PostgreSQL', (
     const until = new Date(Date.now() + 300_000)
     await pauseGarminProviderUntil(pausedOwner, until, nonce)
     expect(await getGarminProviderPauseUntil(pausedOwner)).toEqual(until)
+    expect(await getGarminImportBlock(pausedOwner)).toEqual({
+      code: 'PROVIDER_PAUSED',
+      retryAt: until,
+    })
     expect(await allowGarminImport(pausedOwner)).toBe(false)
     expect(
       (
@@ -116,5 +146,19 @@ describe.skipIf(!enabled)('shared Garmin import limit on isolated PostgreSQL', (
     })
     await pauseGarminProviderUntil(pausedOwner, new Date(Date.now() + 600_000), nonce)
     expect((await getGarminProviderPauseUntil(pausedOwner))?.getTime()).toBeLessThan(Date.now())
+  })
+
+  it('cannot recreate rate state after the Garmin connection is deleted', async () => {
+    const user = await prisma.user.create({ data: { authSubject: `${prefix}-deleted` } })
+    const scopedOwner = getOwnerContext({ id: user.id, role: 'USER', email: null })
+    const nonce = Buffer.alloc(12, 23)
+    await connect(user.id, nonce)
+    expect(await allowGarminImport(scopedOwner)).toBe(true)
+    await deleteAllImportedGarminData(scopedOwner)
+    await expect(allowGarminImport(scopedOwner)).rejects.toBeInstanceOf(CredentialUnavailableError)
+    await expect(reserveGarminHealthAttempt(scopedOwner, nonce, '123456')).rejects.toBeInstanceOf(
+      CredentialUnavailableError,
+    )
+    expect(await prisma.garminImportRateLimit.findUnique({ where: { userId: user.id } })).toBeNull()
   })
 })

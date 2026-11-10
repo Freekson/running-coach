@@ -126,7 +126,7 @@ function sameActivitySummary(existing: Activity, fields: ReturnType<typeof activ
 export async function canSkipFitDownload(
   owner: OwnerContext,
   untrustedActivity: unknown,
-  options: { refresh?: boolean; observedAt?: Date } = {},
+  options: { refresh?: boolean; observedAt?: Date; garminAccountId?: string } = {},
 ): Promise<boolean> {
   const userId = ownerId(owner)
   const activity = canonicalActivitySchema.parse(untrustedActivity)
@@ -135,10 +135,11 @@ export async function canSkipFitDownload(
   const prisma = await getPrismaClient()
   const existing = await prisma.activity.findUnique({
     where: {
-      userId_sourceProvider_externalActivityId: {
+      userId_sourceProvider_externalActivityId_garminAccountId: {
         userId,
         sourceProvider: activity.source.provider,
         externalActivityId: activity.source.externalActivityId,
+        garminAccountId: options.garminAccountId ?? 'LEGACY_UNVERIFIED',
       },
     },
   })
@@ -240,6 +241,7 @@ export async function importCanonicalActivity(
   options: {
     sourceObservedAt?: Date
     fitCheckedAt?: Date
+    garminAccountId?: string
     beforeWrite?: (tx: Prisma.TransactionClient) => Promise<void>
   } = {},
 ): Promise<{ id: string; lapImportStatus: LapImportStatus }> {
@@ -260,7 +262,10 @@ export async function importCanonicalActivity(
     userId,
     sourceProvider: activity.source.provider,
     externalActivityId,
+    garminAccountId: options.garminAccountId ?? 'LEGACY_UNVERIFIED',
   }
+  if (activity.source.provider === 'GARMIN' && options.beforeWrite && !options.garminAccountId)
+    throw new InvalidActivityImportError()
   const prisma = await getPrismaClient()
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -268,7 +273,7 @@ export async function importCanonicalActivity(
         async (tx) => {
           await options.beforeWrite?.(tx)
           const existing = await tx.activity.findUnique({
-            where: { userId_sourceProvider_externalActivityId: identity },
+            where: { userId_sourceProvider_externalActivityId_garminAccountId: identity },
           })
           if (
             existing?.sourceObservedAt &&
@@ -286,7 +291,7 @@ export async function importCanonicalActivity(
           const fields = { ...comparison, lapImportStatus }
           const saved = await tx.activity.upsert({
             where: {
-              userId_sourceProvider_externalActivityId: identity,
+              userId_sourceProvider_externalActivityId_garminAccountId: identity,
             },
             create: {
               ...identity,
@@ -423,14 +428,28 @@ export async function listActivities(owner: OwnerContext, limit: number, cursor?
   listLimitSchema.parse(limit)
   const boundary = cursor === undefined ? null : decodeActivityCursor(cursor, userId)
   const prisma = await getPrismaClient()
+  const garmin = await prisma.integrationConnection.findUnique({
+    where: { userId_provider: { userId, provider: 'GARMIN' } },
+    select: { externalAccountId: true },
+  })
   const rows = await prisma.activity.findMany({
     where: {
       userId,
+      OR: [
+        { sourceProvider: { not: 'GARMIN' } },
+        ...(garmin?.externalAccountId
+          ? [{ sourceProvider: 'GARMIN' as const, garminAccountId: garmin.externalAccountId }]
+          : []),
+      ],
       ...(boundary
         ? {
-            OR: [
-              { listStartedAt: { lt: boundary.listStartedAt } },
-              { listStartedAt: boundary.listStartedAt, id: { lt: boundary.id } },
+            AND: [
+              {
+                OR: [
+                  { listStartedAt: { lt: boundary.listStartedAt } },
+                  { listStartedAt: boundary.listStartedAt, id: { lt: boundary.id } },
+                ],
+              },
             ],
           }
         : {}),
@@ -453,8 +472,21 @@ export async function getActivity(owner: OwnerContext, id: string) {
   const userId = ownerId(owner)
   uuidSchema.parse(id)
   const prisma = await getPrismaClient()
+  const garmin = await prisma.integrationConnection.findUnique({
+    where: { userId_provider: { userId, provider: 'GARMIN' } },
+    select: { externalAccountId: true },
+  })
   const row = await prisma.activity.findFirst({
-    where: { userId, id },
+    where: {
+      userId,
+      id,
+      OR: [
+        { sourceProvider: { not: 'GARMIN' } },
+        ...(garmin?.externalAccountId
+          ? [{ sourceProvider: 'GARMIN' as const, garminAccountId: garmin.externalAccountId }]
+          : []),
+      ],
+    },
     select: {
       ...summarySelect,
       laps: {

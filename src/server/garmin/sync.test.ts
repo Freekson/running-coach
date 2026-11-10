@@ -9,12 +9,22 @@ const {
   isVerifiedCurrentUser: vi.fn(() => true),
   getPrismaClient: vi.fn(),
   getGarminProviderPauseUntil: vi.fn<() => Promise<Date | null>>(async () => null),
-  pauseGarminProviderUntil: vi.fn(async () => {}),
+  pauseGarminProviderUntil: vi.fn<(...args: [unknown, Date, Uint8Array]) => Promise<void>>(
+    async () => {},
+  ),
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser }))
 vi.mock('@/server/db/client', () => ({ getPrismaClient }))
-vi.mock('./import-rate-limit', () => ({ getGarminProviderPauseUntil, pauseGarminProviderUntil }))
+vi.mock('./import-rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./import-rate-limit')>()),
+  getGarminProviderPauseUntil,
+  pauseGarminProviderUntil,
+}))
+vi.mock('./provider-lease', () => ({
+  claimGarminProviderLease: vi.fn(async () => 'synthetic-provider-lease'),
+  releaseGarminProviderLease: vi.fn(async () => {}),
+}))
 
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { GarminImportError, importGarminActivityPage } from './activity-import'
@@ -51,6 +61,7 @@ type Run = {
 
 function fixture() {
   let cursor: Cursor | null = null
+  let externalAccountId: string | null = '123456'
   const runs: Run[] = []
   const db = {
     integrationConnection: {
@@ -59,7 +70,12 @@ function fixture() {
           ? {
               id: connectionId,
               status: 'CONNECTED',
-              credential: { connectionId, nonce: new Uint8Array([1]) },
+              externalAccountId,
+              credential: {
+                connectionId,
+                nonce: new Uint8Array([1]),
+                rotatedAt: new Date('2026-11-01T00:00:00Z'),
+              },
             }
           : null,
       ),
@@ -142,6 +158,9 @@ function fixture() {
   getPrismaClient.mockResolvedValue(db)
   return {
     db,
+    setAccountId(value: string | null) {
+      externalAccountId = value
+    },
     get cursor() {
       return cursor
     },
@@ -163,6 +182,19 @@ beforeEach(() => {
 })
 
 describe('Garmin sync checkpoints', () => {
+  it('requires account verification before an existing key can import activities', async () => {
+    const state = fixture()
+    state.setAccountId(null)
+    expect(await getGarminSyncState(owner)).toMatchObject({
+      status: 'ACTION_REQUIRED',
+      errorCode: 'ACCOUNT_VERIFICATION_REQUIRED',
+    })
+    await expect(runGarminSync(owner)).rejects.toMatchObject({ code: 'NOT_CONNECTED' })
+    expect(state.db.syncCursor.upsert).not.toHaveBeenCalled()
+    process.env.VERCEL_ENV = 'production'
+    expect((await getGarminSyncState(owner)).status).toBe('UNAVAILABLE')
+  })
+
   it('commits a page only after import and resumes its next offset', async () => {
     const state = fixture()
     const importPage = vi.fn(async () => {
@@ -249,9 +281,17 @@ describe('Garmin sync checkpoints', () => {
       throw new GarminImportError('RATE_LIMITED', 10 * 86_400_000)
     })
     await runGarminSync(owner, {}, { now: () => clock, importPage })
-    expect(state.cursor?.nextAttemptAt?.getTime()).toBeGreaterThanOrEqual(
-      clock.getTime() + 10 * 86_400_000,
-    )
+    expect(state.cursor?.nextAttemptAt?.getTime()).toBe(clock.getTime() + 10 * 86_400_000)
+  })
+
+  it('caps an extreme provider Retry-After at 30 days', async () => {
+    const state = fixture()
+    const importPage = vi.fn(async () => {
+      throw new GarminImportError('RATE_LIMITED', 1e20)
+    })
+    await runGarminSync(owner, {}, { now: () => clock, importPage })
+    expect(state.cursor?.nextAttemptAt?.getTime()).toBe(clock.getTime() + 30 * 86_400_000)
+    expect(pauseGarminProviderUntil.mock.calls[0][1]).toEqual(state.cursor?.nextAttemptAt)
   })
 
   it('holds one owner lease across concurrent triggers', async () => {
@@ -495,6 +535,56 @@ describe('Garmin sync checkpoints', () => {
     page.mockClear()
     await runGarminSync(owner, {}, { now: () => clock, importPage: page })
     expect(page.mock.calls[0][1]).toMatchObject({ startDate: '2026-11-09' })
+  })
+
+  it('resumes an extension after its first page times out without another extendDays request', async () => {
+    const state = fixture()
+    await runGarminSync(
+      owner,
+      {},
+      {
+        now: () => clock,
+        importPage: vi.fn(async () => ({
+          imported: [],
+          providerIds: [],
+          hasMore: false,
+          nextStart: null,
+        })),
+      },
+    )
+    if (!state.cursor) throw new Error('Cursor missing')
+    state.cursor.cursorOrCheckpoint = {
+      version: 1,
+      mode: 'DONE',
+      oldestIncludedDate: '2026-08-17',
+      latestRecentDate: '2026-11-08',
+      windowStart: '2026-08-17',
+      windowEnd: '2026-11-08',
+      nextDate: null,
+      offset: 0,
+    }
+    const failedPage = vi.fn(async () => {
+      throw new GarminImportError('TIMEOUT')
+    })
+    expect(
+      (await runGarminSync(owner, { extendDays: 7 }, { now: () => clock, importPage: failedPage }))
+        .status,
+    ).toBe('PAUSED')
+    expect(state.cursor.cursorOrCheckpoint).toMatchObject({
+      mode: 'EXTENSION',
+      windowStart: '2026-08-10',
+      windowEnd: '2026-08-16',
+      nextDate: '2026-08-10',
+    })
+    state.cursor.nextAttemptAt = null
+    const resumedPage = vi.fn<typeof importGarminActivityPage>(async () => ({
+      imported: [],
+      providerIds: [],
+      hasMore: false,
+      nextStart: null,
+    }))
+    await runGarminSync(owner, {}, { now: () => clock, importPage: resumedPage })
+    expect(resumedPage.mock.calls[0][1]).toMatchObject({ startDate: '2026-08-10' })
   })
 
   it('requires a replacement key after an invalid-key response', async () => {

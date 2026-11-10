@@ -1,0 +1,35 @@
+.panel {
+  display: grid;
+  gap: 16px;
+  padding: clamp(18px, 2.5vw, 24px);
+  min-width: 0;
+}
+
+.panel > p {
+  margin: 6px 0 0;
+  color: var(--color-text-muted);
+}
+
+.panel [role='alert'] {
+  color: var(--color-error);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.verificationActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.verificationActions p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-error);
+}

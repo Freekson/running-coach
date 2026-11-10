@@ -85,7 +85,8 @@ async function boundedText(response: Response, maxBytes: number): Promise<string
 
 async function boundedJson(response: Response): Promise<unknown> {
   try {
-    return JSON.parse(await boundedText(response, MAX_JSON_BYTES)) as unknown
+    const body = await boundedText(response, MAX_JSON_BYTES)
+    return body.trim() ? (JSON.parse(body) as unknown) : null
   } catch {
     throw new Error('INVALID_JSON')
   }

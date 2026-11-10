@@ -1,3 +1,4 @@
+import { testGarminAccountId } from '@/server/garmin/test-identity'
 import { randomUUID } from 'node:crypto'
 import { config } from 'dotenv'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -40,7 +41,9 @@ describe.skipIf(!enabled)('Garmin sync lease and checkpoint on isolated PostgreS
     const b = await prisma.user.create({ data: { authSubject: `${prefix}-b`, role: 'ADMIN' } })
     owner = getOwnerContext({ id: a.id, role: 'USER', email: null })
     other = getOwnerContext({ id: b.id, role: 'ADMIN', email: null })
-    await saveProviderApiKey(owner, 'GARMIN', 'synthetic-garmin-key')
+    await saveProviderApiKey(owner, 'GARMIN', 'synthetic-garmin-key', {
+      verifiedGarminAccountId: testGarminAccountId(owner),
+    })
   })
 
   afterAll(async () => {
@@ -110,7 +113,9 @@ describe.skipIf(!enabled)('Garmin sync lease and checkpoint on isolated PostgreS
   it('rotates scheduled connections by last attempt, including a never-synced owner', async () => {
     const third = await prisma.user.create({ data: { authSubject: `${prefix}-c` } })
     const thirdOwner = getOwnerContext({ id: third.id, role: 'USER', email: null })
-    await saveProviderApiKey(thirdOwner, 'GARMIN', 'synthetic-third-garmin-key')
+    await saveProviderApiKey(thirdOwner, 'GARMIN', 'synthetic-third-garmin-key', {
+      verifiedGarminAccountId: testGarminAccountId(thirdOwner),
+    })
     const candidates = [owner.userId, third.id]
     const first = await findScheduledGarminOwnerId(new Date(), candidates)
     expect(candidates).toContain(first)
@@ -136,8 +141,12 @@ describe.skipIf(!enabled)('Garmin sync lease and checkpoint on isolated PostgreS
     const healthyUser = await prisma.user.create({ data: { authSubject: `${prefix}-healthy` } })
     const brokenOwner = getOwnerContext({ id: brokenUser.id, role: 'USER', email: null })
     const healthyOwner = getOwnerContext({ id: healthyUser.id, role: 'USER', email: null })
-    await saveProviderApiKey(brokenOwner, 'GARMIN', 'synthetic-broken-user-key')
-    await saveProviderApiKey(healthyOwner, 'GARMIN', 'synthetic-healthy-user-key')
+    await saveProviderApiKey(brokenOwner, 'GARMIN', 'synthetic-broken-user-key', {
+      verifiedGarminAccountId: testGarminAccountId(brokenOwner),
+    })
+    await saveProviderApiKey(healthyOwner, 'GARMIN', 'synthetic-healthy-user-key', {
+      verifiedGarminAccountId: testGarminAccountId(healthyOwner),
+    })
     const connection = await prisma.integrationConnection.findUniqueOrThrow({
       where: { userId_provider: { userId: brokenUser.id, provider: 'GARMIN' } },
     })
@@ -170,8 +179,12 @@ describe.skipIf(!enabled)('Garmin sync lease and checkpoint on isolated PostgreS
     const readyUser = await prisma.user.create({ data: { authSubject: `${prefix}-ready` } })
     const pausedOwner = getOwnerContext({ id: pausedUser.id, role: 'USER', email: null })
     const readyOwner = getOwnerContext({ id: readyUser.id, role: 'USER', email: null })
-    await saveProviderApiKey(pausedOwner, 'GARMIN', 'synthetic-paused-user-key')
-    await saveProviderApiKey(readyOwner, 'GARMIN', 'synthetic-ready-user-key')
+    await saveProviderApiKey(pausedOwner, 'GARMIN', 'synthetic-paused-user-key', {
+      verifiedGarminAccountId: testGarminAccountId(pausedOwner),
+    })
+    await saveProviderApiKey(readyOwner, 'GARMIN', 'synthetic-ready-user-key', {
+      verifiedGarminAccountId: testGarminAccountId(readyOwner),
+    })
     const credential = await readProviderApiKeySnapshot(pausedOwner, 'GARMIN')
     const retryAt = new Date(Date.now() + 60_000)
     await pauseGarminProviderUntil(pausedOwner, retryAt, credential.nonce)
@@ -188,8 +201,12 @@ describe.skipIf(!enabled)('Garmin sync lease and checkpoint on isolated PostgreS
     const readyUser = await prisma.user.create({ data: { authSubject: `${prefix}-after-denial` } })
     const deniedOwner = getOwnerContext({ id: deniedUser.id, role: 'USER', email: null })
     const readyOwner = getOwnerContext({ id: readyUser.id, role: 'USER', email: null })
-    await saveProviderApiKey(deniedOwner, 'GARMIN', 'synthetic-denied-user-key')
-    await saveProviderApiKey(readyOwner, 'GARMIN', 'synthetic-ready-user-key')
+    await saveProviderApiKey(deniedOwner, 'GARMIN', 'synthetic-denied-user-key', {
+      verifiedGarminAccountId: testGarminAccountId(deniedOwner),
+    })
+    await saveProviderApiKey(readyOwner, 'GARMIN', 'synthetic-ready-user-key', {
+      verifiedGarminAccountId: testGarminAccountId(readyOwner),
+    })
     const state = await runGarminSync(
       deniedOwner,
       {},
@@ -208,7 +225,9 @@ describe.skipIf(!enabled)('Garmin sync lease and checkpoint on isolated PostgreS
   it('respects the shared attempt limit and a completed-window cooldown when scheduling', async () => {
     const user = await prisma.user.create({ data: { authSubject: `${prefix}-cooldown` } })
     const scopedOwner = getOwnerContext({ id: user.id, role: 'USER', email: null })
-    await saveProviderApiKey(scopedOwner, 'GARMIN', 'synthetic-cooldown-user-key')
+    await saveProviderApiKey(scopedOwner, 'GARMIN', 'synthetic-cooldown-user-key', {
+      verifiedGarminAccountId: testGarminAccountId(scopedOwner),
+    })
     for (let attempt = 0; attempt < 3; attempt++)
       expect(await allowGarminImport(scopedOwner)).toBe(true)
     expect(await findScheduledGarminOwnerId(new Date(), [user.id])).toBeNull()

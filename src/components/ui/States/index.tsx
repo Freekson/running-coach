@@ -17,11 +17,15 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
   )
 }
 
-export type LoadingStateProps = { label: string }
+export type LoadingStateProps = { label: string; size?: 'default' | 'large' }
 
-export function LoadingState({ label }: LoadingStateProps) {
+export function LoadingState({ label, size = 'default' }: LoadingStateProps) {
   return (
-    <div className={styles.loading} role="status" aria-live="polite">
+    <div
+      className={`${styles.loading} ${size === 'large' ? styles.loadingLarge : ''}`}
+      role="status"
+      aria-live="polite"
+    >
       <span className={styles.spinner} aria-hidden="true" />
       <span>{label}</span>
     </div>

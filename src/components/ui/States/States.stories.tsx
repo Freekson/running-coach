@@ -37,3 +37,7 @@ export const LongTextMobile: Story = {
 export const Loading: Story = {
   render: () => <LoadingState label="Loading workouts…" />,
 }
+
+export const LargeLoading: Story = {
+  render: () => <LoadingState label="Loading health data…" size="large" />,
+}

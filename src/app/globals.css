@@ -18,6 +18,10 @@
   --color-error: #f4a8a1;
   --color-admin: #d4b0f9;
   --color-admin-surface: #342b48;
+  --color-sleep-deep: #568e9a;
+  --color-sleep-light: #88bdb0;
+  --color-sleep-rem: #a29ccc;
+  --color-sleep-awake: #c4a073;
   --icon-gap: 8px;
   --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
   --type-size-hero: clamp(2.25rem, 4vw, 4rem);

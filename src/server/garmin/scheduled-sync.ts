@@ -30,6 +30,7 @@ export async function findScheduledGarminOwnerId(
       ON import_limit.user_id = connection.user_id
     WHERE connection.provider = 'GARMIN'
       AND connection.status = 'CONNECTED'
+      AND connection.external_account_id IS NOT NULL
       AND owner.status = 'ACTIVE'
       AND (import_limit.provider_retry_at IS NULL OR import_limit.provider_retry_at <= ${at})
       AND (

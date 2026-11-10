@@ -3,8 +3,13 @@ import { AccountUnavailableError, getCurrentUser } from '@/server/auth/current-u
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { CredentialConfigurationError } from '@/server/provider/credential-crypto'
 import {
+  GarminAccountIdentityError,
+  verifyGarminApiKeyAccount,
+} from '@/server/garmin/account-identity'
+import {
   apiKeySchema,
   disconnectProvider,
+  GarminAccountMismatchError,
   getProviderConnectionStatus,
   saveProviderApiKey,
 } from '@/server/provider/vault'
@@ -19,6 +24,16 @@ function safeFailure(error: unknown) {
     return Response.json(
       { code: 'KEY_STORAGE_UNCONFIGURED' },
       { status: 503, headers: privateHeaders },
+    )
+  if (error instanceof GarminAccountMismatchError)
+    return Response.json({ code: error.code }, { status: 409, headers: privateHeaders })
+  if (error instanceof GarminAccountIdentityError)
+    return Response.json(
+      { code: error.code },
+      {
+        status: error.code === 'RATE_LIMITED' ? 429 : error.code === 'INVALID_KEY' ? 400 : 422,
+        headers: privateHeaders,
+      },
     )
   return Response.json(
     { error: 'Credential operation unavailable' },
@@ -81,7 +96,10 @@ export async function PUT(request: Request) {
     const parsed = bodySchema.safeParse(parsedBody.value)
     if (!parsed.success)
       return Response.json({ error: 'Invalid API key' }, { status: 400, headers: privateHeaders })
-    const status = await saveProviderApiKey(getOwnerContext(user), 'GARMIN', parsed.data.apiKey)
+    const accountId = await verifyGarminApiKeyAccount(parsed.data.apiKey)
+    const status = await saveProviderApiKey(getOwnerContext(user), 'GARMIN', parsed.data.apiKey, {
+      verifiedGarminAccountId: accountId,
+    })
     return Response.json(status, { headers: privateHeaders })
   } catch (error) {
     return safeFailure(error)

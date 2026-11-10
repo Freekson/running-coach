@@ -16,6 +16,10 @@ The app uses a dark theme from first paint. `src/app/globals.css` is the source 
 | `--color-focus`                                                      | Keyboard focus outline                                             |
 | `--color-success`, `--color-warning`, `--color-error`                | Status text and badges, accompanied by words or icons              |
 | `--color-admin`, `--color-admin-surface`                             | Administrator role badge text and surface                          |
+| `--color-sleep-deep`                                                 | Deep sleep (`#568E9A`)                                             |
+| `--color-sleep-light`                                                | Light sleep (`#88BDB0`)                                            |
+| `--color-sleep-rem`                                                  | REM sleep (`#A29CCC`)                                              |
+| `--color-sleep-awake`                                                | Awake time (`#C4A073`)                                             |
 
 Use the role that matches the element, rather than copying a hex value. Add a new semantic token to the root palette when a genuinely new role is needed.
 
@@ -57,7 +61,9 @@ Mount `ToastProvider` once in the root layout. Client components call `useToast(
 
 Use `CopyableField` with `id`, `label`, and the complete `value`. Its read-only input stays selectable and its embedded button copies the full value. `disabled` also disables the action; `onCopyError` and `onCopySuccess` can trigger a Toast where useful.
 
-Shared primitives live in `src/components/ui/<Component>/`: `Button`/`ButtonLink`, `Input`/`FormField`, `Card`, `Badge`, `EmptyState`/`LoadingState`, `Dialog`/`ConfirmDialog`, `ToastProvider`/`ToastViewport`, and `CopyableField`. Each React component exports from `index.tsx`; its stylesheet, `*.stories.tsx`, and tests live beside it where needed. Import through `@/components/ui/<Component>` and keep feature-only compositions with the feature. Storybook's `src/**/*.stories.@(ts|tsx)` glob finds both shared and feature stories. Run `pnpm storybook` for the local workbench at port 6006 and `pnpm build-storybook` for a static verification build. Storybook imports `src/app/globals.css` and local Manrope/Inter font files, so it needs no database, session, or secrets. The static output is ignored by Git.
+Shared primitives live in `src/components/ui/<Component>/`: `Button`/`ButtonLink`, `Input`/`FormField`, `Card`, `SectionHeading`, `Badge`, `EmptyState`/`LoadingState`, `Dialog`/`ConfirmDialog`, `ToastProvider`/`ToastViewport`, and `CopyableField`. Each React component exports from `index.tsx`; its stylesheet, `*.stories.tsx`, and tests live beside it where needed. Import through `@/components/ui/<Component>` and keep feature-only compositions with the feature. Storybook's `src/**/*.stories.@(ts|tsx)` glob finds both shared and feature stories. Run `pnpm storybook` for the local workbench at port 6006 and `pnpm build-storybook` for a static verification build. Storybook imports `src/app/globals.css` and local Manrope/Inter font files, so it needs no database, session, or secrets. The static output is ignored by Git.
+
+Use `SectionHeading` for card and section titles in the app: the icon sits on a raised surface, the title uses primary text, and the optional subtitle uses muted text. Choose the correct heading level with `level`; page titles remain `h1`.
 
 Before adding UI, search this catalog and feature components. Compose existing primitives and tokens. Extend the shared library only for a missing pattern with clear reuse, keep variants narrow and typed, and update its stories when behavior changes. Feature-specific compositions can remain local. Check focus, labels, error text, contrast, 320–375px widths, and 200% zoom.
 

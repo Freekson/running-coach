@@ -1,11 +1,12 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ProviderCredentials } from './provider-credentials'
 
-const { notify } = vi.hoisted(() => ({ notify: vi.fn() }))
+const { notify, refresh } = vi.hoisted(() => ({ notify: vi.fn(), refresh: vi.fn() }))
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => notify }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }))
 
 let host: HTMLDivElement
 let root: Root
@@ -46,6 +47,7 @@ beforeEach(async () => {
   globalThis.fetch = fetchMock
   fetchMock.mockReset()
   notify.mockReset()
+  refresh.mockReset()
   await act(async () => root.render(<ProviderCredentials />))
 })
 
@@ -88,8 +90,16 @@ it('saves and removes only a Garmin key through dialogs without displaying the s
   expect(host.querySelector('input')).toBeNull()
   expect(host.textContent).not.toContain(key)
   expect(host.textContent).toContain('Key saved')
+  expect(host.textContent).toContain('Ready to sync manually')
+  expect(host.textContent).toContain('Garmin account verified.')
+  expect(host.textContent).toContain('To confirm data access, choose Sync now on Health')
+  expect(host.textContent).toContain('or Sync activities on Training')
+  expect(host.querySelector('a[href="/app/health"]')?.textContent).toBe('Health')
+  expect(host.querySelector('a[href="/app/training"]')?.textContent).toBe('Training')
+  expect(host.querySelector('.badge--success')).toBeNull()
   expect(host.textContent).not.toContain('Connected')
   expect(button('Replace key')).toBeTruthy()
+  expect(refresh).toHaveBeenCalledOnce()
   await act(async () => button('Remove key').click())
   fetchMock.mockResolvedValueOnce({ ok: true, status: 204 })
   await act(async () => {
@@ -103,11 +113,49 @@ it('saves and removes only a Garmin key through dialogs without displaying the s
     expect.objectContaining({ method: 'DELETE' }),
   )
   expect(host.textContent).toContain('Not configured')
+  expect(refresh).toHaveBeenCalledTimes(2)
   expect(notify).toHaveBeenCalledWith(
     'success',
     'Garmin key removed from Running Coach.',
     'garmin-key',
   )
+})
+
+it('requires a separate destructive confirmation to delete imported Garmin data', async () => {
+  await act(async () => button('Delete all imported Garmin data').click())
+  expect(host.textContent).toContain('permanently deletes imported Garmin activities')
+  expect(fetchMock).not.toHaveBeenCalled()
+  fetchMock.mockResolvedValueOnce({ ok: true, status: 204 })
+  await act(async () => {
+    const dialog = host.querySelector('dialog')!
+    ;[...dialog.querySelectorAll('button')]
+      .find((item) => item.textContent === 'Delete all imported Garmin data')!
+      .click()
+  })
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/integrations/garmin/data',
+    expect.objectContaining({
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'DELETE_ALL_GARMIN_DATA' }),
+    }),
+  )
+})
+
+it('explains the three options after a Garmin account mismatch', async () => {
+  await openAdd()
+  const input = host.querySelector<HTMLInputElement>('#garmin-api-key')!
+  await enterKey(input, 'synthetic-other-account-key')
+  fetchMock.mockResolvedValueOnce({ ok: false, status: 409 })
+  await act(async () =>
+    host
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  )
+  const error = host.querySelector('#garmin-api-key-error')?.textContent ?? ''
+  expect(error).toContain('original Garmin account')
+  expect(error).toContain('delete all imported Garmin data')
+  expect(error).toContain('separate Running Coach account')
+  expect(error).toContain('invitation')
 })
 
 it('shows a known storage error beside the key and through Toast, then clears the secret on cancel', async () => {
@@ -143,157 +191,41 @@ it('shows a known storage error beside the key and through Toast, then clears th
   expect(host.querySelector<HTMLInputElement>('#garmin-api-key')?.value).toBe('')
 })
 
-it('renders verified, invalid and expired connection states', async () => {
+it('renders connected, connection issue and expired states with next steps', async () => {
   const base = { provider: 'GARMIN' as const, createdAt: null, updatedAt: null }
   await act(async () =>
     root.render(<ProviderCredentials initial={{ ...base, status: 'CONNECTED' }} />),
   )
   expect(host.textContent).toContain('Connected')
+  expect(host.textContent).toContain('Garmin access verified.')
   await act(async () => root.render(<ProviderCredentials initial={{ ...base, status: 'ERROR' }} />))
-  expect(host.textContent).toContain('Invalid key')
+  expect(host.textContent).toContain('Connection issue')
+  expect(host.textContent).toContain('Replace the key to resume imports.')
   await act(async () =>
     root.render(<ProviderCredentials initial={{ ...base, status: 'EXPIRED' }} />),
   )
   expect(host.textContent).toContain('Expired')
-})
-
-it('refreshes the connection badge after a successful sync', async () => {
-  const initial = {
-    provider: 'GARMIN' as const,
-    status: 'KEY_SAVED' as const,
-    createdAt: null,
-    updatedAt: null,
-  }
-  await act(async () => root.render(<ProviderCredentials initial={initial} />))
-  fetchMock.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({
-      status: 'PARTIAL',
-      lastAttemptAt: '2026-11-08T00:00:00.000Z',
-      lastSuccessAt: null,
-      nextAttemptAt: null,
-      window: { start: '2026-08-17', end: '2026-11-08' },
-      nextDate: '2026-08-18',
-      processed: 1,
-      errorCode: null,
-    }),
-  })
-  fetchMock.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({ ...initial, status: 'CONNECTED' }),
-  })
-  await act(async () => button('Sync now').click())
-  expect(host.textContent).toContain('Connected')
-  expect(notify).toHaveBeenCalledWith(
-    'success',
-    'Sync checkpoint saved. Continue when ready.',
-    'garmin-sync',
+  expect(host.textContent).toContain('Garmin access has expired.')
+  await act(async () =>
+    root.render(<ProviderCredentials initial={{ ...base, status: 'VERIFICATION_REQUIRED' }} />),
   )
+  expect(host.textContent).toContain('Verification needed')
+  expect(host.textContent).toContain('Open Health and choose Verify & sync')
 })
 
-it('shows an invalid-key sync as an error and refreshes the connection badge', async () => {
-  const initial = {
-    provider: 'GARMIN' as const,
-    status: 'CONNECTED' as const,
-    createdAt: null,
-    updatedAt: null,
-  }
-  await act(async () => root.render(<ProviderCredentials initial={initial} />))
-  fetchMock.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({
-      status: 'ACTION_REQUIRED',
-      lastAttemptAt: '2026-11-08T00:00:00.000Z',
-      lastSuccessAt: null,
-      nextAttemptAt: null,
-      window: null,
-      nextDate: null,
-      processed: 0,
-      errorCode: 'INVALID_KEY',
-    }),
-  })
-  fetchMock.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({ ...initial, status: 'ERROR' }),
-  })
-  await act(async () => button('Sync now').click())
-  expect(host.textContent).toContain('Invalid key')
-  expect(button('Sync now').hasAttribute('disabled')).toBe(true)
-  expect(notify).toHaveBeenCalledWith(
-    'error',
-    'Replace your Garmin key to resume sync.',
-    'garmin-sync',
+it('shows only key management when Garmin is connected', async () => {
+  await act(async () =>
+    root.render(
+      <ProviderCredentials
+        initial={{ provider: 'GARMIN', status: 'CONNECTED', createdAt: null, updatedAt: null }}
+      />,
+    ),
   )
-})
-
-it('keeps a verified key connected when Garmin denies activity access', async () => {
-  const initial = {
-    provider: 'GARMIN' as const,
-    status: 'CONNECTED' as const,
-    createdAt: null,
-    updatedAt: null,
-  }
-  await act(async () => root.render(<ProviderCredentials initial={initial} />))
-  fetchMock.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({
-      status: 'ACTION_REQUIRED',
-      lastAttemptAt: '2026-11-08T00:00:00.000Z',
-      lastSuccessAt: null,
-      nextAttemptAt: null,
-      window: null,
-      nextDate: null,
-      processed: 0,
-      errorCode: 'ACCESS_DENIED',
-    }),
-  })
-  fetchMock.mockResolvedValueOnce({ ok: true, json: async () => initial })
-  await act(async () => button('Sync now').click())
-  expect(host.textContent).toContain('Connected')
-  expect(host.textContent).toContain('Garmin denied activity access')
-  expect(host.textContent).not.toContain('Invalid key')
-  expect(notify).toHaveBeenCalledWith(
-    'error',
-    'Garmin denied activity access. Check your permissions.',
-    'garmin-sync',
-  )
-})
-
-it('refreshes a paused sync after its retry time and enables the button', async () => {
-  vi.useFakeTimers()
-  try {
-    const initial = {
-      provider: 'GARMIN' as const,
-      status: 'CONNECTED' as const,
-      createdAt: null,
-      updatedAt: null,
-    }
-    const paused = {
-      status: 'PAUSED' as const,
-      lastAttemptAt: null,
-      lastSuccessAt: null,
-      nextAttemptAt: new Date(Date.now() + 5_000).toISOString(),
-      window: null,
-      nextDate: null,
-      processed: 0,
-      errorCode: 'RATE_LIMITED',
-    }
-    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => paused })
-    await act(async () =>
-      root.render(<ProviderCredentials initial={initial} initialSync={paused} />),
-    )
-    expect(button('Sync now').hasAttribute('disabled')).toBe(true)
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ ...paused, status: 'PARTIAL', nextAttemptAt: null }),
-    })
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(6_000)
-    })
-    expect(button('Continue sync').hasAttribute('disabled')).toBe(false)
-  } finally {
-    vi.useRealTimers()
-  }
+  expect(host.textContent).toContain('Replace key')
+  expect(host.textContent).toContain('Remove key')
+  expect(host.textContent).not.toContain('Sync now')
+  expect(host.textContent).not.toContain('Backfill')
+  expect(fetchMock).not.toHaveBeenCalled()
 })
 
 it('keeps cleanup available for a previously saved OpenAI key without offering new OpenAI saves', async () => {

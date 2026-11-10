@@ -15,6 +15,7 @@ import {
   recordProviderApiKeyAccess,
 } from '@/server/provider/vault'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
+import { GarminAccountIdentityError, verifyGarminBearerAccount } from './account-identity'
 import { pauseGarminProviderUntil } from './import-rate-limit'
 import {
   FitActivityIdentityError,
@@ -43,6 +44,8 @@ export class GarminImportError extends Error {
       | 'UNAVAILABLE'
       | 'INVALID_RESPONSE'
       | 'IDENTITY_MISMATCH'
+      | 'ACCOUNT_MISMATCH'
+      | 'ACCOUNT_UNVERIFIABLE'
       | 'INVALID_KEY'
       | 'ACCESS_DENIED'
       | 'TOKEN_REJECTED'
@@ -147,6 +150,7 @@ export async function importGarminActivityPage(
   const maxActivities = window.pageSize ?? MAX_ACTIVITIES
   if (startDate > endDate) throw new GarminImportError('INVALID_DATE')
   const credential = await readProviderApiKeySnapshot(owner, 'GARMIN')
+  if (!credential.accountId) throw new GarminImportError('UNAVAILABLE')
   const key = apiKeySchema.parse(credential.key)
   const fetcher = dependencies.fetcher ?? fetch
   const timeoutMs = z
@@ -194,6 +198,20 @@ export async function importGarminActivityPage(
   if (typeof tokenResponse.value !== 'string' || !tokenResponse.value)
     throw new GarminImportError('INVALID_RESPONSE')
   const authorization = `Bearer ${tokenResponse.value}`
+  await paced()
+  let verifiedAccountId: string
+  try {
+    verifiedAccountId = await verifyGarminBearerAccount(authorization, {
+      fetcher,
+      now: dependencies.now,
+      timeoutMs: requestLimit(),
+    })
+  } catch (error) {
+    if (error instanceof GarminAccountIdentityError && error.code === 'RATE_LIMITED')
+      throw new GarminImportError('RATE_LIMITED')
+    throw new GarminImportError('ACCOUNT_UNVERIFIABLE')
+  }
+  if (verifiedAccountId !== credential.accountId) throw new GarminImportError('ACCOUNT_MISMATCH')
   await paced()
   const query = new URLSearchParams({
     start: String(start),
@@ -251,6 +269,7 @@ export async function importGarminActivityPage(
       const skipFit = await canSkipFitDownload(owner, jsonActivity, {
         refresh: window.refreshLaps === true,
         observedAt: sourceObservedAt,
+        garminAccountId: verifiedAccountId,
       })
       const fit = skipFit
         ? { status: 204 as const }
@@ -283,13 +302,20 @@ export async function importGarminActivityPage(
       try {
         imported.push(
           await importCanonicalActivity(owner, normalized, {
+            garminAccountId: verifiedAccountId,
             sourceObservedAt,
             fitCheckedAt:
               !skipFit && (fit.status === 200 || fit.status === 204 || fit.status === 404)
                 ? sourceObservedAt
                 : undefined,
             beforeWrite: (tx) =>
-              assertProviderApiKeySnapshotCurrent(tx, owner, 'GARMIN', credential.nonce),
+              assertProviderApiKeySnapshotCurrent(
+                tx,
+                owner,
+                'GARMIN',
+                credential.nonce,
+                verifiedAccountId,
+              ),
           }),
         )
       } catch (error) {

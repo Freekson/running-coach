@@ -4,23 +4,17 @@
 }
 
 .page h1,
-.page h2,
 .page p {
   margin: 0;
 }
 
-.page h1,
-.page h2 {
+.page h1 {
   font-family: var(--font-heading), system-ui, sans-serif;
   line-height: var(--type-leading-tight);
 }
 
 .page h1 {
   font-size: var(--type-size-page);
-}
-.page h2 {
-  font-size: var(--type-size-body);
-  font-weight: var(--type-weight-semibold);
 }
 .page > header,
 .section,
@@ -40,10 +34,6 @@
 .generateSection {
   gap: 16px;
 }
-.generateSection h2 {
-  font-size: var(--type-size-card);
-}
-
 .sectionHeading {
   display: flex;
   align-items: center;
@@ -51,7 +41,7 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-.sectionHeading span {
+.sectionHeading > span {
   color: var(--color-text-muted);
   font-size: var(--type-size-label);
 }

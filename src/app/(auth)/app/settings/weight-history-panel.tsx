@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Scale } from 'lucide-react'
+import { List, Plus, Scale } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Dialog } from '@/components/ui/Dialog'
+import { SectionHeading } from '@/components/ui/SectionHeading'
 import {
   formatWeight,
   formatWeightDifference,
@@ -20,15 +20,7 @@ import {
   type WeightReading,
 } from './weight-history'
 import styles from './athlete-settings.module.scss'
-import { useClientReady } from './use-client-ready'
-
-type HistoryPage = {
-  items: WeightReading[]
-  page: number
-  pageSize: number
-  total: number
-  totalPages: number
-}
+import { useClientReady } from '@/lib/use-client-ready'
 
 function formatDate(date: string) {
   const local = /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T12:00:00` : date
@@ -37,14 +29,6 @@ function formatDate(date: string) {
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(local))
-}
-
-function formatAddedTime(date: string) {
-  return new Intl.DateTimeFormat('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(new Date(date))
 }
 
 function dayNumber(date: string) {
@@ -206,16 +190,7 @@ export function WeightHistoryPanel({
   const [chartPending, setChartPending] = useState(false)
   const [chartError, setChartError] = useState('')
   const [chartRetry, setChartRetry] = useState(0)
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const [historyPage, setHistoryPage] = useState(1)
-  const [history, setHistory] = useState<HistoryPage | null>(null)
-  const [historyPending, setHistoryPending] = useState(false)
-  const [historyError, setHistoryError] = useState('')
-  const [historyRetry, setHistoryRetry] = useState(0)
   const skipInitialFetch = useRef(true)
-  const historyBody = useRef<HTMLDivElement>(null)
-  const historyPageLabel = useRef<HTMLSpanElement>(null)
-  const focusPageAfterLoad = useRef(false)
 
   useEffect(() => {
     if (skipInitialFetch.current) {
@@ -243,40 +218,6 @@ export function WeightHistoryPanel({
     return () => controller.abort()
   }, [period, chartRetry])
 
-  useEffect(() => {
-    if (!historyOpen) return
-    const controller = new AbortController()
-    async function load() {
-      setHistoryPending(true)
-      setHistoryError('')
-      try {
-        const response = await fetch(`/api/athlete/weight?view=history&page=${historyPage}`, {
-          signal: controller.signal,
-        })
-        if (!response.ok) throw new Error('Loading failed')
-        setHistory((await response.json()) as HistoryPage)
-      } catch {
-        if (!controller.signal.aborted) setHistoryError('Could not load measurements. Try again.')
-      } finally {
-        if (!controller.signal.aborted) setHistoryPending(false)
-      }
-    }
-    void load()
-    return () => controller.abort()
-  }, [historyOpen, historyPage, historyRetry])
-
-  useEffect(() => {
-    if (historyPending || !history || !focusPageAfterLoad.current) return
-    focusPageAfterLoad.current = false
-    if (!historyError) historyPageLabel.current?.focus()
-  }, [historyPending, history, historyError])
-
-  function changeHistoryPage(delta: number) {
-    historyBody.current?.focus()
-    focusPageAfterLoad.current = true
-    setHistoryPage((page) => page + delta)
-  }
-
   const latest = recentWeights[0]
   const trend = useMemo(() => {
     const addedIds = new Set(addedWeights.map((reading) => reading.id))
@@ -286,245 +227,101 @@ export function WeightHistoryPanel({
     ])
     return localReady ? createWeightTrend({ readings, period, system }) : null
   }, [chartWeights, addedWeights, period, system, localReady])
-  const historyGroups = useMemo(() => {
-    const groups = new Map<string, WeightReading[]>()
-    for (const weight of history?.items ?? []) {
-      const date = readingDateKey(weight)
-      const group = groups.get(date) ?? []
-      group.push(weight)
-      groups.set(date, group)
-    }
-    return [...groups.entries()]
-  }, [history])
-
   return (
-    <>
-      <Card as="section" className={styles.section} aria-labelledby="weight-heading">
-        <div className={styles.sectionHeadingWithAction}>
-          <div className={styles.sectionHeading}>
-            <span className={styles.sectionIcon}>
-              <Scale size={20} strokeWidth={2} aria-hidden="true" />
-            </span>
-            <div>
-              <h2 id="weight-heading">Weight history</h2>
-              <p>Track changes in your weight over time</p>
+    <Card as="section" className={styles.section} aria-labelledby="weight-heading">
+      <div className={styles.sectionHeadingWithAction}>
+        <SectionHeading
+          icon={Scale}
+          id="weight-heading"
+          title="Weight history"
+          subtitle="Track changes in your weight over time"
+        />
+        <div className={styles.weightActions}>
+          {latest && (
+            <div className={styles.periodSwitch} role="group" aria-label="Chart period">
+              {chartPeriods.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={period === option}
+                  onClick={() => {
+                    document.cookie = `${chartPeriodCookie}=${option}; Max-Age=31536000; Path=/app/health; SameSite=Lax`
+                    setPeriod(option)
+                  }}
+                >
+                  {option === 'ALL' ? 'All' : option}
+                </button>
+              ))}
             </div>
-          </div>
-          <div className={styles.weightActions}>
-            {latest && (
-              <div className={styles.periodSwitch} role="group" aria-label="Chart period">
-                {chartPeriods.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    aria-pressed={period === option}
-                    onClick={() => {
-                      document.cookie = `${chartPeriodCookie}=${option}; Max-Age=31536000; Path=/app/settings; SameSite=Lax`
-                      setPeriod(option)
-                    }}
-                  >
-                    {option === 'ALL' ? 'All' : option}
-                  </button>
-                ))}
-              </div>
-            )}
-            <Button onClick={onAdd}>
-              <Plus size={18} strokeWidth={2} aria-hidden="true" />
-              Add weight
-            </Button>
-          </div>
+          )}
+          <Button onClick={onAdd}>
+            <Plus size={18} strokeWidth={2} aria-hidden="true" />
+            Add weight
+          </Button>
         </div>
-        {!latest ? (
-          <div className={styles.emptyHistory}>
-            No weight readings yet. Add your first measurement to see your trend.
-          </div>
-        ) : (
-          <>
-            <div className={styles.chartCard}>
-              <div className={styles.chartSummary}>
-                <div>
-                  <strong className={styles.latestWeight}>
-                    {formatWeight(latest.valueKg, system)}
-                  </strong>
-                  <p>Latest recorded weight</p>
-                </div>
-                {!chartPending && !chartError && trend && trend.changeKg !== null && (
-                  <div className={styles.periodChange}>
-                    <strong>{formatWeightDifference(trend.changeKg, system)}</strong>
-                    <span>Over the selected period</span>
-                  </div>
-                )}
+      </div>
+      {!latest ? (
+        <div className={styles.emptyHistory}>
+          No weight readings yet. Add your first measurement to see your trend.
+        </div>
+      ) : (
+        <>
+          <div className={styles.chartCard}>
+            <div className={styles.chartSummary}>
+              <div>
+                <strong className={styles.latestWeight}>
+                  {formatWeight(latest.valueKg, system)}
+                </strong>
+                <p>Latest recorded weight</p>
               </div>
-              {chartPending || !trend ? (
-                <ChartPlaceholder statusLabel="Loading chart">
-                  <span className={styles.chartSpinner} aria-hidden="true" />
-                </ChartPlaceholder>
-              ) : chartError ? (
-                <ChartPlaceholder>
-                  <div className={styles.loadError} role="alert">
-                    <p>{chartError}</p>
-                    <Button variant="secondary" onClick={() => setChartRetry((retry) => retry + 1)}>
-                      Retry
-                    </Button>
-                  </div>
-                </ChartPlaceholder>
-              ) : (
-                trend.chart
+              {!chartPending && !chartError && trend && trend.changeKg !== null && (
+                <div className={styles.periodChange}>
+                  <strong>{formatWeightDifference(trend.changeKg, system)}</strong>
+                  <span>Over the selected period</span>
+                </div>
               )}
             </div>
-            <div className={styles.recentHeading}>
-              <h3>Recent measurements</h3>
-              <span>
-                Latest {recentWeights.length} {recentWeights.length === 1 ? 'record' : 'records'}
-              </span>
-            </div>
-            <ol className={styles.recentCards}>
-              {recentWeights.slice(0, 3).map((weight, index) => (
-                <li key={weight.id}>
-                  <span>{index === 0 ? 'Latest reading' : 'Previous reading'}</span>
-                  <strong>{formatWeight(weight.valueKg, system)}</strong>
-                  <time dateTime={weight.measuredOn ?? weight.measuredAt}>
-                    {weight.measuredOn || localReady
-                      ? formatDate(readingDateKey(weight))
-                      : '\u00a0'}
-                  </time>
-                </li>
-              ))}
-            </ol>
-            <Button
-              variant="secondary"
-              className={styles.viewAll}
-              onClick={() => {
-                setHistoryPage(1)
-                setHistory(null)
-                setHistoryOpen(true)
-              }}
-            >
-              View all measurements
-            </Button>
-          </>
-        )}
-        {notice && (
-          <p className={styles.status} role="status" aria-live="polite">
-            {notice}
-          </p>
-        )}
-      </Card>
-      <Dialog
-        open={historyOpen}
-        title="Weight history"
-        description={
-          history
-            ? `${history.total} ${history.total === 1 ? 'measurement' : 'measurements'} recorded`
-            : undefined
-        }
-        className={styles.historyDialog}
-        onClose={() => setHistoryOpen(false)}
-      >
-        <div
-          ref={historyBody}
-          className={styles.fullHistory}
-          tabIndex={-1}
-          aria-busy={historyPending}
-        >
-          {historyPending && (
-            <div className={styles.historyLoading} role="status" aria-label="Loading measurements">
-              <span className={styles.chartSpinner} aria-hidden="true" />
-            </div>
-          )}
-          {historyError && (
-            <div className={styles.loadError} role="alert">
-              <p>{historyError}</p>
-              <Button variant="secondary" onClick={() => setHistoryRetry((retry) => retry + 1)}>
-                Retry
-              </Button>
-            </div>
-          )}
-          {!historyError && history && (
-            <div
-              className={`${styles.historyResults} ${historyPending ? styles.historyResultsPending : ''}`}
-              aria-hidden={historyPending}
-            >
-              {history.items.length === 0 && <p>No measurements on this page.</p>}
-              {historyGroups.map(([date, readings], groupIndex) => (
-                <section
-                  key={date}
-                  className={styles.historyGroup}
-                  aria-labelledby={`weight-${date}`}
-                >
-                  <div className={styles.historyDateHeading}>
-                    <h3 id={`weight-${date}`}>{formatDate(date)}</h3>
-                    <span>
-                      {readings.length} {readings.length === 1 ? 'reading' : 'readings'}
-                    </span>
-                  </div>
-                  {groupIndex === 0 && (
-                    <div className={styles.historyColumns} aria-hidden="true">
-                      <span>Added at</span>
-                      <span>Weight</span>
-                    </div>
-                  )}
-                  <ol>
-                    {readings.map((weight) => (
-                      <li key={weight.id}>
-                        <div className={styles.historyAddedAt}>
-                          <time
-                            dateTime={weight.createdAt}
-                            aria-label={`Added ${formatDate(weight.createdAt)} at ${formatAddedTime(weight.createdAt)}`}
-                            title={`Added ${formatDate(weight.createdAt)}`}
-                          >
-                            {formatAddedTime(weight.createdAt)}
-                          </time>
-                          {history.page === 1 && history.items[0]?.id === weight.id && (
-                            <span className={styles.latestBadge}>Latest</span>
-                          )}
-                        </div>
-                        <strong>{formatWeight(weight.valueKg, system)}</strong>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              ))}
-              <div className={styles.historyPagination}>
-                <span>
-                  {history.total === 0 ? 0 : (history.page - 1) * history.pageSize + 1}–
-                  {(history.page - 1) * history.pageSize + history.items.length} of {history.total}
-                </span>
-                <div className={styles.historyPageControls}>
-                  <Button
-                    variant="secondary"
-                    size="compact"
-                    className={styles.historyPageButton}
-                    aria-label="Previous page"
-                    disabled={historyPage <= 1}
-                    onClick={() => changeHistoryPage(-1)}
-                  >
-                    <ChevronLeft size={18} strokeWidth={2} aria-hidden="true" />
-                  </Button>
-                  <span
-                    ref={historyPageLabel}
-                    tabIndex={-1}
-                    aria-live="polite"
-                    aria-label={`Page ${history.page} of ${history.totalPages}`}
-                  >
-                    {history.page} / {history.totalPages}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    size="compact"
-                    className={styles.historyPageButton}
-                    aria-label="Next page"
-                    disabled={historyPage >= history.totalPages}
-                    onClick={() => changeHistoryPage(1)}
-                  >
-                    <ChevronRight size={18} strokeWidth={2} aria-hidden="true" />
+            {chartPending || !trend ? (
+              <ChartPlaceholder statusLabel="Loading chart">
+                <span className={styles.chartSpinner} aria-hidden="true" />
+              </ChartPlaceholder>
+            ) : chartError ? (
+              <ChartPlaceholder>
+                <div className={styles.loadError} role="alert">
+                  <p>{chartError}</p>
+                  <Button variant="secondary" onClick={() => setChartRetry((retry) => retry + 1)}>
+                    Retry
                   </Button>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </Dialog>
-    </>
+              </ChartPlaceholder>
+            ) : (
+              trend.chart
+            )}
+          </div>
+          <div className={styles.recentHeading}>
+            <SectionHeading icon={List} title="Recent measurements" level={3} />
+            <span>
+              Latest {recentWeights.length} {recentWeights.length === 1 ? 'record' : 'records'}
+            </span>
+          </div>
+          <ol className={styles.recentCards}>
+            {recentWeights.slice(0, 3).map((weight, index) => (
+              <li key={weight.id}>
+                <span>{index === 0 ? 'Latest reading' : 'Previous reading'}</span>
+                <strong>{formatWeight(weight.valueKg, system)}</strong>
+                <time dateTime={weight.measuredOn ?? weight.measuredAt}>
+                  {weight.measuredOn || localReady ? formatDate(readingDateKey(weight)) : '\u00a0'}
+                </time>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+      {notice && (
+        <p className={styles.status} role="status" aria-live="polite">
+          {notice}
+        </p>
+      )}
+    </Card>
   )
 }

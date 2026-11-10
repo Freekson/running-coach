@@ -6,6 +6,7 @@ import {
 import { runGarminSync } from '@/server/garmin/sync'
 import { allowGarminImport } from '@/server/garmin/import-rate-limit'
 import { findScheduledGarminOwnerId } from '@/server/garmin/scheduled-sync'
+import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 
 export const maxDuration = 60
 const headers = { 'Cache-Control': 'private, no-store' }
@@ -29,6 +30,8 @@ export async function GET(request: Request) {
   } catch (error) {
     if (error instanceof InvalidOwnerContextError)
       return new Response(null, { status: 401, headers })
+    if (error instanceof CredentialUnavailableError)
+      return new Response(null, { status: 204, headers })
     return Response.json({ error: 'Scheduled sync unavailable' }, { status: 503, headers })
   }
 }

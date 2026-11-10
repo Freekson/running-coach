@@ -13,6 +13,7 @@ const {
   readProviderApiKeySnapshot: vi.fn(async () => ({
     key: 'synthetic-api-key',
     nonce: new Uint8Array([1, 2, 3]),
+    accountId: '123456',
   })),
   recordProviderApiKeyAccess: vi.fn(async () => {}),
   assertProviderApiKeySnapshotCurrent: vi.fn(async () => {}),
@@ -39,6 +40,10 @@ vi.mock('@/server/provider/vault', async () => ({
 }))
 vi.mock('@/server/activity/import', () => ({ importCanonicalActivity, canSkipFitDownload }))
 vi.mock('./import-rate-limit', () => ({ pauseGarminProviderUntil }))
+vi.mock('./account-identity', () => ({
+  GarminAccountIdentityError: class GarminAccountIdentityError extends Error {},
+  verifyGarminBearerAccount: vi.fn(async () => '123456'),
+}))
 
 import { getOwnerContext } from '@/server/authorization/ownership'
 import {
@@ -46,6 +51,7 @@ import {
   importGarminActivitiesForDate,
   importGarminActivityPage,
 } from './activity-import'
+import { verifyGarminBearerAccount } from './account-identity'
 
 const owner = getOwnerContext({
   id: '00000000-0000-4000-8000-000000000001',
@@ -135,6 +141,24 @@ function fetcher(
 }
 
 describe('bounded Garmin activity import', () => {
+  it('refuses a changed Garmin account before searching or persisting activities', async () => {
+    vi.clearAllMocks()
+    vi.mocked(verifyGarminBearerAccount).mockResolvedValueOnce('999999')
+    const network = fetcher()
+    await expect(
+      importGarminActivityPage(
+        owner,
+        {
+          startDate: '2026-11-08',
+          endDate: '2026-11-08',
+          start: 0,
+        },
+        { fetcher: network, pause: async () => {} },
+      ),
+    ).rejects.toMatchObject({ code: 'ACCOUNT_MISMATCH' })
+    expect(network).toHaveBeenCalledTimes(1)
+    expect(importCanonicalActivity).not.toHaveBeenCalled()
+  })
   it('checkpoints one completed activity when a two-activity page nears its deadline', async () => {
     vi.clearAllMocks()
     let elapsed = 0
@@ -179,7 +203,7 @@ describe('bounded Garmin activity import', () => {
           pause: async (milliseconds) => {
             elapsed += milliseconds + 100
           },
-          deadlineAt: 2_000,
+          deadlineAt: 2_300,
           timeNow: () => elapsed,
         },
       ),
@@ -223,6 +247,7 @@ describe('bounded Garmin activity import', () => {
     expect(canSkipFitDownload).toHaveBeenCalledWith(owner, expect.anything(), {
       refresh: false,
       observedAt,
+      garminAccountId: '123456',
     })
     expect(importCanonicalActivity).toHaveBeenCalledWith(
       owner,
@@ -242,6 +267,7 @@ describe('bounded Garmin activity import', () => {
     expect(canSkipFitDownload).toHaveBeenCalledWith(owner, expect.anything(), {
       refresh: true,
       observedAt,
+      garminAccountId: '123456',
     })
     expect(importCanonicalActivity).toHaveBeenCalledWith(
       owner,
@@ -408,7 +434,12 @@ describe('bounded Garmin activity import', () => {
     expect(importCanonicalActivity).toHaveBeenCalledWith(
       owner,
       expect.objectContaining({ laps: null }),
-      { sourceObservedAt: observedAt, fitCheckedAt: observedAt, beforeWrite: expect.any(Function) },
+      {
+        sourceObservedAt: observedAt,
+        fitCheckedAt: observedAt,
+        garminAccountId: '123456',
+        beforeWrite: expect.any(Function),
+      },
     )
   })
 

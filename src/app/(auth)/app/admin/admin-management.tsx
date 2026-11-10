@@ -15,9 +15,11 @@ import {
   CircleCheck,
   Clock3,
   Info,
+  Mail,
   Plus,
   RotateCcw,
   TriangleAlert,
+  UsersRound,
 } from 'lucide-react'
 import { AdminBadge } from '@/components/ui/AdminBadge'
 import { Badge, type BadgeProps } from '@/components/ui/Badge'
@@ -27,6 +29,7 @@ import { CopyableField } from '@/components/ui/CopyableField'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField } from '@/components/ui/FormField'
 import { LoadingState } from '@/components/ui/States'
+import { SectionHeading } from '@/components/ui/SectionHeading'
 import { useToast } from '@/components/ui/Toast'
 import styles from './admin-management.module.scss'
 
@@ -77,7 +80,7 @@ function LocalTime({ value, short = false }: { value: string; short?: boolean })
     () => false,
   )
   return (
-    <time dateTime={value} title={value}>
+    <time dateTime={value}>
       {browser
         ? new Intl.DateTimeFormat(
             undefined,
@@ -362,8 +365,12 @@ export function AdminManagement({
         className={`${styles.section} ${styles.generateSection}`}
         aria-labelledby="generate-title"
       >
-        <h2 id="generate-title">Generate invite link</h2>
-        <p>Create a single-use invitation valid for 7 days.</p>
+        <SectionHeading
+          icon={Plus}
+          id="generate-title"
+          title="Generate invite link"
+          subtitle="Create a single-use invitation valid for 7 days."
+        />
         <form onSubmit={generate} className={styles.form}>
           <FormField
             id="invite-label"
@@ -415,7 +422,7 @@ export function AdminManagement({
       </Card>
       <Card as="section" className={styles.section} aria-labelledby="invitations-title">
         <div className={styles.sectionHeading}>
-          <h2 id="invitations-title">Invitations</h2>
+          <SectionHeading icon={Mail} id="invitations-title" title="Invitations" />
           <span>{inviteData.counts.all} invitations</span>
         </div>
         <div className={styles.filters} role="group" aria-label="Filter invitations by status">
@@ -576,7 +583,7 @@ export function AdminManagement({
       </Card>
       <Card as="section" className={styles.section} aria-labelledby="users-title">
         <div className={styles.sectionHeading}>
-          <h2 id="users-title">Registered users</h2>
+          <SectionHeading icon={UsersRound} id="users-title" title="Registered users" />
           <span>{userData.total} users</span>
         </div>
         <div

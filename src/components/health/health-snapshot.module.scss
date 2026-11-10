@@ -1,0 +1,38 @@
+.card {
+  display: grid;
+  gap: 20px;
+  padding: clamp(18px, 2.5vw, 24px);
+  min-width: 0;
+}
+
+.note,
+.measurement p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.measurement {
+  min-width: 0;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--color-surface-raised);
+}
+
+.measurement dt {
+  color: var(--color-text-muted);
+}
+.measurement dd {
+  margin: 6px 0;
+  font-size: var(--type-size-card);
+  font-weight: var(--type-weight-semibold);
+}
+.measurement p {
+  overflow-wrap: anywhere;
+}

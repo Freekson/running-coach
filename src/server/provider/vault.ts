@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { randomUUID } from 'node:crypto'
-import { type IntegrationProvider, type Prisma } from '@prisma/client'
+import { Prisma, type IntegrationProvider } from '@prisma/client'
 import { z } from 'zod'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
 import { getPrismaClient } from '@/server/db/client'
@@ -28,11 +28,18 @@ export class InvalidCredentialError extends Error {
   }
 }
 
+export class GarminAccountMismatchError extends Error {
+  constructor(readonly code: 'ACCOUNT_MISMATCH' | 'ACCOUNT_ALREADY_LINKED') {
+    super('Garmin account does not match the saved association')
+  }
+}
+
 function publicStatus(
   connection: {
     provider: IntegrationProvider
     status: string
     lastSuccessAt: Date | null
+    externalAccountId: string | null
     createdAt: Date
     updatedAt: Date
     credential: { connectionId: string } | null
@@ -44,9 +51,11 @@ function publicStatus(
     ? 'DISCONNECTED'
     : connection.status === 'CONNECTED'
       ? provider === 'GARMIN'
-        ? connection.lastSuccessAt === null
-          ? 'KEY_SAVED'
-          : 'CONNECTED'
+        ? !connection.externalAccountId
+          ? 'VERIFICATION_REQUIRED'
+          : connection.lastSuccessAt === null
+            ? 'KEY_SAVED'
+            : 'CONNECTED'
         : 'CONNECTED'
       : connection.status === 'EXPIRED'
         ? 'EXPIRED'
@@ -70,6 +79,7 @@ export async function getProviderConnectionStatus(
       provider: true,
       status: true,
       lastSuccessAt: true,
+      externalAccountId: true,
       createdAt: true,
       updatedAt: true,
       credential: { select: { connectionId: true } },
@@ -83,53 +93,130 @@ export async function saveProviderApiKey(
   owner: OwnerContext,
   provider: IntegrationProvider,
   rawKey: string,
+  options: { verifiedGarminAccountId?: string; expectedCredentialNonce?: Uint8Array } = {},
 ): Promise<ProviderConnectionStatus> {
   const userId = ownerId(owner)
   const parsed = apiKeySchema.safeParse(rawKey)
   if (!parsed.success) throw new InvalidCredentialError()
   const key = parsed.data
+  const garminAccountId = options.verifiedGarminAccountId
+  if (
+    provider === 'GARMIN' &&
+    (!garminAccountId ||
+      !/^[1-9]\d*$/.test(garminAccountId) ||
+      !Number.isSafeInteger(Number(garminAccountId)))
+  )
+    throw new InvalidCredentialError()
   const prisma = await getPrismaClient()
   const existing = await prisma.integrationConnection.findUnique({
     where: { userId_provider: { userId, provider } },
-    select: { id: true },
+    select: { id: true, externalAccountId: true },
   })
   if (existing) await requireOwnedConnection(owner, existing.id)
+  if (
+    provider === 'GARMIN' &&
+    existing?.externalAccountId &&
+    existing.externalAccountId !== garminAccountId
+  )
+    throw new GarminAccountMismatchError('ACCOUNT_MISMATCH')
   const connectionId = existing?.id ?? randomUUID()
   const encrypted = encryptCredential(key, userId, connectionId, provider)
-  await prisma.$transaction(async (tx) => {
-    const connection = await tx.integrationConnection.upsert({
-      where: { userId_provider: { userId, provider } },
-      create: { id: connectionId, userId, provider, authMethod: 'API_KEY', status: 'PENDING' },
-      update: {},
-      select: { id: true, authMethod: true },
-    })
-    if (connection.id !== connectionId || connection.authMethod !== 'API_KEY')
-      throw new CredentialUnavailableError()
-    await tx.integrationCredential.upsert({
-      where: { connectionId: connection.id },
-      create: { userId, connectionId: connection.id, ...encrypted },
-      update: { ...encrypted },
-    })
-    await tx.integrationConnection.update({
-      where: { userId_id: { userId, id: connection.id } },
-      data: { status: 'CONNECTED', lastSuccessAt: null, lastFailureAt: null },
-    })
-    await tx.syncCursor.deleteMany({ where: { userId, connectionId: connection.id } })
-    if (provider === 'GARMIN')
-      await tx.garminImportRateLimit.updateMany({
-        where: { userId },
-        data: { providerRetryAt: null },
+  try {
+    await prisma.$transaction(async (tx) => {
+      const connection = await tx.integrationConnection.upsert({
+        where: { userId_provider: { userId, provider } },
+        create: { id: connectionId, userId, provider, authMethod: 'API_KEY', status: 'PENDING' },
+        update: {},
+        select: { id: true, authMethod: true, status: true, externalAccountId: true },
       })
-    await tx.syncRun.updateMany({
-      where: { userId, connectionId: connection.id, status: 'RUNNING' },
-      data: {
-        status: 'FAILED',
-        finishedAt: new Date(),
-        errorCode: 'CREDENTIAL_REPLACED',
-        errorSafeMessage: 'Credential changed',
-      },
+      if (connection.id !== connectionId || connection.authMethod !== 'API_KEY')
+        throw new CredentialUnavailableError()
+      if (options.expectedCredentialNonce) {
+        if (connection.status !== 'CONNECTED') throw new CredentialUnavailableError()
+        const currentCredential = await tx.integrationCredential.findUnique({
+          where: { connectionId: connection.id },
+          select: { nonce: true },
+        })
+        if (
+          !currentCredential ||
+          !Buffer.from(currentCredential.nonce).equals(Buffer.from(options.expectedCredentialNonce))
+        )
+          throw new CredentialUnavailableError()
+      }
+      if (
+        provider === 'GARMIN' &&
+        connection.externalAccountId &&
+        connection.externalAccountId !== garminAccountId
+      )
+        throw new GarminAccountMismatchError('ACCOUNT_MISMATCH')
+      await tx.integrationCredential.upsert({
+        where: { connectionId: connection.id },
+        create: { userId, connectionId: connection.id, ...encrypted },
+        update: { ...encrypted },
+      })
+      await tx.integrationConnection.update({
+        where: { userId_id: { userId, id: connection.id } },
+        data: {
+          status: 'CONNECTED',
+          externalAccountId: provider === 'GARMIN' ? garminAccountId : undefined,
+          lastSuccessAt: null,
+          lastFailureAt: null,
+        },
+      })
+      if (provider === 'GARMIN' && connection.externalAccountId === garminAccountId) {
+        await tx.syncCursor.updateMany({
+          where: { userId, connectionId: connection.id },
+          data: { leaseToken: null, leaseExpiresAt: null, nextAttemptAt: null },
+        })
+        const cursors = await tx.syncCursor.findMany({
+          where: { userId, connectionId: connection.id },
+          select: { id: true, cursorOrCheckpoint: true },
+        })
+        for (const cursor of cursors) {
+          const checkpoint = cursor.cursorOrCheckpoint
+          if (
+            checkpoint &&
+            typeof checkpoint === 'object' &&
+            !Array.isArray(checkpoint) &&
+            checkpoint.actionRequired === true
+          )
+            await tx.syncCursor.update({
+              where: { id: cursor.id },
+              data: {
+                cursorOrCheckpoint: {
+                  ...checkpoint,
+                  actionRequired: false,
+                } as Prisma.InputJsonValue,
+              },
+            })
+        }
+      } else {
+        await tx.syncCursor.deleteMany({ where: { userId, connectionId: connection.id } })
+      }
+      if (provider === 'GARMIN' && !connection.externalAccountId)
+        await tx.garminImportRateLimit.updateMany({
+          where: { userId },
+          data: { providerRetryAt: null },
+        })
+      await tx.syncRun.updateMany({
+        where: { userId, connectionId: connection.id, status: 'RUNNING' },
+        data: {
+          status: 'FAILED',
+          finishedAt: new Date(),
+          errorCode: 'CREDENTIAL_REPLACED',
+          errorSafeMessage: 'Credential changed',
+        },
+      })
     })
-  })
+  } catch (error) {
+    if (
+      provider === 'GARMIN' &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    )
+      throw new GarminAccountMismatchError('ACCOUNT_ALREADY_LINKED')
+    throw error
+  }
   return getProviderConnectionStatus(owner, provider)
 }
 
@@ -137,7 +224,7 @@ export async function saveProviderApiKey(
 export async function readProviderApiKeySnapshot(
   owner: OwnerContext,
   provider: IntegrationProvider,
-): Promise<{ key: string; nonce: Uint8Array }> {
+): Promise<{ key: string; nonce: Uint8Array; accountId: string | null }> {
   const prisma = await getPrismaClient()
   const connection = await prisma.integrationConnection.findUnique({
     where: { userId_provider: { userId: ownerId(owner), provider } },
@@ -145,6 +232,7 @@ export async function readProviderApiKeySnapshot(
       id: true,
       status: true,
       authMethod: true,
+      externalAccountId: true,
       credential: {
         select: {
           userId: true,
@@ -169,6 +257,7 @@ export async function readProviderApiKeySnapshot(
   return {
     key: decryptCredential(credential, ownerId(owner), connection.id, provider),
     nonce: credential.nonce,
+    accountId: connection.externalAccountId,
   }
 }
 
@@ -185,6 +274,7 @@ export async function assertProviderApiKeySnapshotCurrent(
   owner: OwnerContext,
   provider: IntegrationProvider,
   nonce: Uint8Array,
+  accountId?: string,
 ): Promise<void> {
   const userId = ownerId(owner)
   const rows = await tx.$queryRaw<{ id: string }[]>`
@@ -197,6 +287,7 @@ export async function assertProviderApiKeySnapshotCurrent(
       AND connection.provider::text = ${provider}
       AND connection.status = 'CONNECTED'
       AND credential.nonce = ${nonce}
+      AND (${accountId ?? null}::text IS NULL OR connection.external_account_id = ${accountId ?? null})
     FOR UPDATE OF connection
   `
   if (rows.length !== 1) throw new CredentialUnavailableError()
@@ -254,5 +345,28 @@ export async function disconnectProvider(owner: OwnerContext, provider: Integrat
         errorSafeMessage: 'Connection removed',
       },
     })
+  })
+}
+
+/** Explicit destructive reset. The connection lock makes in-flight provider writes fail closed. */
+export async function deleteAllImportedGarminData(owner: OwnerContext): Promise<void> {
+  const userId = ownerId(owner)
+  const prisma = await getPrismaClient()
+  await prisma.$transaction(async (tx) => {
+    const connection = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM integration_connections
+      WHERE user_id = ${userId}::uuid AND provider = 'GARMIN'
+      FOR UPDATE
+    `
+    await tx.activity.deleteMany({ where: { userId, sourceProvider: 'GARMIN' } })
+    await tx.dailyHealthMetric.deleteMany({ where: { userId, sourceProvider: 'GARMIN' } })
+    await tx.garminImportRateLimit.deleteMany({ where: { userId } })
+    if (connection.length === 1) {
+      await tx.syncRun.deleteMany({ where: { userId, connectionId: connection[0].id } })
+      await tx.syncCursor.deleteMany({ where: { userId, connectionId: connection[0].id } })
+      await tx.integrationConnection.delete({
+        where: { userId_id: { userId, id: connection[0].id } },
+      })
+    }
   })
 }

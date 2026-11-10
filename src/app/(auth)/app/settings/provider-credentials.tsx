@@ -1,18 +1,23 @@
 'use client'
 
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   CircleCheck,
   CircleMinus,
-  CircleX,
   Clock3,
   ExternalLink,
   Eye,
   EyeOff,
+  KeyRound,
   LockKeyhole,
   PlugZap,
   Plus,
+  RefreshCw,
   Sparkles,
+  Trash2,
+  TriangleAlert,
   Watch,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -20,13 +25,13 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog'
 import { Input } from '@/components/ui/FormField'
+import { SectionHeading } from '@/components/ui/SectionHeading'
 import { useToast } from '@/components/ui/Toast'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
-import type { GarminSyncState } from '@/lib/garmin-sync-state'
+import { garminAccountIssueMessage } from '@/lib/garmin-account-message'
 import styles from './provider-credentials.module.scss'
 
 const endpoint = '/api/integrations/garmin'
-const syncEndpoint = `${endpoint}/sync`
 const helpUrl = 'https://developer.garmin.com/gc-developer-program/personal/personal-api'
 
 function disconnected(): ProviderConnectionStatus {
@@ -38,9 +43,11 @@ function displayStatus(status: ProviderConnectionStatus['status']) {
     case 'CONNECTED':
       return { label: 'Connected', tone: 'success' as const, icon: CircleCheck }
     case 'KEY_SAVED':
-      return { label: 'Key saved', tone: 'success' as const, icon: CircleCheck }
+      return { label: 'Key saved', tone: 'neutral' as const, icon: KeyRound }
+    case 'VERIFICATION_REQUIRED':
+      return { label: 'Verification needed', tone: 'warning' as const, icon: TriangleAlert }
     case 'ERROR':
-      return { label: 'Invalid key', tone: 'error' as const, icon: CircleX }
+      return { label: 'Connection issue', tone: 'warning' as const, icon: TriangleAlert }
     case 'EXPIRED':
       return { label: 'Expired', tone: 'warning' as const, icon: Clock3 }
     default:
@@ -48,7 +55,33 @@ function displayStatus(status: ProviderConnectionStatus['status']) {
   }
 }
 
+function garminDescription(status: ProviderConnectionStatus['status']) {
+  switch (status) {
+    case 'CONNECTED':
+      return 'Garmin access verified. Activity and health imports are available.'
+    case 'KEY_SAVED':
+      return (
+        <>
+          Garmin account verified. To confirm data access, choose <strong>Sync now</strong> on{' '}
+          <Link href="/app/health">Health</Link> or <strong>Sync activities</strong> on{' '}
+          <Link href="/app/training">Training</Link>.
+        </>
+      )
+    case 'VERIFICATION_REQUIRED':
+      return 'This saved key has no verified Garmin account ID. Open Health and choose Verify & sync, or replace the key.'
+    case 'ERROR':
+      return 'Garmin access could not be verified. Replace the key to resume imports.'
+    case 'EXPIRED':
+      return 'Garmin access has expired. Replace the key to resume imports.'
+    default:
+      return 'Connect Garmin to import activities and health data.'
+  }
+}
+
 async function saveError(response: Response): Promise<string> {
+  if (response.status === 409) return garminAccountIssueMessage('ACCOUNT_MISMATCH')!
+  if (response.status === 422) return garminAccountIssueMessage('ACCOUNT_UNVERIFIABLE')!
+  if (response.status === 429) return 'Garmin is rate limiting requests. Try again later.'
   if (response.status === 400) return 'Enter a valid API key without spaces (8–2048 characters).'
   if (response.status === 401) return 'Your session expired. Sign in again.'
   if (response.status === 403) return 'The request was blocked. Refresh the page and try again.'
@@ -75,157 +108,41 @@ async function saveError(response: Response): Promise<string> {
 export function ProviderCredentials({
   initial,
   openaiInitial,
-  initialSync,
 }: {
   initial?: ProviderConnectionStatus
   openaiInitial?: ProviderConnectionStatus
-  initialSync?: GarminSyncState
 }) {
   const connection = initial?.provider === 'GARMIN' ? initial : disconnected()
   const version = `${connection.status}:${connection.createdAt}:${connection.updatedAt}:${openaiInitial?.status}:${openaiInitial?.updatedAt}`
   return (
-    <ProviderCredentialsPanel
-      key={version}
-      initial={connection}
-      openaiInitial={openaiInitial}
-      initialSync={initialSync}
-    />
+    <ProviderCredentialsPanel key={version} initial={connection} openaiInitial={openaiInitial} />
   )
 }
 
 function ProviderCredentialsPanel({
   initial,
   openaiInitial,
-  initialSync,
 }: {
   initial: ProviderConnectionStatus
   openaiInitial?: ProviderConnectionStatus
-  initialSync?: GarminSyncState
 }) {
   const toast = useToast()
+  const router = useRouter()
   const [connection, setConnection] = useState(initial)
   const [key, setKey] = useState('')
   const [visible, setVisible] = useState(false)
   const [fieldError, setFieldError] = useState('')
   const [keyOpen, setKeyOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
+  const [deleteDataOpen, setDeleteDataOpen] = useState(false)
   const [openaiRemoveOpen, setOpenaiRemoveOpen] = useState(false)
   const [openaiSaved, setOpenaiSaved] = useState(
     openaiInitial?.provider === 'OPENAI' && openaiInitial.status !== 'DISCONNECTED',
   )
   const [pending, setPending] = useState(false)
-  const [syncPending, setSyncPending] = useState(false)
-  const [syncState, setSyncState] = useState<GarminSyncState | null>(initialSync ?? null)
-  const [refreshTick, setRefreshTick] = useState(0)
-  const connectionRevision = useRef(0)
   const saved = connection.status !== 'DISCONNECTED'
   const display = displayStatus(connection.status)
   const StatusIcon = display.icon
-
-  useEffect(() => {
-    if (!initialSync) return
-    let active = true
-    const revision = connectionRevision.current
-    void fetch(syncEndpoint, { credentials: 'same-origin', cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) return
-        const state = (await response.json()) as GarminSyncState
-        if (active && revision === connectionRevision.current) setSyncState(state)
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [initialSync])
-
-  useEffect(() => {
-    if (syncState?.status !== 'PAUSED' && syncState?.status !== 'SYNCING') return
-    const retryAt = syncState.nextAttemptAt ? Date.parse(syncState.nextAttemptAt) : NaN
-    const delay =
-      syncState.status === 'SYNCING'
-        ? 5_000
-        : Number.isFinite(retryAt)
-          ? Math.max(5_000, Math.min(60_000, retryAt - Date.now() + 1_000))
-          : 60_000
-    let active = true
-    const revision = connectionRevision.current
-    const timer = window.setTimeout(() => {
-      void fetch(syncEndpoint, { credentials: 'same-origin', cache: 'no-store' })
-        .then(async (response) => {
-          if (!response.ok) return
-          const state = (await response.json()) as GarminSyncState
-          if (active && revision === connectionRevision.current) setSyncState(state)
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (active && revision === connectionRevision.current) setRefreshTick((tick) => tick + 1)
-        })
-    }, delay)
-    return () => {
-      active = false
-      window.clearTimeout(timer)
-    }
-  }, [syncState?.status, syncState?.nextAttemptAt, refreshTick])
-
-  async function sync(extendDays?: number) {
-    if (syncPending) return
-    const revision = ++connectionRevision.current
-    setSyncPending(true)
-    try {
-      const response = await fetch(syncEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        cache: 'no-store',
-        body: JSON.stringify(extendDays ? { extendDays } : {}),
-      })
-      if (!response.ok) {
-        if (revision !== connectionRevision.current) return
-        toast(
-          'error',
-          response.status === 429
-            ? 'Garmin asked us to pause. Try again later.'
-            : response.status === 403
-              ? 'Garmin sync is not available for this deployment.'
-              : 'Sync could not start. Check the connection and try again.',
-          'garmin-sync',
-        )
-        return
-      }
-      const state = (await response.json()) as GarminSyncState
-      if (revision !== connectionRevision.current) return
-      setSyncState(state)
-      if (state.status === 'ACTION_REQUIRED' && state.errorCode === 'INVALID_KEY')
-        setConnection((current) => ({ ...current, status: 'ERROR' }))
-      if (state.status === 'SUCCESS') toast('success', 'Garmin sync completed.', 'garmin-sync')
-      else if (state.status === 'PARTIAL')
-        toast('success', 'Sync checkpoint saved. Continue when ready.', 'garmin-sync')
-      else if (state.status === 'PAUSED')
-        toast('warning', 'Garmin sync paused. Check its status below.', 'garmin-sync')
-      else if (state.status === 'ACTION_REQUIRED')
-        toast(
-          'error',
-          state.errorCode === 'ACCESS_DENIED'
-            ? 'Garmin denied activity access. Check your permissions.'
-            : 'Replace your Garmin key to resume sync.',
-          'garmin-sync',
-        )
-      else toast('error', 'Garmin sync stopped. Check its status below.', 'garmin-sync')
-      void fetch(endpoint, { credentials: 'same-origin', cache: 'no-store' })
-        .then(async (statusResponse) => {
-          if (!statusResponse.ok) return
-          const latest = (await statusResponse.json()) as ProviderConnectionStatus
-          if (latest.provider === 'GARMIN' && revision === connectionRevision.current)
-            setConnection(latest)
-        })
-        .catch(() => {})
-    } catch {
-      if (revision === connectionRevision.current)
-        toast('error', 'Network error. Check your connection and try again.', 'garmin-sync')
-    } finally {
-      setSyncPending(false)
-    }
-  }
 
   function closeKey() {
     if (pending) return
@@ -264,13 +181,12 @@ function ProviderCredentialsPanel({
       }
       const status: ProviderConnectionStatus = await response.json()
       if (status.provider !== 'GARMIN') throw new Error('Unexpected provider response')
-      connectionRevision.current++
       setConnection(status)
-      setSyncState(null)
       setKey('')
       setVisible(false)
       setKeyOpen(false)
       toast('success', 'Garmin key saved.', 'garmin-key')
+      router.refresh()
     } catch {
       const message = receivedResponse
         ? 'The server returned an unexpected response. Try again.'
@@ -301,10 +217,11 @@ function ProviderCredentialsPanel({
         )
         return
       }
-      setConnection(disconnected())
-      connectionRevision.current++
+      const removed = disconnected()
+      setConnection(removed)
       setRemoveOpen(false)
       toast('success', 'Garmin key removed from Running Coach.', 'garmin-key')
+      router.refresh()
     } catch {
       toast('error', 'Network error. Check your connection and try again.', 'garmin-key')
     } finally {
@@ -328,8 +245,35 @@ function ProviderCredentialsPanel({
       setOpenaiSaved(false)
       setOpenaiRemoveOpen(false)
       toast('success', 'OpenAI key removed from Running Coach.', 'openai-key')
+      router.refresh()
     } catch {
       toast('error', 'Network error. Check your connection and try again.', 'openai-key')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function deleteGarminData() {
+    if (pending) return
+    setPending(true)
+    try {
+      const response = await fetch('/api/integrations/garmin/data', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        cache: 'no-store',
+        body: JSON.stringify({ confirm: 'DELETE_ALL_GARMIN_DATA' }),
+      })
+      if (!response.ok) {
+        toast('error', 'Could not delete imported Garmin data. Try again.', 'garmin-data')
+        return
+      }
+      setConnection(disconnected())
+      setDeleteDataOpen(false)
+      toast('success', 'Imported Garmin data and account association deleted.', 'garmin-data')
+      router.refresh()
+    } catch {
+      toast('error', 'Network error. Check your connection and try again.', 'garmin-data')
     } finally {
       setPending(false)
     }
@@ -338,109 +282,97 @@ function ProviderCredentialsPanel({
   return (
     <>
       <Card as="section" className={styles.card} aria-labelledby="integrations-heading">
-        <div className={styles.heading}>
-          <PlugZap size={20} strokeWidth={2} aria-hidden="true" focusable="false" />
-          <div>
-            <h2 id="integrations-heading">Integrations &amp; API keys</h2>
-            <p>Manage external services connected to Running Coach.</p>
-          </div>
-        </div>
+        <SectionHeading
+          icon={PlugZap}
+          id="integrations-heading"
+          title="Integrations & API keys"
+          subtitle="Manage external services connected to Running Coach."
+          className={styles.heading}
+        />
         <div className={styles.provider}>
-          <span className={styles.providerIcon} aria-hidden="true">
-            <Watch size={22} strokeWidth={2} focusable="false" />
-          </span>
-          <div className={styles.details}>
-            <h3>Garmin Connect</h3>
-            <p>Import your running activities.</p>
-            <Badge tone={display.tone} className={styles.status}>
-              <StatusIcon size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-              {display.label}
-            </Badge>
-            {saved && syncState && (
-              <p className={styles.syncDetail} role="status">
-                {syncState.status === 'SYNCING'
-                  ? 'Syncing on another request.'
-                  : syncState.status === 'PAUSED'
-                    ? `Paused until ${syncState.nextAttemptAt ? new Date(syncState.nextAttemptAt).toLocaleString() : 'later'}.`
-                    : syncState.status === 'ACTION_REQUIRED'
-                      ? syncState.errorCode === 'ACCESS_DENIED'
-                        ? 'Garmin denied activity access. Check your permissions or replace your key.'
-                        : 'Replace your Garmin key to resume.'
-                      : syncState.status === 'UNAVAILABLE'
-                        ? 'Garmin sync is not enabled for this deployment.'
-                        : syncState.status === 'ERROR'
-                          ? `Sync error: ${syncState.errorCode ?? 'unavailable'}.`
-                          : syncState.status === 'PARTIAL_FAILURE'
-                            ? `Sync stopped after ${syncState.processed} activities: ${syncState.errorCode ?? 'unavailable'}. Continue after the retry time.`
-                            : syncState.status === 'PARTIAL'
-                              ? `Backfill in progress through ${syncState.window?.end ?? 'today'}; next day ${syncState.nextDate}.`
-                              : syncState.status === 'SUCCESS'
-                                ? 'Last window completed.'
-                                : 'Ready to sync.'}
-                {syncState.lastSuccessAt &&
-                  ` Last successful window: ${new Date(syncState.lastSuccessAt).toLocaleString()}.`}
-                {syncState.lastAttemptAt &&
-                  ` Last batch processed ${syncState.processed} activities.`}
-              </p>
-            )}
+          <div className={styles.providerIdentity}>
+            <SectionHeading icon={Watch} title="Garmin Connect" level={3} />
+            <div className={styles.statusLine}>
+              <Badge tone={display.tone} className={styles.status}>
+                <StatusIcon size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+                {display.label}
+              </Badge>
+              {connection.status === 'KEY_SAVED' && (
+                <span className={styles.statusDetail}>Ready to sync manually</span>
+              )}
+              {connection.status === 'VERIFICATION_REQUIRED' && (
+                <span className={styles.statusDetail}>Sync paused</span>
+              )}
+            </div>
           </div>
+          <p className={styles.description}>{garminDescription(connection.status)}</p>
           <div className={styles.actions}>
-            {saved && (
-              <Button
-                variant="secondary"
-                onClick={() => void sync()}
-                loading={syncPending}
-                disabled={
-                  pending ||
-                  syncPending ||
-                  syncState?.status === 'SYNCING' ||
-                  syncState?.status === 'PAUSED' ||
-                  syncState?.status === 'ACTION_REQUIRED' ||
-                  syncState?.status === 'UNAVAILABLE'
-                }
-              >
-                {syncState?.status === 'PARTIAL' ? 'Continue sync' : 'Sync now'}
-              </Button>
-            )}
-            {saved && syncState?.status === 'SUCCESS' && (
-              <Button
-                variant="secondary"
-                onClick={() => void sync(7)}
-                disabled={pending || syncPending}
-              >
-                Import 7 older days
-              </Button>
-            )}
-            <Button onClick={() => setKeyOpen(true)}>
-              {!saved && <Plus size={18} strokeWidth={2} aria-hidden="true" focusable="false" />}
+            <Button variant={saved ? 'secondary' : 'primary'} onClick={() => setKeyOpen(true)}>
+              {saved ? (
+                <RefreshCw size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+              ) : (
+                <Plus size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+              )}
               {saved ? 'Replace key' : 'Add key'}
             </Button>
             {saved && (
-              <Button variant="secondary" onClick={() => setRemoveOpen(true)}>
+              <Button
+                variant="secondary"
+                className={styles.removeButton}
+                onClick={() => setRemoveOpen(true)}
+              >
                 Remove key
               </Button>
             )}
           </div>
         </div>
         <div className={styles.provider}>
-          <span className={`${styles.providerIcon} ${styles.openaiIcon}`} aria-hidden="true">
-            <Sparkles size={22} strokeWidth={2} focusable="false" />
-          </span>
-          <div className={styles.details}>
-            <h3>OpenAI</h3>
-            <p>Automatic training plan generation.</p>
-            <Badge tone="neutral" className={styles.status}>
-              <Clock3 size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-              Coming soon
-            </Badge>
+          <div className={styles.providerIdentity}>
+            <SectionHeading icon={Sparkles} title="OpenAI" level={3} />
+            <div className={styles.statusLine}>
+              <Badge tone="neutral" className={styles.status}>
+                {openaiSaved ? (
+                  <KeyRound size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+                ) : (
+                  <Clock3 size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+                )}
+                {openaiSaved ? 'Key saved' : 'Coming soon'}
+              </Badge>
+              {openaiSaved && <span className={styles.statusDetail}>Coming soon</span>}
+            </div>
           </div>
+          <p className={styles.description}>
+            {openaiSaved
+              ? 'Your key is stored. Automatic training plan generation is coming soon.'
+              : 'Automatic training plan generation is coming soon.'}
+          </p>
           {openaiSaved && (
             <div className={styles.actions}>
-              <Button variant="secondary" onClick={() => setOpenaiRemoveOpen(true)}>
+              <Button
+                variant="secondary"
+                className={styles.removeButton}
+                onClick={() => setOpenaiRemoveOpen(true)}
+              >
                 Remove saved key
               </Button>
             </div>
           )}
+        </div>
+        <div className={styles.dangerZone}>
+          <SectionHeading
+            icon={Trash2}
+            title="Delete imported Garmin data"
+            subtitle="Remove Garmin activities, laps, health records and sync history, then reset the Garmin account association."
+            level={3}
+            className={styles.dangerDetails}
+          />
+          <Button
+            variant="secondary"
+            className={styles.dangerButton}
+            onClick={() => setDeleteDataOpen(true)}
+          >
+            Delete all imported Garmin data
+          </Button>
         </div>
       </Card>
 
@@ -448,7 +380,7 @@ function ProviderCredentialsPanel({
         <Dialog
           open
           title={`${saved ? 'Replace' : 'Add'} Garmin API key`}
-          description="Enter your personal Garmin Connect API key to import activities."
+          description="Enter your personal Garmin Connect API key to import activities and health data."
           onClose={closeKey}
           pending={pending}
           actions={
@@ -536,6 +468,18 @@ function ProviderCredentialsPanel({
           variant="destructive"
           onConfirm={removeOpenai}
           onClose={() => setOpenaiRemoveOpen(false)}
+          pending={pending}
+        />
+      )}
+      {deleteDataOpen && (
+        <ConfirmDialog
+          open
+          title="Delete all imported Garmin data?"
+          description="This permanently deletes imported Garmin activities, laps, health records and sync history. Your Garmin key and account association will also be removed. Other Running Coach data stays intact."
+          confirmText="Delete all imported Garmin data"
+          variant="destructive"
+          onConfirm={deleteGarminData}
+          onClose={() => setDeleteDataOpen(false)}
           pending={pending}
         />
       )}

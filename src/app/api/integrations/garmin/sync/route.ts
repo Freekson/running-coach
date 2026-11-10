@@ -1,6 +1,15 @@
 import { z } from 'zod'
 import { AccountUnavailableError, getCurrentUser } from '@/server/auth/current-user'
 import { getOwnerContext } from '@/server/authorization/ownership'
+import {
+  CredentialConfigurationError,
+  CredentialUnavailableError,
+} from '@/server/provider/credential-crypto'
+import {
+  GarminAccountIdentityError,
+  verifySavedGarminAccount,
+} from '@/server/garmin/account-identity'
+import { GarminAccountMismatchError } from '@/server/provider/vault'
 import { GarminSyncUnavailableError, getGarminSyncState, runGarminSync } from '@/server/garmin/sync'
 import { allowGarminImport } from '@/server/garmin/import-rate-limit'
 
@@ -64,10 +73,23 @@ export async function POST(request: Request) {
     const owner = getOwnerContext(user)
     if (!(await allowGarminImport(owner)))
       return Response.json({ code: 'PAUSED' }, { status: 429, headers })
+    const state = await getGarminSyncState(owner)
+    if (state.errorCode === 'ACCOUNT_VERIFICATION_REQUIRED') await verifySavedGarminAccount(owner)
     return Response.json(await runGarminSync(owner, body.data), { headers })
   } catch (error) {
     if (error instanceof AccountUnavailableError)
       return new Response(null, { status: 403, headers })
+    if (error instanceof GarminAccountIdentityError)
+      return Response.json(
+        { code: error.code },
+        { status: error.code === 'RATE_LIMITED' ? 429 : 422, headers },
+      )
+    if (error instanceof GarminAccountMismatchError)
+      return Response.json({ code: error.code }, { status: 409, headers })
+    if (error instanceof CredentialConfigurationError)
+      return Response.json({ code: 'KEY_STORAGE_UNCONFIGURED' }, { status: 503, headers })
+    if (error instanceof CredentialUnavailableError)
+      return Response.json({ code: 'CREDENTIAL_CHANGED' }, { status: 409, headers })
     if (error instanceof GarminSyncUnavailableError) {
       const status =
         error.code === 'BUSY'

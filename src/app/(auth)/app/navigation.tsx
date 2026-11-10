@@ -11,6 +11,7 @@ const sections = [
   { label: 'Training', href: '/app/training' },
   { label: 'Calendar', href: '/app/calendar' },
   { label: 'Goals', href: '/app/goals' },
+  { label: 'Health', href: '/app/health' },
   { label: 'Settings', href: '/app/settings' },
 ] as const
 

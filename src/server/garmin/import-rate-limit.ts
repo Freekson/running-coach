@@ -6,14 +6,69 @@ import { assertProviderApiKeySnapshotCurrent } from '@/server/provider/vault'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 
 const MAX_IMPORTS = 3
+const MAX_PROVIDER_RETRY_MS = 30 * 24 * 60 * 60 * 1000
+
+/** A malformed Retry-After must not permanently pause both Garmin import paths. */
+export function boundedGarminRetryAt(
+  from: Date,
+  requestedMs: number | undefined,
+  minimumMs = 60_000,
+): Date {
+  const delay = requestedMs !== undefined && Number.isFinite(requestedMs) ? requestedMs : 0
+  return new Date(from.getTime() + Math.min(MAX_PROVIDER_RETRY_MS, Math.max(minimumMs, delay)))
+}
+
+/** Allocate a per-owner order only while this verified Garmin key is still active. */
+export async function reserveGarminHealthAttempt(
+  owner: OwnerContext,
+  credentialNonce: Uint8Array,
+  garminAccountId: string,
+): Promise<bigint> {
+  const userId = ownerId(owner)
+  const prisma = await getPrismaClient()
+  const rows = await prisma.$queryRaw<{ attemptSequence: bigint }[]>`
+    WITH active_connection AS (
+      SELECT connection.id
+      FROM "integration_connections" AS connection
+      JOIN "integration_credentials" AS credential
+        ON credential.connection_id = connection.id
+        AND credential.user_id = connection.user_id
+      WHERE connection.user_id = ${userId}::uuid
+        AND connection.provider = 'GARMIN'
+        AND connection.status = 'CONNECTED'
+        AND connection.external_account_id = ${garminAccountId}
+        AND credential.nonce = ${credentialNonce}
+      FOR UPDATE OF connection
+    )
+    INSERT INTO "garmin_import_rate_limits"
+      ("user_id", "count", "window_started_at", "health_attempt_sequence")
+    SELECT ${userId}::uuid, 1, CURRENT_TIMESTAMP, 1 FROM active_connection
+    ON CONFLICT ("user_id") DO UPDATE SET
+      "health_attempt_sequence" = "garmin_import_rate_limits"."health_attempt_sequence" + 1
+    RETURNING "health_attempt_sequence" AS "attemptSequence"
+  `
+  if (rows.length !== 1) throw new CredentialUnavailableError()
+  return rows[0].attemptSequence
+}
 
 /** Reserve one bounded import attempt across all app instances before contacting Garmin. */
 export async function allowGarminImport(owner: OwnerContext): Promise<boolean> {
   const userId = ownerId(owner)
   const prisma = await getPrismaClient()
   const rows = await prisma.$queryRaw<{ count: number; paused: boolean | null }[]>`
+    WITH active_connection AS (
+      SELECT connection.id
+      FROM "integration_connections" AS connection
+      JOIN "integration_credentials" AS credential
+        ON credential.connection_id = connection.id
+        AND credential.user_id = connection.user_id
+      WHERE connection.user_id = ${userId}::uuid
+        AND connection.provider = 'GARMIN'
+        AND connection.status = 'CONNECTED'
+      FOR UPDATE OF connection
+    )
     INSERT INTO "garmin_import_rate_limits" ("user_id", "count", "window_started_at")
-    VALUES (${userId}::uuid, 1, CURRENT_TIMESTAMP)
+    SELECT ${userId}::uuid, 1, CURRENT_TIMESTAMP FROM active_connection
     ON CONFLICT ("user_id") DO UPDATE SET
       "count" = CASE
         WHEN "garmin_import_rate_limits"."provider_retry_at" > CURRENT_TIMESTAMP
@@ -29,7 +84,26 @@ export async function allowGarminImport(owner: OwnerContext): Promise<boolean> {
       END
     RETURNING "count", ("provider_retry_at" > CURRENT_TIMESTAMP) AS "paused"
   `
-  return rows.length === 1 && !rows[0].paused && rows[0].count <= MAX_IMPORTS
+  if (rows.length !== 1) throw new CredentialUnavailableError()
+  return !rows[0].paused && rows[0].count <= MAX_IMPORTS
+}
+
+/** Explain a denied attempt without exposing provider payloads or another owner's state. */
+export async function getGarminImportBlock(
+  owner: OwnerContext,
+  observedAt: Date = new Date(),
+): Promise<{ code: 'PROVIDER_PAUSED' | 'APP_RATE_LIMITED'; retryAt: Date } | null> {
+  const prisma = await getPrismaClient()
+  const row = await prisma.garminImportRateLimit.findUnique({
+    where: { userId: ownerId(owner) },
+    select: { count: true, windowStartedAt: true, providerRetryAt: true },
+  })
+  if (!row) return null
+  if (row.providerRetryAt && row.providerRetryAt > observedAt)
+    return { code: 'PROVIDER_PAUSED', retryAt: row.providerRetryAt }
+  const retryAt = new Date(row.windowStartedAt.getTime() + 60_000)
+  if (row.count > MAX_IMPORTS && retryAt > observedAt) return { code: 'APP_RATE_LIMITED', retryAt }
+  return null
 }
 
 export async function getGarminProviderPauseUntil(owner: OwnerContext): Promise<Date | null> {

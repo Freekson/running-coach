@@ -27,6 +27,18 @@ const json = (value: unknown, status = 200) => Response.json(value, { status })
 beforeEach(() => vi.clearAllMocks())
 
 describe('Garmin Personal API PoC', () => {
+  it('reads a bounded 365-day summary larger than the shared JSON limit', async () => {
+    const largeSummary = { data: [{ calendarDate: '2026-11-07', filler: 'x'.repeat(900_000) }] }
+    const fetcher = responses(json(largeSummary), json(largeSummary))
+    const path = '/usersummary-service/v2/dailysummaries?startDate=2026-11-07&endDate=2026-11-07'
+    expect(await requestJson(fetcher, path, 'Bearer synthetic')).toMatchObject({
+      status: 'TOO_LARGE',
+    })
+    expect(
+      await requestJson(fetcher, path, 'Bearer synthetic', 'GET', 'json', 8_000, 4_194_304),
+    ).toMatchObject({ status: 200, value: largeSummary })
+  })
+
   it.each([200, 204])('returns null for a successful empty JSON response (%i)', async (status) => {
     const fetcher = responses(new Response(null, { status }))
     expect(

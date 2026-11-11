@@ -19,6 +19,7 @@ import { normalizeGarminDailySummary, normalizeGarminSleep } from './normalizati
 import { GarminAccountIdentityError, verifyGarminBearerAccount } from './account-identity'
 import { requestJson } from './personal-api-poc'
 import { isGarminImportAllowed } from './sync-policy'
+import { projectGarminHealth } from './provider-projection'
 
 const dateSchema = z.iso.date()
 const timezoneSchema = z
@@ -32,7 +33,13 @@ const timezoneSchema = z
       return false
     }
   })
-const dailyResponseSchema = z.object({ data: z.array(z.unknown()).max(60) })
+const dailyRowsSchema = z.array(z.unknown()).max(365)
+const dailyResponseSchema = z
+  .union([z.object({ data: dailyRowsSchema }), dailyRowsSchema])
+  .transform((value) => (Array.isArray(value) ? value : value.data))
+// The verified 365-day response exceeded the shared 512 KiB JSON probe limit.
+const dailySummaryMaxJsonBytes = 4 * 1024 * 1024
+const summaryFallbackDays = 30
 const emptySleepCore = [
   'calendarDate',
   'sleepTimeSeconds',
@@ -72,6 +79,43 @@ function verifiedEmptySingleSleep(value: unknown): boolean {
   )
 }
 
+// Garmin omits the top-level date when a day contains naps but no night sleep.
+// Range responses include dates on each nap, which are sufficient only when
+// every nap belongs to the same day and no night-sleep data is present.
+function datedNapOnlySleep(value: unknown): string | null {
+  const payload = record(value)
+  if (!payload || !emptySleepCore.every((key) => key in payload && payload[key] === null))
+    return null
+  if (emptySleepMeasurements.some((key) => key !== 'napTimeSeconds' && payload[key] != null))
+    return null
+  const total = payload.napTimeSeconds
+  const naps = payload.dailyNapDTOS
+  if (
+    typeof total !== 'number' ||
+    !Number.isFinite(total) ||
+    total <= 0 ||
+    total > 86_400 ||
+    !Array.isArray(naps) ||
+    naps.length === 0 ||
+    naps.length > 20
+  )
+    return null
+  const firstDate = record(naps[0])?.calendarDate
+  if (typeof firstDate !== 'string' || !dateSchema.safeParse(firstDate).success) return null
+  if (
+    !naps.every((nap) => record(nap)?.calendarDate === firstDate) ||
+    !Object.entries(payload).every(([key, item]) => {
+      if (item == null) return true
+      if (key === 'napTimeSeconds' || key === 'dailyNapDTOS') return true
+      if (key === 'deviceRemCapable' || key === 'retro') return typeof item === 'boolean'
+      if (key === 'sleepNeed' || key === 'nextSleepNeed') return record(item) !== null
+      return false
+    })
+  )
+    return null
+  return firstDate
+}
+
 function rangeRows(value: unknown): unknown[] | null {
   if (Array.isArray(value)) return value
   const payload = record(value)
@@ -90,11 +134,23 @@ function rangeRecords(
 ): Map<string, unknown> {
   const result = new Map<string, unknown>()
   const rows = rangeRows(value)
-  if (!rows || rows.length > 60) return result
+  if (!rows || rows.length > 365) return result
+  if (rows.length === 0) {
+    // An entirely empty, successful range is explicit checked-empty coverage.
+    // Missing dates in a partially populated range remain unresolved.
+    for (let day = start; day <= end; day = addDays(day, 1)) result.set(day, null)
+    return result
+  }
   const grouped = new Map<string, unknown[]>()
   for (const row of rows) {
-    const date = record(row)?.calendarDate
-    if (!dateSchema.safeParse(date).success || typeof date !== 'string') continue
+    const topLevelDate = record(row)?.calendarDate
+    const date =
+      typeof topLevelDate === 'string' && dateSchema.safeParse(topLevelDate).success
+        ? topLevelDate
+        : source === 'SLEEP'
+          ? datedNapOnlySleep(row)
+          : null
+    if (!date) continue
     if (date < start || date > end) continue
     grouped.set(date, [...(grouped.get(date) ?? []), row])
   }
@@ -103,7 +159,7 @@ function rangeRecords(
     const candidate = candidates[0]
     try {
       if (source === 'SUMMARY') normalizeGarminDailySummary(owner, 'UTC', candidate)
-      else {
+      else if (datedNapOnlySleep(candidate) !== date) {
         const sleep = normalizeGarminSleep(owner, 'UTC', candidate)
         if (sleep.sleepDurationMs === null) continue
       }
@@ -123,10 +179,23 @@ export type GarminHealthImportErrorCode =
   | 'ACCOUNT_MISMATCH'
   | 'ACCOUNT_UNVERIFIABLE'
   | `${'SUMMARY' | 'SLEEP'}_${'TIMEOUT' | 'NETWORK' | 'INVALID_RESPONSE' | 'DATE_MISMATCH'}`
+  | 'SUMMARY_INVALID_JSON'
+  | `${'SUMMARY' | 'SLEEP'}_TOO_LARGE`
   | `${'SUMMARY' | 'SLEEP'}_HTTP_${number}`
 
+export type GarminSummaryDiagnosticCode =
+  | 'SUMMARY_EMPTY_BODY'
+  | 'SUMMARY_NULL_DATA'
+  | 'SUMMARY_INVALID_ENVELOPE'
+  | 'SUMMARY_MULTIPLE_RECORDS'
+  | 'SUMMARY_INVALID_RECORD'
+  | 'SUMMARY_DATE_MISMATCH'
+
 export class GarminHealthImportError extends Error {
-  constructor(readonly code: GarminHealthImportErrorCode) {
+  constructor(
+    readonly code: GarminHealthImportErrorCode,
+    readonly diagnosticCode: GarminSummaryDiagnosticCode | null = null,
+  ) {
     super('Garmin health import unavailable')
   }
 }
@@ -144,6 +213,9 @@ type Dependencies = {
   sleepTimezoneBasis?: HealthTimezoneBasis
   sources?: 'BOTH' | 'SUMMARY_ONLY' | 'SLEEP_ONLY'
   batchEndDate?: string
+  batchStartDate?: string
+  earliestAllowedDate?: string
+  recheckFetchedSleep?: boolean
 }
 
 export type GarminHealthSession = {
@@ -160,6 +232,12 @@ export type GarminHealthSession = {
     summaryFetchedAt: Date
     sleepFetchedAt: Date | null
     sleepError: GarminHealthImportErrorCode | null
+  }
+  summaryFallback?: {
+    start: string
+    end: string
+    summaries: Map<string, unknown>
+    fetchedAt: Date
   }
 }
 
@@ -208,13 +286,20 @@ export async function importGarminHealthDate(
   const today = localDay(now, parsedSelectionZone.data)
   // Validate against the zone that selected the bounded window. A dated
   // activity can supply a different source zone on a travel day.
-  if (date > today || date < addDays(today, -29)) throw new GarminHealthImportError('INVALID_DATE')
+  const earliestAllowedDate = dependencies.earliestAllowedDate ?? addDays(today, -29)
+  if (date > today || date < earliestAllowedDate) throw new GarminHealthImportError('INVALID_DATE')
+  const batchStart = dependencies.batchStartDate ?? date
+  const batchEnd = dependencies.batchEndDate ?? date
+  const batchLimit = dependencies.sources === 'SUMMARY_ONLY' ? 365 : 30
   if (
-    dependencies.batchEndDate &&
-    (!dateSchema.safeParse(dependencies.batchEndDate).success ||
-      dependencies.batchEndDate < date ||
-      dependencies.batchEndDate > today ||
-      dependencies.batchEndDate > addDays(date, 9))
+    (dependencies.batchStartDate || dependencies.batchEndDate) &&
+    (!dateSchema.safeParse(batchStart).success ||
+      !dateSchema.safeParse(batchEnd).success ||
+      batchStart > date ||
+      batchEnd < date ||
+      batchStart < earliestAllowedDate ||
+      batchEnd > today ||
+      batchEnd > addDays(batchStart, batchLimit - 1))
   )
     throw new GarminHealthImportError('INVALID_DATE')
   const session: GarminHealthSession = dependencies.session ?? {}
@@ -243,7 +328,9 @@ export async function importGarminHealthDate(
   const skipSleep =
     dependencies.sources === 'SUMMARY_ONLY' ||
     alreadyFetched(coverage?.sleepFetchedAt) ||
-    (dependencies.sources === 'SLEEP_ONLY' && coverage?.sleepFetchedAt != null)
+    (dependencies.sources === 'SLEEP_ONLY' &&
+      !dependencies.recheckFetchedSleep &&
+      coverage?.sleepFetchedAt != null)
   if (skipSummary && skipSleep)
     return {
       status:
@@ -311,6 +398,7 @@ export async function importGarminHealthDate(
       'GET',
       'json',
       dependencies.requestTimeoutMs,
+      source === 'SUMMARY' ? dailySummaryMaxJsonBytes : undefined,
     )
     if (response.status === 401) {
       session.bearer = undefined
@@ -323,6 +411,7 @@ export async function importGarminHealthDate(
         'GET',
         'json',
         dependencies.requestTimeoutMs,
+        source === 'SUMMARY' ? dailySummaryMaxJsonBytes : undefined,
       )
     }
     if (response.status === 429) {
@@ -335,8 +424,11 @@ export async function importGarminHealthDate(
     }
     if (response.status === 'TIMEOUT') throw new GarminHealthImportError(`${source}_TIMEOUT`)
     if (response.status === 'NETWORK_ERROR') throw new GarminHealthImportError(`${source}_NETWORK`)
-    if (response.status === 'INVALID_JSON' || response.status === 'TOO_LARGE')
-      throw new GarminHealthImportError(`${source}_INVALID_RESPONSE`)
+    if (response.status === 'TOO_LARGE') throw new GarminHealthImportError(`${source}_TOO_LARGE`)
+    if (response.status === 'INVALID_JSON')
+      throw new GarminHealthImportError(
+        source === 'SUMMARY' ? 'SUMMARY_INVALID_JSON' : 'SLEEP_INVALID_RESPONSE',
+      )
     if (response.status !== 200 && !(source === 'SLEEP' && response.status === 204))
       throw new GarminHealthImportError(`${source}_HTTP_${response.status}`)
     if (source === 'SLEEP' && response.status === 200 && response.value == null)
@@ -344,28 +436,34 @@ export async function importGarminHealthDate(
     return response.value
   }
   if (
-    dependencies.batchEndDate &&
-    dependencies.sources !== 'SLEEP_ONLY' &&
+    (dependencies.batchEndDate || dependencies.batchStartDate) &&
     (!session.batch || date < session.batch.start || date > session.batch.end)
   ) {
-    const end = dependencies.batchEndDate
-    const summaryPayload = await read(
-      `/usersummary-service/v2/dailysummaries?startDate=${date}&endDate=${end}`,
-      'SUMMARY',
-    )
+    const start = batchStart
+    const end = batchEnd
+    const summaryPayload =
+      dependencies.sources === 'SLEEP_ONLY'
+        ? null
+        : await read(
+            `/usersummary-service/v2/dailysummaries?startDate=${start}&endDate=${end}`,
+            'SUMMARY',
+          )
     const summaryFetchedAt = new Date()
-    const summaries = rangeRecords(owner, 'SUMMARY', summaryPayload, date, end)
+    const summaries =
+      summaryPayload === null
+        ? new Map<string, unknown>()
+        : rangeRecords(owner, 'SUMMARY', summaryPayload, start, end)
     let sleeps = new Map<string, unknown>()
     let sleepFetchedAt: Date | null = null
     let sleepError: GarminHealthImportErrorCode | null = null
     if (dependencies.sources !== 'SUMMARY_ONLY') {
       try {
         const sleepPayload = await read(
-          `/sleep-service/sleep/dailySleepSummariesByDate?startDate=${date}&endDate=${end}`,
+          `/sleep-service/sleep/dailySleepSummariesByDate?startDate=${start}&endDate=${end}`,
           'SLEEP',
         )
         sleepFetchedAt = new Date()
-        sleeps = rangeRecords(owner, 'SLEEP', sleepPayload, date, end)
+        sleeps = rangeRecords(owner, 'SLEEP', sleepPayload, start, end)
       } catch (error) {
         if (!(error instanceof GarminHealthImportError)) throw error
         // A range failure leaves every date unresolved; the single-day endpoint
@@ -377,7 +475,7 @@ export async function importGarminHealthDate(
       }
     }
     session.batch = {
-      start: date,
+      start,
       end,
       summaries,
       sleeps,
@@ -387,20 +485,62 @@ export async function importGarminHealthDate(
     }
   }
   if (!skipSummary) {
-    const cached = session.batch?.summaries.get(date)
+    if (
+      dependencies.sources === 'SUMMARY_ONLY' &&
+      dependencies.earliestAllowedDate &&
+      !session.batch?.summaries.has(date) &&
+      (!session.summaryFallback ||
+        date < session.summaryFallback.start ||
+        date > session.summaryFallback.end)
+    ) {
+      const start =
+        addDays(date, -(summaryFallbackDays - 1)) < dependencies.earliestAllowedDate
+          ? dependencies.earliestAllowedDate
+          : addDays(date, -(summaryFallbackDays - 1))
+      const payload = await read(
+        `/usersummary-service/v2/dailysummaries?startDate=${start}&endDate=${date}`,
+        'SUMMARY',
+      )
+      session.summaryFallback = {
+        start,
+        end: date,
+        summaries: rangeRecords(owner, 'SUMMARY', payload, start, date),
+        fetchedAt: new Date(),
+      }
+    }
+    const inBatch = session.batch?.summaries.has(date) ?? false
+    const inFallback = session.summaryFallback?.summaries.has(date) ?? false
+    const cached = inBatch
+      ? session.batch?.summaries.get(date)
+      : session.summaryFallback?.summaries.get(date)
     const summaryPayload = cached
       ? { data: [cached] }
-      : await read(
-          `/usersummary-service/v2/dailysummaries?startDate=${date}&endDate=${date}`,
-          'SUMMARY',
-        )
-    const summaryFetchedAt = cached ? session.batch!.summaryFetchedAt : new Date()
+      : inBatch || inFallback
+        ? { data: [] }
+        : await read(
+            `/usersummary-service/v2/dailysummaries?startDate=${date}&endDate=${date}`,
+            'SUMMARY',
+          )
+    const summaryFetchedAt = inBatch
+      ? session.batch!.summaryFetchedAt
+      : inFallback
+        ? session.summaryFallback!.fetchedAt
+        : new Date()
     if (session.verifiedAccountId !== credential.accountId)
       throw new GarminHealthImportError('UNAVAILABLE')
     const summaryResponse = dailyResponseSchema.safeParse(summaryPayload)
-    if (!summaryResponse.success) throw new GarminHealthImportError('SUMMARY_INVALID_RESPONSE')
-    const summaries = summaryResponse.data.data
-    if (summaries.length > 1) throw new GarminHealthImportError('SUMMARY_INVALID_RESPONSE')
+    if (!summaryResponse.success) {
+      const diagnosticCode =
+        summaryPayload === null
+          ? 'SUMMARY_EMPTY_BODY'
+          : record(summaryPayload)?.data === null
+            ? 'SUMMARY_NULL_DATA'
+            : 'SUMMARY_INVALID_ENVELOPE'
+      throw new GarminHealthImportError('SUMMARY_INVALID_RESPONSE', diagnosticCode)
+    }
+    const summaries = summaryResponse.data
+    if (summaries.length > 1)
+      throw new GarminHealthImportError('SUMMARY_INVALID_RESPONSE', 'SUMMARY_MULTIPLE_RECORDS')
     let summary: ReturnType<typeof normalizeGarminDailySummary> | null = null
     try {
       summary =
@@ -408,10 +548,10 @@ export async function importGarminHealthDate(
           ? null
           : normalizeGarminDailySummary(owner, sourceTimezone, summaries[0])
     } catch {
-      throw new GarminHealthImportError('SUMMARY_INVALID_RESPONSE')
+      throw new GarminHealthImportError('SUMMARY_INVALID_RESPONSE', 'SUMMARY_INVALID_RECORD')
     }
     if (summary && summary.localDate !== date)
-      throw new GarminHealthImportError('SUMMARY_DATE_MISMATCH')
+      throw new GarminHealthImportError('SUMMARY_DATE_MISMATCH', 'SUMMARY_DATE_MISMATCH')
     await saveGarminHealthObservation(
       owner,
       'summary',
@@ -423,21 +563,26 @@ export async function importGarminHealthDate(
       summaryFetchedAt,
       attemptSequence,
       dependencies.summaryTimezoneBasis,
+      summaries.length ? projectGarminHealth('summary', summaries[0]) : null,
     )
   }
   try {
     if (!skipSleep) {
       if (session.batch?.sleepError) throw new GarminHealthImportError(session.batch.sleepError)
       const cached = session.batch?.sleeps.get(date)
-      const sleepResponse =
-        cached ?? (await read(`/sleep-service/sleep/dailySleep?date=${date}`, 'SLEEP'))
-      const sleepFetchedAt = cached ? session.batch!.sleepFetchedAt! : new Date()
+      const sleepResponse = session.batch?.sleeps.has(date)
+        ? cached
+        : await read(`/sleep-service/sleep/dailySleep?date=${date}`, 'SLEEP')
+      const sleepFetchedAt = session.batch?.sleeps.has(date)
+        ? session.batch.sleepFetchedAt!
+        : new Date()
       if (session.verifiedAccountId !== credential.accountId)
         throw new GarminHealthImportError('UNAVAILABLE')
       let sleep: ReturnType<typeof normalizeGarminSleep> | null = null
+      const napOnly = datedNapOnlySleep(sleepResponse) === date
       try {
         sleep =
-          sleepResponse == null || (!cached && verifiedEmptySingleSleep(sleepResponse))
+          sleepResponse == null || napOnly || (!cached && verifiedEmptySingleSleep(sleepResponse))
             ? null
             : normalizeGarminSleep(owner, sleepTimezone, sleepResponse)
         if (sleep && sleep.sleepDurationMs === null)
@@ -458,6 +603,7 @@ export async function importGarminHealthDate(
         sleepFetchedAt,
         attemptSequence,
         dependencies.sleepTimezoneBasis,
+        sleep || napOnly ? projectGarminHealth('sleep', sleepResponse) : null,
       )
     }
   } catch (error) {

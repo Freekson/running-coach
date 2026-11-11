@@ -120,7 +120,7 @@ it('closes only when a pointer press and release both happen on the backdrop', (
   expect(close).toHaveBeenCalledOnce()
 })
 
-it('locks background scrolling until the last dialog closes and restores existing styles', () => {
+it('keeps root overflow unchanged while dialogs open and close', () => {
   const originalBodyOverflow = document.body.style.overflow
   const originalRootOverflow = document.documentElement.style.overflow
   document.body.style.overflow = 'auto'
@@ -139,8 +139,8 @@ it('locks background scrolling until the last dialog closes and restores existin
   )
 
   act(() => root.render(<>{first}</>))
-  expect(document.body.style.overflow).toBe('hidden')
-  expect(document.documentElement.style.overflow).toBe('hidden')
+  expect(document.body.style.overflow).toBe('auto')
+  expect(document.documentElement.style.overflow).toBe('scroll')
 
   act(() =>
     root.render(
@@ -151,8 +151,8 @@ it('locks background scrolling until the last dialog closes and restores existin
     ),
   )
   act(() => root.render(<>{second}</>))
-  expect(document.body.style.overflow).toBe('hidden')
-  expect(document.documentElement.style.overflow).toBe('hidden')
+  expect(document.body.style.overflow).toBe('auto')
+  expect(document.documentElement.style.overflow).toBe('scroll')
 
   act(() => root.render(null))
   expect(document.body.style.overflow).toBe('auto')

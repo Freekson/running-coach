@@ -116,9 +116,11 @@ function responseFailureMessage(
 export function HealthSyncPanel({
   initial,
   hideDetails = false,
+  initialImportReady = true,
 }: {
   initial: GarminSyncState
   hideDetails?: boolean
+  initialImportReady?: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -228,6 +230,14 @@ export function HealthSyncPanel({
     }
   }
 
+  if (!initialImportReady && state.status !== 'NOT_CONNECTED')
+    return (
+      <EmptyState
+        title="Complete Garmin health import first"
+        description="Import Daily summaries and Sleep in Settings before using incremental Sync now."
+        action={<Link href="/app/settings">Open Settings</Link>}
+      />
+    )
   if (state.status === 'ACTION_REQUIRED' && state.errorCode === 'ACCOUNT_VERIFICATION_REQUIRED')
     return (
       <EmptyState

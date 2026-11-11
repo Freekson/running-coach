@@ -7,6 +7,7 @@ const {
   getActivity,
   importGarminActivitiesForDate,
   allowGarminImport,
+  withGarminProviderLease,
 } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   isVerifiedCurrentUser: vi.fn(() => true),
@@ -14,6 +15,7 @@ const {
   getActivity: vi.fn(),
   importGarminActivitiesForDate: vi.fn(),
   allowGarminImport: vi.fn(),
+  withGarminProviderLease: vi.fn(async (_owner: unknown, work: () => Promise<unknown>) => work()),
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({
@@ -31,6 +33,10 @@ vi.mock('@/server/garmin/activity-import', () => ({
   importGarminActivitiesForDate,
 }))
 vi.mock('@/server/garmin/import-rate-limit', () => ({ allowGarminImport }))
+vi.mock('@/server/garmin/provider-lease', () => ({
+  withGarminProviderLease,
+  GarminProviderLeaseUnavailableError: class GarminProviderLeaseUnavailableError extends Error {},
+}))
 
 import { GET as list } from './route'
 import { GET as detail } from './[id]/route'
@@ -133,6 +139,10 @@ describe('activity routes', () => {
     expect(allowGarminImport).toHaveBeenCalledWith({
       userId: '00000000-0000-4000-8000-00000000000a',
     })
+    expect(withGarminProviderLease).toHaveBeenCalledWith(
+      { userId: '00000000-0000-4000-8000-00000000000a' },
+      expect.any(Function),
+    )
     expect(importGarminActivitiesForDate).toHaveBeenCalledWith(
       { userId: '00000000-0000-4000-8000-00000000000a' },
       '2026-11-08',

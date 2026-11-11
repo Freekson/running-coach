@@ -216,7 +216,12 @@ describe('Garmin sync checkpoints', () => {
         pageSize: 1,
         refreshLaps: false,
       },
-      { requestTimeoutMs: 7000, pacingMs: 1000, deadlineAt: Date.parse('2026-11-08T12:00:20Z') },
+      {
+        requestTimeoutMs: 7000,
+        pacingMs: 1000,
+        deadlineAt: Date.parse('2026-11-08T12:00:20Z'),
+        identitySession: {},
+      },
     )
     expect(state.cursor?.cursorOrCheckpoint).toMatchObject({ nextDate: '2026-08-17', offset: 3 })
     const secondPage = vi.fn(async () => {
@@ -233,7 +238,12 @@ describe('Garmin sync checkpoints', () => {
         pageSize: 1,
         refreshLaps: false,
       },
-      { requestTimeoutMs: 7000, pacingMs: 1000, deadlineAt: clock.getTime() - 1_000 },
+      {
+        requestTimeoutMs: 7000,
+        pacingMs: 1000,
+        deadlineAt: clock.getTime() - 1_000,
+        identitySession: {},
+      },
     )
     expect(state.cursor?.cursorOrCheckpoint).toMatchObject({
       nextDate: '2026-08-17',
@@ -416,7 +426,12 @@ describe('Garmin sync checkpoints', () => {
         pageSize: 2,
         refreshLaps: false,
       },
-      { requestTimeoutMs: 3000, pacingMs: 2000, deadlineAt: clock.getTime() + 20_000 },
+      {
+        requestTimeoutMs: 3000,
+        pacingMs: 2000,
+        deadlineAt: clock.getTime() + 20_000,
+        identitySession: {},
+      },
     ])
   })
 

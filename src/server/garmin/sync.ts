@@ -339,6 +339,8 @@ export async function runGarminSync(
       })
       if (saved.count !== 1) throw new GarminImportError('STORAGE_UNAVAILABLE')
     }
+    // Reuse identity only within this invocation and only for the same credential nonce.
+    const identitySession: { accountId?: string; credentialNonce?: Uint8Array } = {}
     for (let page = 0; page < maxPages && checkpoint.nextDate !== null; page++) {
       if (now().getTime() - started.getTime() >= runBudgetMs) break
       const result = await (dependencies.importPage ?? importGarminActivityPage)(
@@ -350,7 +352,12 @@ export async function runGarminSync(
           pageSize,
           refreshLaps: checkpoint.mode !== 'INITIAL',
         },
-        { requestTimeoutMs, pacingMs, deadlineAt: started.getTime() + runBudgetMs },
+        {
+          requestTimeoutMs,
+          pacingMs,
+          deadlineAt: started.getTime() + runBudgetMs,
+          identitySession,
+        },
       )
       processed += result.imported.length
       const nextOffset = result.hasMore ? result.nextStart : null

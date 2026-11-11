@@ -25,39 +25,6 @@ export type DialogProps = {
   pending?: boolean
 }
 
-type ScrollLock = {
-  count: number
-  bodyOverflow: string
-  rootOverflow: string
-}
-
-const scrollLocks = new WeakMap<Document, ScrollLock>()
-
-function lockBackgroundScroll(ownerDocument: Document) {
-  const current = scrollLocks.get(ownerDocument)
-  if (current) {
-    current.count += 1
-  } else {
-    scrollLocks.set(ownerDocument, {
-      count: 1,
-      bodyOverflow: ownerDocument.body.style.overflow,
-      rootOverflow: ownerDocument.documentElement.style.overflow,
-    })
-    ownerDocument.body.style.overflow = 'hidden'
-    ownerDocument.documentElement.style.overflow = 'hidden'
-  }
-
-  return () => {
-    const lock = scrollLocks.get(ownerDocument)
-    if (!lock) return
-    lock.count -= 1
-    if (lock.count > 0) return
-    ownerDocument.body.style.overflow = lock.bodyOverflow
-    ownerDocument.documentElement.style.overflow = lock.rootOverflow
-    scrollLocks.delete(ownerDocument)
-  }
-}
-
 export function Dialog({
   open,
   title,
@@ -90,10 +57,8 @@ export function Dialog({
     if (!element) return
     if (open && !element.open) element.showModal()
     if (!open && element.open) element.close()
-    const unlockScroll = open ? lockBackgroundScroll(element.ownerDocument) : undefined
     return () => {
       if (element.open) element.close()
-      unlockScroll?.()
     }
   }, [open])
   return (

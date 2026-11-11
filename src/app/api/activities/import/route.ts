@@ -3,6 +3,10 @@ import { AccountUnavailableError, getCurrentUser } from '@/server/auth/current-u
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { GarminImportError, importGarminActivitiesForDate } from '@/server/garmin/activity-import'
 import { allowGarminImport } from '@/server/garmin/import-rate-limit'
+import {
+  GarminProviderLeaseUnavailableError,
+  withGarminProviderLease,
+} from '@/server/garmin/provider-lease'
 import { isGarminImportAllowed } from '@/server/garmin/sync-policy'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 
@@ -69,11 +73,16 @@ export async function POST(request: Request) {
         { error: 'Garmin import rate limit reached' },
         { status: 429, headers: privateHeaders },
       )
-    const result = await importGarminActivitiesForDate(owner, parsed.data.date, {
-      start: parsed.data.start,
-    })
+    const result = await withGarminProviderLease(owner, () =>
+      importGarminActivitiesForDate(owner, parsed.data.date, { start: parsed.data.start }),
+    )
     return Response.json(result, { headers: privateHeaders })
   } catch (error) {
+    if (error instanceof GarminProviderLeaseUnavailableError)
+      return Response.json(
+        { error: 'Garmin import is busy' },
+        { status: 409, headers: privateHeaders },
+      )
     if (error instanceof AccountUnavailableError)
       return new Response(null, { status: 403, headers: privateHeaders })
     if (error instanceof CredentialUnavailableError)

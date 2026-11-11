@@ -141,6 +141,35 @@ function fetcher(
 }
 
 describe('bounded Garmin activity import', () => {
+  it('reuses account verification only for pages with the same saved credential', async () => {
+    vi.clearAllMocks()
+    const identitySession: { accountId?: string; credentialNonce?: Uint8Array } = {}
+    const network = fetcher({ list: [] })
+    const page = { startDate: '2026-11-08', endDate: '2026-11-08', start: 0 }
+    await importGarminActivityPage(owner, page, {
+      fetcher: network,
+      pause: async () => {},
+      identitySession,
+    })
+    await importGarminActivityPage(owner, page, {
+      fetcher: network,
+      pause: async () => {},
+      identitySession,
+    })
+    expect(verifyGarminBearerAccount).toHaveBeenCalledTimes(1)
+    readProviderApiKeySnapshot.mockResolvedValueOnce({
+      key: 'synthetic-api-key',
+      nonce: new Uint8Array([4, 5, 6]),
+      accountId: '123456',
+    })
+    await importGarminActivityPage(owner, page, {
+      fetcher: network,
+      pause: async () => {},
+      identitySession,
+    })
+    expect(verifyGarminBearerAccount).toHaveBeenCalledTimes(2)
+  })
+
   it('refuses a changed Garmin account before searching or persisting activities', async () => {
     vi.clearAllMocks()
     vi.mocked(verifyGarminBearerAccount).mockResolvedValueOnce('999999')

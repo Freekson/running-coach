@@ -4,22 +4,22 @@ The app uses a dark theme from first paint. `src/app/globals.css` is the source 
 
 ## Color roles
 
-| Token                                                                | Purpose                                                            |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `--color-bg`                                                         | Page canvas (`#101417`)                                            |
-| `--color-surface`, `--color-surface-raised`, `--color-surface-hover` | Cards, controls, and interactive surfaces                          |
-| `--color-border`                                                     | Decorative dividers and card edges                                 |
-| `--color-border-strong`                                              | Input and secondary button boundaries that must be distinguishable |
-| `--color-text`, `--color-text-muted`                                 | Primary and supporting copy                                        |
-| `--color-primary`, `--color-primary-hover`, `--color-primary-active` | Links, primary actions, and active accents                         |
-| `--color-primary-foreground`                                         | Text and icons on a primary fill                                   |
-| `--color-focus`                                                      | Keyboard focus outline                                             |
-| `--color-success`, `--color-warning`, `--color-error`                | Status text and badges, accompanied by words or icons              |
-| `--color-admin`, `--color-admin-surface`                             | Administrator role badge text and surface                          |
-| `--color-sleep-deep`                                                 | Deep sleep (`#568E9A`)                                             |
-| `--color-sleep-light`                                                | Light sleep (`#88BDB0`)                                            |
-| `--color-sleep-rem`                                                  | REM sleep (`#A29CCC`)                                              |
-| `--color-sleep-awake`                                                | Awake time (`#C4A073`)                                             |
+| Token                                                                | Purpose                                                                       |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `--color-bg`                                                         | Page canvas (`#101417`)                                                       |
+| `--color-surface`, `--color-surface-raised`, `--color-surface-hover` | Cards, controls, and interactive surfaces                                     |
+| `--color-border`                                                     | Decorative dividers and card edges                                            |
+| `--color-border-strong`                                              | Input and secondary button boundaries that must be distinguishable            |
+| `--color-text`, `--color-text-muted`                                 | Primary and supporting copy                                                   |
+| `--color-primary`, `--color-primary-hover`, `--color-primary-active` | Links, primary actions, and active accents                                    |
+| `--color-primary-foreground`                                         | Text and icons on a primary fill                                              |
+| `--color-focus`                                                      | Keyboard focus outline                                                        |
+| `--color-success`, `--color-warning`, `--color-error`                | Status text and badges, accompanied by words or icons; error red is `#ff6b6b` |
+| `--color-admin`, `--color-admin-surface`                             | Administrator role badge text and surface                                     |
+| `--color-sleep-deep`                                                 | Deep sleep (`#568E9A`)                                                        |
+| `--color-sleep-light`                                                | Light sleep (`#88BDB0`)                                                       |
+| `--color-sleep-rem`                                                  | REM sleep (`#A29CCC`)                                                         |
+| `--color-sleep-awake`                                                | Awake time (`#C4A073`)                                                        |
 
 Use the role that matches the element, rather than copying a hex value. Add a new semantic token to the root palette when a genuinely new role is needed.
 

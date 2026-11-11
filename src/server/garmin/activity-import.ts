@@ -70,6 +70,7 @@ type Dependencies = {
   pacingMs?: number
   deadlineAt?: number
   timeNow?: () => number
+  identitySession?: { accountId?: string; credentialNonce?: Uint8Array }
 }
 
 type Window = {
@@ -199,19 +200,30 @@ export async function importGarminActivityPage(
     throw new GarminImportError('INVALID_RESPONSE')
   const authorization = `Bearer ${tokenResponse.value}`
   await paced()
-  let verifiedAccountId: string
-  try {
-    verifiedAccountId = await verifyGarminBearerAccount(authorization, {
-      fetcher,
-      now: dependencies.now,
-      timeoutMs: requestLimit(),
-    })
-  } catch (error) {
-    if (error instanceof GarminAccountIdentityError && error.code === 'RATE_LIMITED')
-      throw new GarminImportError('RATE_LIMITED')
-    throw new GarminImportError('ACCOUNT_UNVERIFIABLE')
+  const session = dependencies.identitySession
+  const reuseIdentity =
+    session?.accountId === credential.accountId &&
+    session.credentialNonce !== undefined &&
+    Buffer.from(session.credentialNonce).equals(Buffer.from(credential.nonce))
+  let verifiedAccountId = session?.accountId ?? ''
+  if (!reuseIdentity) {
+    try {
+      verifiedAccountId = await verifyGarminBearerAccount(authorization, {
+        fetcher,
+        now: dependencies.now,
+        timeoutMs: requestLimit(),
+      })
+    } catch (error) {
+      if (error instanceof GarminAccountIdentityError && error.code === 'RATE_LIMITED')
+        throw new GarminImportError('RATE_LIMITED')
+      throw new GarminImportError('ACCOUNT_UNVERIFIABLE')
+    }
   }
   if (verifiedAccountId !== credential.accountId) throw new GarminImportError('ACCOUNT_MISMATCH')
+  if (session && !reuseIdentity) {
+    session.accountId = verifiedAccountId
+    session.credentialNonce = credential.nonce
+  }
   await paced()
   const query = new URLSearchParams({
     start: String(start),

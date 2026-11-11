@@ -12,6 +12,7 @@ import { SectionHeading } from '@/components/ui/SectionHeading'
 import { useToast } from '@/components/ui/Toast'
 import type { MeasurementSystem } from '@/lib/measurement-system'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
+import type { GarminImportStreamState } from '@/server/garmin/data-import'
 import type { ProfilePatch } from '@/server/athlete/profile'
 import { useMeasurementSystem } from '../measurement-system-provider'
 import { useNavigationGuard } from '../navigation-guard'
@@ -53,12 +54,12 @@ export function AthleteSettingsRoute({
   initial,
   registrationName,
   garminConnection,
-  openaiConnection,
+  garminImports,
 }: {
   initial: Settings
   registrationName: string | null
   garminConnection: ProviderConnectionStatus
-  openaiConnection: ProviderConnectionStatus
+  garminImports: GarminImportStreamState[]
 }) {
   const router = useRouter()
   return (
@@ -66,7 +67,7 @@ export function AthleteSettingsRoute({
       initial={initial}
       registrationName={registrationName}
       garminConnection={garminConnection}
-      openaiConnection={openaiConnection}
+      garminImports={garminImports}
       onProfileSaved={() => router.refresh()}
     />
   )
@@ -76,13 +77,13 @@ export function AthleteSettings({
   initial,
   registrationName,
   garminConnection,
-  openaiConnection,
+  garminImports,
   onProfileSaved,
 }: {
   initial: Settings
   registrationName?: string | null
   garminConnection?: ProviderConnectionStatus
-  openaiConnection?: ProviderConnectionStatus
+  garminImports?: GarminImportStreamState[]
   onProfileSaved?: () => void
 }) {
   const { system, setSystem } = useMeasurementSystem()
@@ -452,7 +453,7 @@ export function AthleteSettings({
         </dl>
       </Card>
 
-      <ProviderCredentials initial={garminConnection} openaiInitial={openaiConnection} />
+      <ProviderCredentials initial={garminConnection} garminImports={garminImports} />
 
       <Dialog
         open={unsavedOpen}

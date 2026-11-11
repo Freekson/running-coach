@@ -20,6 +20,7 @@ import {
 } from '@/server/garmin/health-sync'
 import { allowGarminImport, getGarminImportBlock } from '@/server/garmin/import-rate-limit'
 import { getHealthPreferredTimezone } from '@/server/health/history'
+import { healthInitialImportReady } from '@/server/garmin/data-import'
 
 export const maxDuration = 40
 const headers = { 'Cache-Control': 'private, no-store' }
@@ -85,6 +86,8 @@ export async function POST(request: Request) {
     if (!parsed.success) return new Response(null, { status: 400, headers })
     const owner = getOwnerContext(user)
     diagnosticOwner = owner
+    if (!(await healthInitialImportReady(owner)))
+      return Response.json({ code: 'INITIAL_IMPORT_REQUIRED' }, { status: 409, headers })
     const state = await getGarminHealthSyncState(owner)
     if (state.status === 'SYNCING') return Response.json({ code: 'BUSY' }, { status: 409, headers })
     if (

@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { GARMIN_HISTORY_YEARS } from '@/lib/garmin-import-window'
 
 vi.mock('server-only', () => ({}))
 
@@ -32,15 +33,15 @@ it('catches up missed days before returning to the recent overlap', () => {
   expect(later).toMatchObject({ windowStart: '2026-11-04', windowEnd: '2026-11-10' })
 })
 
-it('continues from the oldest importable date after an absence longer than a month', () => {
+it('continues from the last checked date after an absence longer than a month', () => {
   const completed = { ...healthWindow('2026-09-20', false, 'UTC'), nextDate: null }
   expect(nextHealthWindow(completed, '2026-11-09', 'UTC')).toMatchObject({
-    windowStart: '2026-10-11',
+    windowStart: '2026-09-21',
     windowEnd: '2026-11-09',
   })
 })
 
-it('drops expired retry dates and resumes every still eligible date after a long pause', () => {
+it('keeps unresolved dates for catch-up after a long pause', () => {
   const stale = {
     ...healthWindow('2026-11-09', false, 'UTC'),
     nextDate: '2026-10-15',
@@ -48,18 +49,25 @@ it('drops expired retry dates and resumes every still eligible date after a long
     sleepFailedDates: ['2026-10-11'],
   }
   expect(eligibleHealthCheckpoint(stale, '2026-11-20', 'UTC')).toMatchObject({
-    windowStart: '2026-10-22',
-    nextDate: '2026-10-22',
-    sleepRetryDates: [],
-    sleepFailedDates: [],
+    windowStart: '2026-10-11',
+    nextDate: '2026-10-15',
+    sleepRetryDates: ['2026-10-11', '2026-10-13'],
+    sleepFailedDates: ['2026-10-11'],
   })
   expect(eligibleHealthCheckpoint(stale, '2026-12-15', 'UTC')).toMatchObject({
-    windowStart: '2026-11-16',
-    windowEnd: '2026-12-15',
-    nextDate: '2026-11-16',
-    sleepRetryDates: [],
-    sleepFailedDates: [],
+    windowStart: '2026-10-11',
+    windowEnd: '2026-11-09',
+    nextDate: '2026-10-15',
+    sleepRetryDates: ['2026-10-11', '2026-10-13'],
+    sleepFailedDates: ['2026-10-11'],
   })
+})
+
+it('caps incremental catch-up at the configured calendar-year history boundary', () => {
+  const completed = { ...healthWindow('1990-01-01', true, 'UTC'), nextDate: null }
+  expect(nextHealthWindow(completed, '2026-11-09', 'UTC').windowStart).toBe(
+    `${2026 - GARMIN_HISTORY_YEARS}-11-10`,
+  )
 })
 
 it('uses IANA day boundaries across UTC midnight and the DST fall-back hour', () => {

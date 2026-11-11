@@ -11,6 +11,7 @@ const {
   getGarminImportBlock,
   verifySavedGarminAccount,
   recordGarminHealthRequestDiagnostic,
+  healthInitialImportReady,
 } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   isVerifiedCurrentUser: vi.fn(() => true),
@@ -36,6 +37,7 @@ const {
   >(async () => null),
   verifySavedGarminAccount: vi.fn(async () => {}),
   recordGarminHealthRequestDiagnostic: vi.fn(async () => {}),
+  healthInitialImportReady: vi.fn(async () => true),
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({
@@ -51,6 +53,7 @@ vi.mock('@/server/garmin/health-sync', () => ({
   recordGarminHealthRequestDiagnostic,
 }))
 vi.mock('@/server/health/history', () => ({ getHealthPreferredTimezone }))
+vi.mock('@/server/garmin/data-import', () => ({ healthInitialImportReady }))
 vi.mock('@/server/garmin/health-import', () => ({
   GarminHealthImportError: class extends Error {},
 }))
@@ -82,6 +85,15 @@ beforeEach(() => {
     role: 'USER',
     email: null,
   })
+  healthInitialImportReady.mockResolvedValue(true)
+})
+
+it('requires both initial health streams before incremental sync', async () => {
+  healthInitialImportReady.mockResolvedValueOnce(false)
+  const response = await POST(post())
+  expect(response.status).toBe(409)
+  expect(await response.json()).toEqual({ code: 'INITIAL_IMPORT_REQUIRED' })
+  expect(runGarminHealthSync).not.toHaveBeenCalled()
 })
 
 it('rejects unauthenticated, cross-origin and client-selected day requests', async () => {

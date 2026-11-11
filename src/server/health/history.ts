@@ -7,6 +7,7 @@ import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
 import { assertProviderApiKeySnapshotCurrent } from '@/server/provider/vault'
 import type { HealthTimezoneBasis } from '@/lib/health-history'
+import { mergeGarminProjection, type ProviderProjection } from '@/server/garmin/provider-projection'
 
 function dbDate(date: string): Date {
   return new Date(`${date}T00:00:00.000Z`)
@@ -43,6 +44,7 @@ export async function saveGarminHealthObservation(
   fetchedAt: Date,
   attemptSequence: bigint,
   timezoneBasis: HealthTimezoneBasis = 'REQUEST_INFERRED',
+  projection?: ProviderProjection | null,
 ): Promise<void> {
   const userId = ownerId(owner)
   const nonceBytes = Uint8Array.from(credentialNonce)
@@ -66,6 +68,25 @@ export async function saveGarminHealthObservation(
       localDate: dbDate(localDate),
       garminAccountId,
     }
+    const previous = projection
+      ? await tx.dailyHealthMetric.findUnique({
+          where: { userId_sourceProvider_localDate_garminAccountId: key },
+          select: { rawMetadata: true },
+        })
+      : null
+    const existingMetadata =
+      previous?.rawMetadata &&
+      typeof previous.rawMetadata === 'object' &&
+      !Array.isArray(previous.rawMetadata)
+        ? previous.rawMetadata
+        : {}
+    const projectionKey = kind === 'summary' ? 'garminDailySummaryV1' : 'garminSleepV1'
+    const rawMetadata = projection
+      ? {
+          ...existingMetadata,
+          [projectionKey]: mergeGarminProjection(existingMetadata[projectionKey], projection),
+        }
+      : undefined
     const fields =
       kind === 'summary'
         ? {
@@ -78,6 +99,7 @@ export async function saveGarminHealthObservation(
               : {}),
             summaryFetchedAt: fetchedAt,
             summaryAttemptSequence: attemptSequence,
+            ...(rawMetadata ? { rawMetadata } : {}),
           }
         : {
             ...(observation?.sleepDurationMs != null
@@ -104,6 +126,7 @@ export async function saveGarminHealthObservation(
               : {}),
             sleepFetchedAt: fetchedAt,
             sleepAttemptSequence: attemptSequence,
+            ...(rawMetadata ? { rawMetadata } : {}),
           }
     await tx.dailyHealthMetric.createMany({
       data: {

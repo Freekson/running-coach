@@ -89,6 +89,10 @@ vi.mock('@/server/garmin/health-sync', () => ({
     errorCode: null,
   })),
 }))
+vi.mock('@/server/garmin/data-import', () => ({
+  getGarminImportState: vi.fn(async () => []),
+  healthInitialImportReady: vi.fn(async () => false),
+}))
 const { notFound } = vi.hoisted(() => ({
   notFound: vi.fn(() => {
     throw new Error('Not found')
@@ -204,7 +208,7 @@ describe('authenticated /app routes', () => {
     expect(settings.props.children.props.initial.profile.measurementSystem).toBe('METRIC')
     expect(getAthleteProfile).toHaveBeenCalledWith({ userId: 'user-a' })
     expect(getProviderConnectionStatus).toHaveBeenCalledWith({ userId: 'user-a' }, 'GARMIN')
-    expect(getProviderConnectionStatus).toHaveBeenCalledWith({ userId: 'user-a' }, 'OPENAI')
+    expect(getProviderConnectionStatus).toHaveBeenCalledTimes(1)
     const health = await HealthPage()
     expect(health.type).toBe(AppShell)
     expect(getHealthTrendRows).toHaveBeenCalledWith({ userId: 'user-a' }, null, expect.any(String))

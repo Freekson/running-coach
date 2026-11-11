@@ -3,6 +3,11 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
+import {
+  earliestGarminHistoryDate,
+  garminHistoryWindowDays,
+  GARMIN_MAX_HISTORY_DAYS,
+} from '@/lib/garmin-import-window'
 import type { GarminSyncState } from '@/lib/garmin-sync-state'
 import type { HealthTimezoneBasis } from '@/lib/health-history'
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
@@ -34,18 +39,17 @@ const checkpointSchema = z
     windowStart: z.iso.date(),
     windowEnd: z.iso.date(),
     nextDate: z.iso.date().nullable(),
-    sleepRetryDates: z.array(z.iso.date()).max(30).default([]),
-    sleepFailedDates: z.array(z.iso.date()).max(30).default([]),
+    sleepRetryDates: z.array(z.iso.date()).max(GARMIN_MAX_HISTORY_DAYS).default([]),
+    sleepFailedDates: z.array(z.iso.date()).max(GARMIN_MAX_HISTORY_DAYS).default([]),
     fallbackTimezone: z.string().min(1),
   })
   .refine(
     (checkpoint) =>
       validTimezone(checkpoint.fallbackTimezone) &&
-      checkpoint.windowStart <= checkpoint.windowEnd &&
-      (Date.parse(`${checkpoint.windowEnd}T00:00:00Z`) -
-        Date.parse(`${checkpoint.windowStart}T00:00:00Z`)) /
-        86_400_000 <
-        30 &&
+      garminHistoryWindowDays(checkpoint.windowStart, checkpoint.windowEnd) !== null &&
+      checkpoint.sleepRetryDates.length <=
+        (garminHistoryWindowDays(checkpoint.windowStart, checkpoint.windowEnd) ?? 0) &&
+      checkpoint.sleepFailedDates.length <= checkpoint.sleepRetryDates.length &&
       new Set(checkpoint.sleepRetryDates).size === checkpoint.sleepRetryDates.length &&
       new Set(checkpoint.sleepFailedDates).size === checkpoint.sleepFailedDates.length &&
       checkpoint.sleepFailedDates.every((date) => checkpoint.sleepRetryDates.includes(date)) &&
@@ -231,12 +235,13 @@ export function nextHealthWindow(
 ): Checkpoint {
   const overlapStart = addDays(today, -6)
   const firstMissingDate = addDays(checkpoint.windowEnd, 1)
-  // Advance past dates outside the bounded import horizon so a long absence
-  // cannot leave the cursor permanently failing on an old date.
-  const oldestImportableDate = addDays(today, -29)
-  const catchupStart =
-    firstMissingDate < oldestImportableDate ? oldestImportableDate : firstMissingDate
-  const start = catchupStart < overlapStart ? catchupStart : overlapStart
+  const oldest = earliestGarminHistoryDate(today)
+  const start =
+    firstMissingDate < overlapStart
+      ? firstMissingDate < oldest
+        ? oldest
+        : firstMissingDate
+      : overlapStart
   return {
     version: 1,
     mode: 'RECENT',
@@ -254,7 +259,7 @@ export function eligibleHealthCheckpoint(
   today: string,
   timezone: string,
 ): Checkpoint {
-  const oldest = addDays(today, -29)
+  const oldest = earliestGarminHistoryDate(today)
   if (checkpoint.windowEnd < oldest) return nextHealthWindow(checkpoint, today, timezone)
   const windowStart = checkpoint.windowStart < oldest ? oldest : checkpoint.windowStart
   const nextDate =
@@ -578,27 +583,41 @@ export async function runGarminHealthSync(
     : browserTimezone
   if (!validTimezone(fallbackTimezone)) throw new GarminHealthImportError('INVALID_DATE')
   const cursorKey = { connectionId: connection.id, dataType: 'HEALTH' }
-  const hasHistory = Boolean(
-    await prisma.dailyHealthMetric.findFirst({
-      where: {
-        userId,
-        sourceProvider: 'GARMIN',
-        garminAccountId: connection.externalAccountId,
-        OR: [{ summaryFetchedAt: { not: null } }, { sleepFetchedAt: { not: null } }],
-      },
-      select: { id: true },
-    }),
-  )
+  const importCursors = await prisma.syncCursor.findMany({
+    where: {
+      userId,
+      connectionId: connection.id,
+      dataType: { in: ['GARMIN_IMPORT_DAILY_SUMMARY', 'GARMIN_IMPORT_SLEEP'] },
+    },
+    select: { cursorOrCheckpoint: true },
+  })
+  const initialCoverageEnds = importCursors.flatMap((cursor) => {
+    const value = cursor.cursorOrCheckpoint
+    return value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      'endDate' in value &&
+      typeof value.endDate === 'string' &&
+      z.iso.date().safeParse(value.endDate).success
+      ? [value.endDate]
+      : []
+  })
+  const today = localDay(started, fallbackTimezone)
+  const initial = healthWindow(today, initialCoverageEnds.length === 2, fallbackTimezone)
+  if (initialCoverageEnds.length === 2) {
+    const firstMissing = addDays(initialCoverageEnds.sort()[0], 1)
+    const overlap = addDays(today, -6)
+    const oldest = earliestGarminHistoryDate(today)
+    initial.windowStart =
+      firstMissing < overlap ? (firstMissing < oldest ? oldest : firstMissing) : overlap
+    initial.nextDate = initial.windowStart
+  }
   await prisma.syncCursor.upsert({
     where: { connectionId_dataType: cursorKey },
     create: {
       userId,
       ...cursorKey,
-      cursorOrCheckpoint: healthWindow(
-        localDay(started, fallbackTimezone),
-        hasHistory,
-        fallbackTimezone,
-      ),
+      cursorOrCheckpoint: initial,
     },
     update: {},
   })
@@ -726,6 +745,7 @@ export async function runGarminHealthSync(
         {
           sleepTimezone: zones.sleep,
           selectionTimezone: checkpoint.fallbackTimezone,
+          earliestAllowedDate: checkpoint.windowStart,
           now: now(),
           requestTimeoutMs: 10_000,
           session,

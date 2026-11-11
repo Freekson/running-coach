@@ -4,16 +4,17 @@ import { AppShell } from '../app-shell'
 import { getAthleteProfile } from '@/server/athlete/profile'
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { getProviderConnectionStatus } from '@/server/provider/vault'
+import { getGarminImportState } from '@/server/garmin/data-import'
 import { AthleteSettingsRoute } from './athlete-settings'
 
 export default async function SettingsPage() {
   const user = await getAppUser()
   if (!user) return <AccountUnavailable />
   const owner = getOwnerContext(user)
-  const [profile, garminConnection, openaiConnection] = await Promise.all([
+  const [profile, garminConnection, garminImports] = await Promise.all([
     getAthleteProfile(owner),
     getProviderConnectionStatus(owner, 'GARMIN'),
-    getProviderConnectionStatus(owner, 'OPENAI'),
+    getGarminImportState(owner),
   ])
   return (
     <AppShell user={user} measurementSystem={profile.measurementSystem}>
@@ -22,7 +23,7 @@ export default async function SettingsPage() {
         initial={{ profile }}
         registrationName={user.name ?? null}
         garminConnection={garminConnection}
-        openaiConnection={openaiConnection}
+        garminImports={garminImports}
       />
     </AppShell>
   )

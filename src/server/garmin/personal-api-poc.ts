@@ -83,11 +83,12 @@ async function boundedText(response: Response, maxBytes: number): Promise<string
   return (await boundedBytes(response, maxBytes)).toString('utf8')
 }
 
-async function boundedJson(response: Response): Promise<unknown> {
+async function boundedJson(response: Response, maxBytes: number): Promise<unknown> {
   try {
-    const body = await boundedText(response, MAX_JSON_BYTES)
+    const body = await boundedText(response, maxBytes)
     return body.trim() ? (JSON.parse(body) as unknown) : null
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'TOO_LARGE') throw error
     throw new Error('INVALID_JSON')
   }
 }
@@ -114,6 +115,7 @@ export async function requestJson(
   method: 'GET' | 'POST' = 'GET',
   responseKind: 'json' | 'token' = 'json',
   timeoutMs = TIMEOUT_MS,
+  maxJsonBytes = MAX_JSON_BYTES,
 ): Promise<{ status: GarminProbeResult['status']; value?: unknown; retryAfterMs?: number }> {
   try {
     const response = await fetcher(new URL(path, BASE_URL), {
@@ -147,7 +149,7 @@ export async function requestJson(
         value:
           responseKind === 'token'
             ? (await boundedText(response, 16 * 1024)).trim()
-            : await boundedJson(response),
+            : await boundedJson(response, maxJsonBytes),
       }
     } catch (error) {
       if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError'))

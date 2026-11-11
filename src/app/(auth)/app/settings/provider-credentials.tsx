@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   CircleCheck,
@@ -12,10 +11,8 @@ import {
   EyeOff,
   KeyRound,
   LockKeyhole,
-  PlugZap,
   Plus,
   RefreshCw,
-  Sparkles,
   Trash2,
   TriangleAlert,
   Watch,
@@ -29,6 +26,8 @@ import { SectionHeading } from '@/components/ui/SectionHeading'
 import { useToast } from '@/components/ui/Toast'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
 import { garminAccountIssueMessage } from '@/lib/garmin-account-message'
+import type { GarminImportStreamState } from '@/server/garmin/data-import'
+import { GarminDataImport } from './garmin-data-import'
 import styles from './provider-credentials.module.scss'
 
 const endpoint = '/api/integrations/garmin'
@@ -60,15 +59,9 @@ function garminDescription(status: ProviderConnectionStatus['status']) {
     case 'CONNECTED':
       return 'Garmin access verified. Activity and health imports are available.'
     case 'KEY_SAVED':
-      return (
-        <>
-          Garmin account verified. To confirm data access, choose <strong>Sync now</strong> on{' '}
-          <Link href="/app/health">Health</Link> or <strong>Sync activities</strong> on{' '}
-          <Link href="/app/training">Training</Link>.
-        </>
-      )
+      return 'Garmin account verified. Choose streams below to import your data.'
     case 'VERIFICATION_REQUIRED':
-      return 'This saved key has no verified Garmin account ID. Open Health and choose Verify & sync, or replace the key.'
+      return 'This saved key has no verified Garmin account ID. Verify it here or replace the key.'
     case 'ERROR':
       return 'Garmin access could not be verified. Replace the key to resume imports.'
     case 'EXPIRED':
@@ -107,24 +100,24 @@ async function saveError(response: Response): Promise<string> {
 
 export function ProviderCredentials({
   initial,
-  openaiInitial,
+  garminImports = [],
 }: {
   initial?: ProviderConnectionStatus
-  openaiInitial?: ProviderConnectionStatus
+  garminImports?: GarminImportStreamState[]
 }) {
   const connection = initial?.provider === 'GARMIN' ? initial : disconnected()
-  const version = `${connection.status}:${connection.createdAt}:${connection.updatedAt}:${openaiInitial?.status}:${openaiInitial?.updatedAt}`
+  const version = `${connection.status}:${connection.createdAt}:${connection.updatedAt}`
   return (
-    <ProviderCredentialsPanel key={version} initial={connection} openaiInitial={openaiInitial} />
+    <ProviderCredentialsPanel key={version} initial={connection} garminImports={garminImports} />
   )
 }
 
 function ProviderCredentialsPanel({
   initial,
-  openaiInitial,
+  garminImports,
 }: {
   initial: ProviderConnectionStatus
-  openaiInitial?: ProviderConnectionStatus
+  garminImports: GarminImportStreamState[]
 }) {
   const toast = useToast()
   const router = useRouter()
@@ -135,10 +128,6 @@ function ProviderCredentialsPanel({
   const [keyOpen, setKeyOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [deleteDataOpen, setDeleteDataOpen] = useState(false)
-  const [openaiRemoveOpen, setOpenaiRemoveOpen] = useState(false)
-  const [openaiSaved, setOpenaiSaved] = useState(
-    openaiInitial?.provider === 'OPENAI' && openaiInitial.status !== 'DISCONNECTED',
-  )
   const [pending, setPending] = useState(false)
   const saved = connection.status !== 'DISCONNECTED'
   const display = displayStatus(connection.status)
@@ -158,7 +147,6 @@ function ProviderCredentialsPanel({
     if (key.length < 8 || key.length > 2048 || !/^[\x21-\x7e]+$/.test(key)) {
       const message = 'Enter a valid API key without spaces (8–2048 characters).'
       setFieldError(message)
-      toast('error', message, 'garmin-key')
       return
     }
     setPending(true)
@@ -176,7 +164,6 @@ function ProviderCredentialsPanel({
       if (!response.ok) {
         const message = await saveError(response)
         setFieldError(message)
-        toast('error', message, 'garmin-key')
         return
       }
       const status: ProviderConnectionStatus = await response.json()
@@ -192,7 +179,6 @@ function ProviderCredentialsPanel({
         ? 'The server returned an unexpected response. Try again.'
         : 'Network error. Check your connection and try again.'
       setFieldError(message)
-      toast('error', message, 'garmin-key')
     } finally {
       setPending(false)
     }
@@ -229,25 +215,32 @@ function ProviderCredentialsPanel({
     }
   }
 
-  async function removeOpenai() {
+  async function verifySavedKey() {
     if (pending) return
     setPending(true)
     try {
-      const response = await fetch('/api/integrations/openai', {
-        method: 'DELETE',
+      const response = await fetch('/api/integrations/garmin/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        cache: 'no-store',
+        body: JSON.stringify({
+          streamId: 'daily_summary',
+          action: 'verify',
+          browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        }),
       })
       if (!response.ok) {
-        toast('error', 'Could not remove the OpenAI key. Try again.', 'openai-key')
+        toast(
+          'error',
+          'The saved Garmin key could not be verified. Replace it or try again later.',
+          'garmin-key',
+        )
         return
       }
-      setOpenaiSaved(false)
-      setOpenaiRemoveOpen(false)
-      toast('success', 'OpenAI key removed from Running Coach.', 'openai-key')
+      toast('success', 'Garmin account verified. Choose streams to import.', 'garmin-key')
       router.refresh()
     } catch {
-      toast('error', 'Network error. Check your connection and try again.', 'openai-key')
+      toast('error', 'Network error. Check your connection and try again.', 'garmin-key')
     } finally {
       setPending(false)
     }
@@ -281,31 +274,23 @@ function ProviderCredentialsPanel({
 
   return (
     <>
-      <Card as="section" className={styles.card} aria-labelledby="integrations-heading">
-        <SectionHeading
-          icon={PlugZap}
-          id="integrations-heading"
-          title="Integrations & API keys"
-          subtitle="Manage external services connected to Running Coach."
-          className={styles.heading}
-        />
+      <Card as="section" className={styles.card} aria-label="Garmin Connect">
         <div className={styles.provider}>
           <div className={styles.providerIdentity}>
-            <SectionHeading icon={Watch} title="Garmin Connect" level={3} />
+            <SectionHeading
+              icon={Watch}
+              title="Garmin Connect"
+              level={2}
+              className={styles.providerHeading}
+            />
             <div className={styles.statusLine}>
               <Badge tone={display.tone} className={styles.status}>
                 <StatusIcon size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
                 {display.label}
               </Badge>
-              {connection.status === 'KEY_SAVED' && (
-                <span className={styles.statusDetail}>Ready to sync manually</span>
-              )}
-              {connection.status === 'VERIFICATION_REQUIRED' && (
-                <span className={styles.statusDetail}>Sync paused</span>
-              )}
             </div>
+            <p className={styles.description}>{garminDescription(connection.status)}</p>
           </div>
-          <p className={styles.description}>{garminDescription(connection.status)}</p>
           <div className={styles.actions}>
             <Button variant={saved ? 'secondary' : 'primary'} onClick={() => setKeyOpen(true)}>
               {saved ? (
@@ -321,49 +306,27 @@ function ProviderCredentialsPanel({
                 className={styles.removeButton}
                 onClick={() => setRemoveOpen(true)}
               >
+                <Trash2 size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
                 Remove key
+              </Button>
+            )}
+            {connection.status === 'VERIFICATION_REQUIRED' && (
+              <Button variant="secondary" onClick={() => void verifySavedKey()} disabled={pending}>
+                Verify saved key
               </Button>
             )}
           </div>
         </div>
-        <div className={styles.provider}>
-          <div className={styles.providerIdentity}>
-            <SectionHeading icon={Sparkles} title="OpenAI" level={3} />
-            <div className={styles.statusLine}>
-              <Badge tone="neutral" className={styles.status}>
-                {openaiSaved ? (
-                  <KeyRound size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-                ) : (
-                  <Clock3 size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-                )}
-                {openaiSaved ? 'Key saved' : 'Coming soon'}
-              </Badge>
-              {openaiSaved && <span className={styles.statusDetail}>Coming soon</span>}
-            </div>
-          </div>
-          <p className={styles.description}>
-            {openaiSaved
-              ? 'Your key is stored. Automatic training plan generation is coming soon.'
-              : 'Automatic training plan generation is coming soon.'}
-          </p>
-          {openaiSaved && (
-            <div className={styles.actions}>
-              <Button
-                variant="secondary"
-                className={styles.removeButton}
-                onClick={() => setOpenaiRemoveOpen(true)}
-              >
-                Remove saved key
-              </Button>
-            </div>
-          )}
-        </div>
+      </Card>
+      {(connection.status === 'CONNECTED' || connection.status === 'KEY_SAVED') &&
+        garminImports.length > 0 && <GarminDataImport initial={garminImports} />}
+      <Card as="section" className={styles.card} aria-label="Delete imported Garmin data">
         <div className={styles.dangerZone}>
           <SectionHeading
             icon={Trash2}
             title="Delete imported Garmin data"
             subtitle="Remove Garmin activities, laps, health records and sync history, then reset the Garmin account association."
-            level={3}
+            level={2}
             className={styles.dangerDetails}
           />
           <Button
@@ -371,6 +334,7 @@ function ProviderCredentialsPanel({
             className={styles.dangerButton}
             onClick={() => setDeleteDataOpen(true)}
           >
+            <Trash2 size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
             Delete all imported Garmin data
           </Button>
         </div>
@@ -456,18 +420,6 @@ function ProviderCredentialsPanel({
           variant="destructive"
           onConfirm={remove}
           onClose={() => setRemoveOpen(false)}
-          pending={pending}
-        />
-      )}
-      {openaiRemoveOpen && (
-        <ConfirmDialog
-          open
-          title="Remove saved OpenAI key?"
-          description="The stored key will be deleted from Running Coach. It must be revoked separately in your OpenAI account."
-          confirmText="Remove key"
-          variant="destructive"
-          onConfirm={removeOpenai}
-          onClose={() => setOpenaiRemoveOpen(false)}
           pending={pending}
         />
       )}

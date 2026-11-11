@@ -43,3 +43,31 @@ export async function releaseGarminProviderLease(
     data: { leaseToken: null, leaseExpiresAt: null },
   })
 }
+
+export class GarminProviderLeaseUnavailableError extends Error {
+  constructor() {
+    super('Garmin provider is busy')
+  }
+}
+
+/** Wrap entry points without a durable stream cursor in the shared provider lease. */
+export async function withGarminProviderLease<T>(
+  owner: OwnerContext,
+  work: () => Promise<T>,
+): Promise<T> {
+  const userId = ownerId(owner)
+  const prisma = await getPrismaClient()
+  const connection = await prisma.integrationConnection.findUnique({
+    where: { userId_provider: { userId, provider: 'GARMIN' } },
+    select: { id: true, status: true, credential: { select: { connectionId: true } } },
+  })
+  if (!connection?.credential || connection.status !== 'CONNECTED')
+    throw new GarminProviderLeaseUnavailableError()
+  const token = await claimGarminProviderLease(owner, connection.id, new Date())
+  if (!token) throw new GarminProviderLeaseUnavailableError()
+  try {
+    return await work()
+  } finally {
+    await releaseGarminProviderLease(owner, connection.id, token)
+  }
+}

@@ -213,8 +213,31 @@ it('records no data as missing and rejects a mismatched provider day', async () 
     })
   await expect(
     importGarminHealthDate(owner, '2026-11-07', 'UTC', { now, pause: async () => {} }),
-  ).rejects.toMatchObject({ code: 'SUMMARY_DATE_MISMATCH' })
+  ).rejects.toMatchObject({
+    code: 'SUMMARY_DATE_MISMATCH',
+    diagnosticCode: 'SUMMARY_DATE_MISMATCH',
+  })
   expect(saveGarminHealthObservation).not.toHaveBeenCalled()
+})
+
+it('counts a bare empty daily response as checked during a failed-date retry', async () => {
+  requestJson
+    .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
+    .mockResolvedValueOnce({ status: 200, value: [] })
+  await expect(
+    importGarminHealthDate(owner, '2026-11-07', 'UTC', {
+      now,
+      pause: async () => {},
+      sources: 'SUMMARY_ONLY',
+    }),
+  ).resolves.toMatchObject({ status: 'SUMMARY_ONLY' })
+  expect(saveGarminHealthObservation).toHaveBeenCalledOnce()
+  expect(saveGarminHealthObservation.mock.calls[0].slice(1, 5)).toEqual([
+    'summary',
+    '2026-11-07',
+    'UTC',
+    null,
+  ])
 })
 
 it('keeps a nonempty malformed single-day summary unresolved', async () => {
@@ -223,9 +246,43 @@ it('keeps a nonempty malformed single-day summary unresolved', async () => {
     .mockResolvedValueOnce({ status: 200, value: { data: [null] } })
   await expect(
     importGarminHealthDate(owner, '2026-11-07', 'UTC', { now, pause: async () => {} }),
-  ).rejects.toMatchObject({ code: 'SUMMARY_INVALID_RESPONSE' })
+  ).rejects.toMatchObject({
+    code: 'SUMMARY_INVALID_RESPONSE',
+    diagnosticCode: 'SUMMARY_INVALID_RECORD',
+  })
   expect(saveGarminHealthObservation).not.toHaveBeenCalled()
   expect(requestJson).toHaveBeenCalledTimes(2)
+})
+
+it('stops a daily range that exceeds its bounded response limit without failing a date', async () => {
+  requestJson
+    .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
+    .mockResolvedValueOnce({ status: 'TOO_LARGE' })
+  await expect(
+    importGarminHealthDate(owner, '2026-11-07', 'UTC', {
+      now,
+      pause: async () => {},
+      sources: 'SUMMARY_ONLY',
+      earliestAllowedDate: '2026-11-06',
+      batchStartDate: '2026-11-06',
+    }),
+  ).rejects.toMatchObject({ code: 'SUMMARY_TOO_LARGE' })
+  expect(saveGarminHealthObservation).not.toHaveBeenCalled()
+  expect(requestJson.mock.calls[1][6]).toBe(4 * 1024 * 1024)
+})
+
+it.each([
+  [null, 'SUMMARY_EMPTY_BODY'],
+  [{ data: null }, 'SUMMARY_NULL_DATA'],
+  [{ unexpected: [] }, 'SUMMARY_INVALID_ENVELOPE'],
+])('classifies an unresolved daily response without persisting it', async (payload, reason) => {
+  requestJson
+    .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
+    .mockResolvedValueOnce({ status: 200, value: payload })
+  await expect(
+    importGarminHealthDate(owner, '2026-11-07', 'UTC', { now, pause: async () => {} }),
+  ).rejects.toMatchObject({ code: 'SUMMARY_INVALID_RESPONSE', diagnosticCode: reason })
+  expect(saveGarminHealthObservation).not.toHaveBeenCalled()
 })
 
 it('treats a 204 sleep response as checked with no data', async () => {
@@ -618,7 +675,7 @@ it('falls back only for malformed summary and undated sleep records', async () =
   ])
 })
 
-it('checks a date omitted from a partial summary batch through one single-day fallback', async () => {
+it('counts a bare empty single-day summary after a partial batch as checked', async () => {
   requestJson
     .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
     .mockResolvedValueOnce({
@@ -632,7 +689,7 @@ it('checks a date omitted from a partial summary batch through one single-day fa
         { calendarDate: '2026-11-08', sleepTimeSeconds: 25_000 },
       ],
     })
-    .mockResolvedValueOnce({ status: 200, value: { data: [] } })
+    .mockResolvedValueOnce({ status: 200, value: [] })
   const session = {}
   await importGarminHealthDate(owner, '2026-11-07', 'UTC', {
     now,
@@ -650,6 +707,52 @@ it('checks a date omitted from a partial summary batch through one single-day fa
   expect(saveGarminHealthObservation.mock.calls[3][4]).toMatchObject({
     sleepDurationMs: 25_000_000,
   })
+})
+
+it('checks missing historical summary dates with an explicitly empty shorter range', async () => {
+  requestJson
+    .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
+    .mockResolvedValueOnce({
+      status: 200,
+      value: { data: [{ calendarDate: '2026-11-07', heartRate: { restingValue: 52 } }] },
+    })
+    .mockResolvedValueOnce({ status: 200, value: [] })
+  const session = {}
+  for (const date of ['2026-11-07', '2026-11-06', '2026-11-05']) {
+    await expect(
+      importGarminHealthDate(owner, date, 'UTC', {
+        now,
+        pause: async () => {},
+        session,
+        sources: 'SUMMARY_ONLY',
+        earliestAllowedDate: '2026-11-05',
+        batchStartDate: date === '2026-11-07' ? '2026-11-05' : undefined,
+      }),
+    ).resolves.toMatchObject({ status: 'SUMMARY_ONLY' })
+  }
+  expect(requestJson).toHaveBeenCalledTimes(3)
+  expect(requestJson.mock.calls[2][1]).toContain('startDate=2026-11-05&endDate=2026-11-06')
+  expect(saveGarminHealthObservation.mock.calls.map((call) => call[4])).toEqual([
+    expect.objectContaining({ restingHrBpm: 52 }),
+    null,
+    null,
+  ])
+})
+
+it('retries a failed historical date through a bounded empty range', async () => {
+  requestJson
+    .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
+    .mockResolvedValueOnce({ status: 200, value: [] })
+  await expect(
+    importGarminHealthDate(owner, '2026-11-06', 'UTC', {
+      now,
+      pause: async () => {},
+      sources: 'SUMMARY_ONLY',
+      earliestAllowedDate: '2026-11-05',
+    }),
+  ).resolves.toMatchObject({ status: 'SUMMARY_ONLY' })
+  expect(requestJson.mock.calls[1][1]).toContain('startDate=2026-11-05&endDate=2026-11-06')
+  expect(saveGarminHealthObservation.mock.calls[0][4]).toBeNull()
 })
 
 it('resolves duplicate sleep dates through the requested single-day endpoint', async () => {
@@ -818,7 +921,132 @@ it('refuses to reuse a batch session for another owner', async () => {
       session,
     }),
   ).rejects.toMatchObject({ code: 'UNAVAILABLE' })
-  expect(requestJson).toHaveBeenCalledTimes(5)
+  expect(requestJson).toHaveBeenCalledTimes(3)
+})
+
+it('uses one dated 365-day summary request and reuses its range for later dates', async () => {
+  const start = '2025-11-09'
+  const end = '2026-11-08'
+  const dates = Array.from({ length: 365 }, (_, index) =>
+    new Date(Date.parse(`${start}T00:00:00Z`) + index * 86_400_000).toISOString().slice(0, 10),
+  )
+  requestJson
+    .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
+    .mockResolvedValueOnce({
+      status: 200,
+      value: { data: dates.map((calendarDate) => ({ calendarDate })) },
+    })
+  const session = {}
+  for (const date of [end, '2026-11-07']) {
+    await importGarminHealthDate(owner, date, 'UTC', {
+      now,
+      pause: async () => {},
+      session,
+      sources: 'SUMMARY_ONLY',
+      batchStartDate: start,
+      earliestAllowedDate: start,
+    })
+  }
+  expect(requestJson).toHaveBeenCalledTimes(2)
+  expect(requestJson.mock.calls[1][1]).toContain(`startDate=${start}&endDate=${end}`)
+  expect(saveGarminHealthObservation).toHaveBeenCalledTimes(2)
+})
+
+it('uses one 30-day sleep request and counts a fully empty range as checked', async () => {
+  const start = '2026-10-10'
+  const end = '2026-11-08'
+  requestJson
+    .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
+    .mockResolvedValueOnce({ status: 200, value: [] })
+  const session = {}
+  for (const date of [end, '2026-11-07']) {
+    await importGarminHealthDate(owner, date, 'UTC', {
+      now,
+      pause: async () => {},
+      session,
+      sources: 'SLEEP_ONLY',
+      recheckFetchedSleep: true,
+      batchStartDate: start,
+      earliestAllowedDate: start,
+    })
+  }
+  expect(requestJson).toHaveBeenCalledTimes(2)
+  expect(requestJson.mock.calls[1][1]).toContain(`startDate=${start}&endDate=${end}`)
+  expect(saveGarminHealthObservation.mock.calls.map((call) => [call[1], call[4]])).toEqual([
+    ['sleep', null],
+    ['sleep', null],
+  ])
+})
+
+const napOnlySleep = {
+  calendarDate: null,
+  sleepTimeSeconds: null,
+  sleepStartTimestampGMT: null,
+  sleepStartTimestampLocal: null,
+  sleepEndTimestampGMT: null,
+  sleepEndTimestampLocal: null,
+  napTimeSeconds: 1_800,
+  dailyNapDTOS: [{ calendarDate: '2026-11-07', napTimeSec: 1_800 }],
+  deviceRemCapable: true,
+  retro: false,
+  sleepNeed: {},
+  nextSleepNeed: {},
+}
+
+it('checks a dated nap-only range row and retains its nap projection without inventing night sleep', async () => {
+  requestJson
+    .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
+    .mockResolvedValueOnce({ status: 200, value: [napOnlySleep] })
+  const result = await importGarminHealthDate(owner, '2026-11-07', 'UTC', {
+    now,
+    pause: async () => {},
+    sources: 'SLEEP_ONLY',
+    batchStartDate: '2026-11-07',
+    recheckFetchedSleep: true,
+  })
+  expect(result.status).toBe('SUCCEEDED')
+  expect(requestJson).toHaveBeenCalledTimes(2)
+  expect(requestJson.mock.calls[1][1]).toContain('startDate=2026-11-07&endDate=2026-11-07')
+  expect(saveGarminHealthObservation).toHaveBeenCalledOnce()
+  expect(saveGarminHealthObservation.mock.calls[0][4]).toBeNull()
+  expect(saveGarminHealthObservation.mock.calls[0][10]).toEqual({
+    schemaVersion: 1,
+    napTimeSeconds: 1_800,
+  })
+})
+
+it.each([
+  [
+    'another day',
+    { ...napOnlySleep, dailyNapDTOS: [{ calendarDate: '2026-11-06', napTimeSec: 1_800 }] },
+  ],
+  [
+    'mixed days',
+    {
+      ...napOnlySleep,
+      dailyNapDTOS: [
+        { calendarDate: '2026-11-07', napTimeSec: 900 },
+        { calendarDate: '2026-11-06', napTimeSec: 900 },
+      ],
+    },
+  ],
+  ['missing nap dates', { ...napOnlySleep, dailyNapDTOS: [{ napTimeSec: 1_800 }] }],
+  ['night sleep fields', { ...napOnlySleep, deepSleepSeconds: 600 }],
+])('keeps a nap-only range row with %s unresolved', async (_description, row) => {
+  requestJson
+    .mockResolvedValueOnce({ status: 200, value: 'synthetic-token' })
+    .mockResolvedValueOnce({ status: 200, value: [row] })
+    .mockResolvedValueOnce({ status: 200, value: { ...napOnlySleep, dailyNapDTOS: undefined } })
+  const result = await importGarminHealthDate(owner, '2026-11-07', 'UTC', {
+    now,
+    pause: async () => {},
+    sources: 'SLEEP_ONLY',
+    batchStartDate: '2026-11-07',
+    recheckFetchedSleep: true,
+  })
+  expect(result).toMatchObject({ status: 'PARTIAL', errorCode: 'SLEEP_INVALID_RESPONSE' })
+  expect(requestJson).toHaveBeenCalledTimes(3)
+  expect(saveGarminHealthObservation).not.toHaveBeenCalled()
 })
 
 it('counts bounded data/token requests and account checks for 30 initial and seven recent days', async () => {

@@ -7,12 +7,15 @@
   background: var(--color-surface);
   color: var(--color-text);
   box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
+  overscroll-behavior: contain;
 }
 .wide {
   width: min(100% - 32px, 680px);
 }
 .dialog::backdrop {
   background: rgb(0 0 0 / 65%);
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 .content {
   display: grid;

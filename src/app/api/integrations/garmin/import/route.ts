@@ -27,7 +27,7 @@ function rateLimitedResponse(code: string, retryAt: Date | null): Response {
 }
 const bodySchema = z.strictObject({
   streamId: z.enum(['daily_summary', 'sleep', 'activities']),
-  action: z.enum(['import', 'resume', 'retry', 'reimport', 'verify']),
+  action: z.enum(['import', 'resume', 'retry', 'reimport', 'verify', 'sync']),
   browserTimezone: z.string().min(1).max(100),
 })
 
@@ -88,9 +88,6 @@ export async function POST(request: Request) {
     if (!parsed.success) return new Response(null, { status: 400, headers })
     owner = getOwnerContext(user)
     const { streamId, action, browserTimezone } = parsed.data
-    // TODO(RUN-76 follow-up): Enable this stream after Activities import is implemented.
-    if (streamId === 'activities')
-      return Response.json({ code: 'NOT_SUPPORTED' }, { status: 422, headers })
     if (action === 'verify') {
       if (!(await allowGarminImport(owner))) {
         const block = await getGarminImportBlock(owner)

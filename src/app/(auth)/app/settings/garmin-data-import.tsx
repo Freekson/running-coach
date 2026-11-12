@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { SectionHeading } from '@/components/ui/SectionHeading'
-import type { GarminImportStreamState, ImportStreamId } from '@/server/garmin/data-import'
+import type { GarminImportStreamState, ImportStreamId } from '@/lib/garmin-import-state'
 import { useToast } from '@/components/ui/Toast'
 import { useClientReady } from '@/lib/use-client-ready'
 import { GARMIN_HISTORY_YEARS } from '@/lib/garmin-import-window'
@@ -50,7 +50,7 @@ const labels: Record<GarminImportStreamState['status'], string> = {
 const streamDescriptions: Record<ImportStreamId, string> = {
   daily_summary: 'Wellness and daily metrics (resting HR, steps, calories, etc.).',
   sleep: 'Sleep duration, stages (Deep, Light, REM) and sleep score.',
-  activities: 'Activity import will be available in a future update.',
+  activities: 'Workouts and activities (running, cycling, walking, etc.) with summary metrics.',
 }
 const streamIcons = { daily_summary: FileText, sleep: Moon, activities: Activity }
 const statusIcons = {
@@ -69,7 +69,7 @@ const statusTones = {
   completed_with_warnings: 'warning',
   completed: 'success',
 } as const
-const streamStateSchema = z.object({
+const baseStreamStateSchema = z.object({
   streamId: z.enum(['daily_summary', 'sleep', 'activities']),
   status: z.enum([
     'not_started',
@@ -91,9 +91,13 @@ const streamStateSchema = z.object({
   errorCode: z.string().nullable(),
   generation: z.number().int().positive().nullable(),
   activityCount: z.number().int().nonnegative().optional(),
+  pagesFetched: z.number().int().nonnegative().optional(),
   currentRange: z.object({ start: z.string(), end: z.string() }).nullable().optional(),
 })
-type ImportAction = 'import' | 'resume' | 'retry' | 'reimport'
+const streamStateSchema = baseStreamStateSchema.extend({
+  recentSync: baseStreamStateSchema.optional(),
+})
+type ImportAction = 'import' | 'resume' | 'retry' | 'reimport' | 'sync'
 type ImportItem = { streamId: ImportStreamId; action: ImportAction }
 type ImportResult =
   | { kind: 'states'; states: GarminImportStreamState[] }
@@ -108,6 +112,8 @@ const accountErrors = new Set([
   'ACCOUNT_UNVERIFIABLE',
   'ACCOUNT_VERIFICATION_REQUIRED',
   'INVALID_CHECKPOINT',
+  'INVALID_KEY',
+  'ACCESS_DENIED',
 ])
 
 function requiresAttention(code: string | null): boolean {
@@ -142,7 +148,13 @@ function safeFailure(code: string | null): string | null {
     return 'Verify the saved Garmin account before importing.'
   if (code === 'INVALID_CHECKPOINT') return 'Saved import progress needs attention.'
   if (code === 'ACCOUNT_MISMATCH') return 'The saved key belongs to a different Garmin account.'
-  if (code === 'NOT_CONNECTED') return 'The Garmin key was rejected. Replace it to continue.'
+  if (code === 'INVALID_KEY' || code === 'NOT_CONNECTED')
+    return 'The Garmin key was rejected. Replace it to continue.'
+  if (code === 'TOKEN_REJECTED')
+    return 'Garmin rejected the temporary access token. Retry the import to request a new token.'
+  if (code === 'ACCESS_DENIED') return 'Garmin denied activity access. Check the key permissions.'
+  if (code === 'INVALID_RESPONSE')
+    return 'Garmin returned invalid or changing activity data. Progress is saved; retry the page.'
   if (code === 'RATE_LIMITED') return rateLimitMessage
   if (/^(?:SLEEP|SUMMARY)_HTTP_40[13]$/.test(code))
     return 'Garmin denied this data stream. Check the key and account permissions.'
@@ -178,6 +190,7 @@ function retryAtFromHeader(value: string | null): string | null {
 
 function hasStreamDetails(stream: GarminImportStreamState): boolean {
   return Boolean(
+    stream.streamId === 'activities' ||
     stream.totalDays !== null ||
     stream.startDate ||
     stream.currentRange ||
@@ -223,6 +236,40 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
     const timer = setInterval(() => setNowMs(Date.now()), 5_000)
     return () => clearInterval(timer)
   }, [])
+
+  const externallyRunning =
+    !pending &&
+    streams.some((stream) => stream.status === 'running' || stream.recentSync?.status === 'running')
+  useEffect(() => {
+    if (!externallyRunning) return
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout>
+    async function refreshProgress() {
+      try {
+        const response = await fetch('/api/integrations/garmin/import', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        if (response.ok) {
+          const payload: unknown = await response.json()
+          const parsed = z.array(streamStateSchema).safeParse(payload)
+          if (parsed.success && !controller.signal.aborted && !activeRun.current)
+            setOverride({ initial, value: parsed.data })
+        }
+      } catch {
+        // A read-only refresh can retry without changing the saved import or starting a job.
+      } finally {
+        if (!controller.signal.aborted) timer = setTimeout(() => void refreshProgress(), 5_000)
+      }
+    }
+    timer = setTimeout(() => void refreshProgress(), 5_000)
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+    }
+  }, [externallyRunning, initial])
 
   const rateLimitDeadlines = [
     providerRetryAt,
@@ -291,12 +338,7 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
   }
 
   async function run(items: ImportItem[]) {
-    if (
-      activeRun.current ||
-      items.length === 0 ||
-      items.some((item) => item.streamId === 'activities')
-    )
-      return
+    if (activeRun.current || items.length === 0) return
     if (
       rateLimitUntil ||
       items.some((item) => {
@@ -317,8 +359,10 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
         if (controller.signal.aborted) break
         setActiveStream(item.streamId)
         let action = item.action
-        let previous = streams.find((stream) => stream.streamId === item.streamId)
-        const retrying = action === 'retry'
+        const progressState = (stream: GarminImportStreamState | undefined) =>
+          item.action === 'sync' ? stream?.recentSync : stream
+        let previous = progressState(streams.find((stream) => stream.streamId === item.streamId))
+        const retrying = action === 'retry' && item.streamId !== 'activities'
         let consecutiveStalls = 0
         for (;;) {
           if (controller.signal.aborted) break
@@ -347,7 +391,9 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
             if (!(await waitForRetry(retryAt, controller.signal))) break
             continue
           }
-          const current = result.states.find((stream) => stream.streamId === item.streamId)
+          const current = progressState(
+            result.states.find((stream) => stream.streamId === item.streamId),
+          )
           if (!current) throw new Error('Import stream missing from response')
           if (requiresAttention(current.errorCode)) {
             unresolved = true
@@ -361,7 +407,7 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
             consecutiveRateLimits++
             consecutiveStalls = 0
             previous = current
-            if (!retrying) action = 'resume'
+            if (!retrying) action = item.action === 'sync' ? 'sync' : 'resume'
             const retryAt = nextGarminRateLimitRetryAt(
               Date.now(),
               consecutiveRateLimits,
@@ -378,14 +424,16 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
             const advanced =
               current.nextDate !== previous?.nextDate ||
               current.checkedDays !== previous?.checkedDays ||
-              current.failedDateCount !== previous?.failedDateCount
+              current.failedDateCount !== previous?.failedDateCount ||
+              current.pagesFetched !== previous?.pagesFetched ||
+              current.activityCount !== previous?.activityCount
             consecutiveStalls = advanced ? 0 : consecutiveStalls + 1
             if (consecutiveStalls >= maxConsecutiveStalls) {
               unresolved = true
               break
             }
             previous = current
-            if (!retrying) action = 'resume'
+            if (!retrying) action = item.action === 'sync' ? 'sync' : 'resume'
             const retryAt = new Date(Math.max(Date.parse(current.retryAfter), Date.now() + 1_000))
             setWaitingUntil(retryAt.toISOString())
             if (!(await waitForRetry(retryAt.toISOString(), controller.signal))) break
@@ -404,12 +452,16 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
             continue
           }
           if (current.nextDate !== null && current.status !== 'completed') {
-            if (previous && current.nextDate === previous.nextDate) {
+            if (
+              previous &&
+              current.nextDate === previous.nextDate &&
+              current.pagesFetched === previous.pagesFetched
+            ) {
               unresolved = true
               break
             }
             previous = current
-            action = 'resume'
+            action = item.action === 'sync' ? 'sync' : 'resume'
             continue
           }
           break
@@ -420,7 +472,7 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
         if (!failed && unresolved)
           toast(
             'warning',
-            'Import paused with unresolved dates. Review the stream status.',
+            'Import paused with unresolved work. Review the stream status.',
             'garmin-data-import',
           )
         setSelected([])
@@ -472,10 +524,13 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
               <strong>Resume import</strong> continues unchecked history.
             </li>
             <li>
-              <strong>Retry failed dates</strong> checks only unresolved dates.
+              <strong>Retry failed dates</strong> checks only unresolved dates. Retry summaries
+              continues the saved activity page.
             </li>
             <li>
-              <strong>Reimport</strong> starts a new pass for that stream.
+              <strong>Reimport</strong> starts a new pass for that stream. Activity Sync now checks
+              recent dates with a seven-day overlap. Older edits need Reimport; deleted Garmin
+              activities remain saved.
             </li>
           </ul>
         </div>
@@ -494,21 +549,19 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
       )}
       <div className={styles.streams}>
         {streams.map((stream) => {
-          // TODO(RUN-76 follow-up): Enable Activities after its import flow is implemented.
-          const activitiesUnavailable = stream.streamId === 'activities'
+          const isActivities = stream.streamId === 'activities'
           const needsAccountAction = requiresAttention(stream.errorCode)
           const canResume =
-            !activitiesUnavailable &&
             (stream.status === 'paused' || stream.status === 'waiting_retry') &&
             stream.nextDate !== null &&
             !needsAccountAction
           const canRetry =
-            !activitiesUnavailable &&
-            stream.failedDateCount > 0 &&
+            (isActivities
+              ? Boolean(stream.errorCode && stream.nextDate)
+              : stream.failedDateCount > 0) &&
             !needsAccountAction &&
             stream.status !== 'running'
-          const selectable =
-            !activitiesUnavailable && (stream.status === 'not_started' || canResume)
+          const selectable = stream.status === 'not_started' || canResume
           const parsedRetryMs = stream.retryAfter ? Date.parse(stream.retryAfter) : 0
           const streamRetryMs = Number.isFinite(parsedRetryMs) ? parsedRetryMs : 0
           const blockedUntil =
@@ -524,27 +577,26 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
           const status = activeStatus ? (waitingUntil ? 'waiting_retry' : 'running') : stream.status
           const StatusIcon = statusIcons[status]
           const StreamIcon = streamIcons[stream.streamId]
-          const hasDetails = !activitiesUnavailable && hasStreamDetails(stream)
+          const hasDetails = hasStreamDetails(stream)
           const isExpanded = hasDetails && Boolean(expanded[stream.streamId])
           const detailsId = `garmin-${stream.streamId}-details`
           const retryHintId = `garmin-${stream.streamId}-retry-time`
           const statusLabel =
-            status === 'paused' && !stream.errorCode ? 'Ready to resume' : labels[status]
+            isActivities && status === 'completed'
+              ? 'Summary complete \u00b7 Laps pending'
+              : status === 'paused' && !stream.errorCode
+                ? 'Ready to resume'
+                : labels[status]
           const checkedCount = stream.checkedDays.toLocaleString('en-US')
           const totalCount = stream.totalDays?.toLocaleString('en-US')
           return (
-            <article
-              key={stream.streamId}
-              className={[styles.stream, activitiesUnavailable && styles.streamUnavailable]
-                .filter(Boolean)
-                .join(' ')}
-            >
+            <article key={stream.streamId} className={styles.stream}>
               <div className={styles.titleRow}>
                 <label className={styles.select}>
                   <input
                     type="checkbox"
                     aria-label={`Select ${names[stream.streamId]}`}
-                    checked={selected.includes(stream.streamId)}
+                    checked={stream.status === 'completed' || selected.includes(stream.streamId)}
                     disabled={pending || blocked || !selectable}
                     onChange={(event) =>
                       setSelected((current) =>
@@ -563,22 +615,15 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
                   <p>{streamDescriptions[stream.streamId]}</p>
                 </div>
                 {!hasDetails ? (
-                  <Badge
-                    tone={activitiesUnavailable ? 'neutral' : statusTones[status]}
-                    className={styles.staticStatus}
-                  >
-                    {activitiesUnavailable ? (
-                      <Clock3 size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-                    ) : (
-                      <StatusIcon
-                        size={16}
-                        strokeWidth={2}
-                        className={status === 'running' ? styles.statusSpinner : undefined}
-                        aria-hidden="true"
-                        focusable="false"
-                      />
-                    )}
-                    {activitiesUnavailable ? 'Coming later' : statusLabel}
+                  <Badge tone={statusTones[status]} className={styles.staticStatus}>
+                    <StatusIcon
+                      size={16}
+                      strokeWidth={2}
+                      className={status === 'running' ? styles.statusSpinner : undefined}
+                      aria-hidden="true"
+                      focusable="false"
+                    />
+                    {statusLabel}
                   </Badge>
                 ) : (
                   <button
@@ -594,7 +639,12 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
                       }))
                     }
                   >
-                    <Badge tone={statusTones[status]} className={styles.status}>
+                    <Badge
+                      tone={
+                        isActivities && status === 'completed' ? 'warning' : statusTones[status]
+                      }
+                      className={styles.status}
+                    >
                       <StatusIcon
                         size={16}
                         strokeWidth={2}
@@ -614,7 +664,7 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
               </div>
               {isExpanded && (
                 <div id={detailsId} className={styles.streamDetails}>
-                  {stream.totalDays !== null && (
+                  {!isActivities && stream.totalDays !== null && (
                     <div className={styles.coverage}>
                       <progress
                         value={stream.checkedDays}
@@ -631,10 +681,72 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
                       </div>
                     </div>
                   )}
-                  {stream.streamId === 'activities' && stream.lastSyncAt && (
-                    <p className={styles.note}>
-                      {stream.activityCount ?? 0} activities processed in the latest run. Total
-                      history is unknown.
+                  {isActivities && (
+                    <div className={styles.stages}>
+                      <section className={styles.stage} aria-labelledby="activity-summary-stage">
+                        <span className={styles.stageNumber} aria-hidden="true">
+                          1
+                        </span>
+                        <div className={styles.stageBody}>
+                          <div className={styles.stageHeading}>
+                            <h4 id="activity-summary-stage">Activity summaries</h4>
+                            <Badge tone={statusTones[status]}>
+                              {status === 'not_started' ? 'Not started' : labels[status]}
+                            </Badge>
+                          </div>
+                          <p>
+                            Import all activity types and their available distance, time, heart rate
+                            and other summary metrics.
+                          </p>
+                          <p className={styles.stageCount} role="status">
+                            {(stream.activityCount ?? 0).toLocaleString('en-US')} summaries imported{' '}
+                            {'\u00b7'} {(stream.pagesFetched ?? 0).toLocaleString('en-US')} pages
+                            checked
+                          </p>
+                          {stream.totalDays !== null && (
+                            <div className={styles.coverage}>
+                              <progress
+                                value={stream.checkedDays}
+                                max={stream.totalDays}
+                                aria-label="Activity summary date coverage"
+                              />
+                              <span className={styles.note}>
+                                {checkedCount} of {totalCount} dates verified.
+                                {stream.status === 'completed'
+                                  ? ' Summary coverage complete.'
+                                  : ' Activity total is known after traversal.'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                      <section className={styles.stage} aria-labelledby="activity-laps-stage">
+                        <span className={styles.stageNumber} aria-hidden="true">
+                          2
+                        </span>
+                        <div className={styles.stageBody}>
+                          <div className={styles.stageHeading}>
+                            <h4 id="activity-laps-stage">Normalized laps</h4>
+                            <Badge>Not started</Badge>
+                          </div>
+                          <p>
+                            FIT downloads and normalized lap data will be available in a future
+                            update.
+                          </p>
+                        </div>
+                      </section>
+                    </div>
+                  )}
+                  {isActivities && stream.recentSync && (
+                    <p className={styles.note} role="status">
+                      Recent sync: {labels[stream.recentSync.status]} {'\u00b7'}{' '}
+                      {stream.recentSync.activityCount ?? 0} summaries imported {'\u00b7'}{' '}
+                      {stream.recentSync.pagesFetched ?? 0} pages checked.
+                      {stream.recentSync.startDate &&
+                        ` Window: ${stream.recentSync.startDate} \u2013 ${stream.recentSync.endDate}.`}
+                      {stream.recentSync.retryAfter &&
+                        ` Retry after ${clientReady ? formatLocalDateTime(stream.recentSync.retryAfter) : 'the saved retry time'}.`}
+                      {safeFailure(stream.recentSync.errorCode)}
                     </p>
                   )}
                   {(stream.startDate ||
@@ -658,7 +770,7 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
                           </span>
                         </div>
                       )}
-                      {stream.currentRange && stream.streamId !== 'activities' && (
+                      {stream.currentRange && (
                         <div>
                           <Layers size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
                           <span>
@@ -724,7 +836,7 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
                         Resume import
                       </Button>
                     )}
-                    {stream.streamId !== 'activities' && canRetry && (
+                    {canRetry && (
                       <Button
                         size="compact"
                         variant="secondary"
@@ -733,31 +845,44 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
                         onClick={() => void run([{ streamId: stream.streamId, action: 'retry' }])}
                       >
                         <RotateCw size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
-                        Retry failed dates
+                        {isActivities ? 'Retry summaries' : 'Retry failed dates'}
                         {stream.failedDateCount > 0 ? ` (${stream.failedDateCount})` : ''}
                       </Button>
                     )}
-                    {stream.streamId !== 'activities' &&
-                      stream.status !== 'not_started' &&
-                      stream.status !== 'running' && (
-                        <Button
-                          size="compact"
-                          variant="secondary"
-                          disabled={pending || blocked}
-                          aria-describedby={blocked ? retryHintId : undefined}
-                          onClick={() =>
-                            void run([{ streamId: stream.streamId, action: 'reimport' }])
-                          }
-                        >
-                          <RotateCw
-                            size={18}
-                            strokeWidth={2}
-                            aria-hidden="true"
-                            focusable="false"
-                          />
-                          Reimport {names[stream.streamId]}
-                        </Button>
-                      )}
+                    {stream.status !== 'not_started' && stream.status !== 'running' && (
+                      <Button
+                        size="compact"
+                        variant="secondary"
+                        disabled={pending || blocked}
+                        aria-describedby={blocked ? retryHintId : undefined}
+                        onClick={() =>
+                          void run([{ streamId: stream.streamId, action: 'reimport' }])
+                        }
+                      >
+                        <RotateCw size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+                        Reimport {names[stream.streamId]}
+                      </Button>
+                    )}
+                    {isActivities && stream.status === 'completed' && (
+                      <Button
+                        size="compact"
+                        variant="secondary"
+                        disabled={
+                          pending ||
+                          stream.recentSync?.status === 'running' ||
+                          blocked ||
+                          Boolean(
+                            stream.recentSync?.retryAfter &&
+                            Date.parse(stream.recentSync.retryAfter) > nowMs,
+                          ) ||
+                          requiresAttention(stream.recentSync?.errorCode ?? null)
+                        }
+                        onClick={() => void run([{ streamId: 'activities', action: 'sync' }])}
+                      >
+                        <RotateCw size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+                        Sync now
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}

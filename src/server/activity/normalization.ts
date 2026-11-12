@@ -47,6 +47,8 @@ export const canonicalActivitySchema = z.object({
   cadenceStepsPerMinute: nullableNonnegative,
   elevationGainMeters: nullableNonnegative,
   elevationLossMeters: nullableNonnegative,
+  calories: z.number().int().min(0).max(2_147_483_647).nullable().optional(),
+  activityTitle: z.string().trim().min(1).max(200).nullable().optional(),
   laps: z.array(canonicalLapSchema).nullable(),
 })
 

@@ -141,6 +141,237 @@ function fetcher(
 }
 
 describe('bounded Garmin activity import', () => {
+  it('paginates a multi-year summary history across the 1000-record boundary', async () => {
+    vi.clearAllMocks()
+    const rows = Array.from({ length: 1025 }, (_, index) => ({
+      activityId: index + 2000,
+      activityType: { typeKey: index % 2 ? 'cycling' : 'running' },
+      startTimeGMT: '2024-06-01 06:00:00',
+    }))
+    const offsets: number[] = []
+    const network = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input))
+      if (url.pathname.includes('/personal-api-key/token')) return new Response('synthetic-bearer')
+      if (!url.pathname.includes('/search/activities'))
+        throw new Error('Unexpected detail or FIT request')
+      expect(url.searchParams.get('limit')).toBe('1000')
+      expect(url.searchParams.get('startDate')).toBe('2023-11-10')
+      expect(url.searchParams.get('endDate')).toBe('2026-11-11')
+      const offset = Number(url.searchParams.get('start'))
+      offsets.push(offset)
+      return Response.json(rows.slice(offset, offset + 1000))
+    })
+    const ids: string[] = []
+    let start = 0
+    for (;;) {
+      const page = await importGarminActivityPage(
+        owner,
+        {
+          startDate: '2023-11-10',
+          endDate: '2026-11-11',
+          start,
+          pageSize: 1000,
+          summariesOnly: { startDate: '2023-11-12', endDate: '2026-11-09', timezone: 'UTC' },
+        },
+        { fetcher: network, pause: async () => {} },
+      )
+      ids.push(...page.providerIds)
+      if (page.nextStart === null) break
+      start = page.nextStart
+    }
+    expect(offsets).toEqual([0, 1000, 1025])
+    expect(new Set(ids).size).toBe(1025)
+    expect(importCanonicalActivity).toHaveBeenCalledTimes(1025)
+    expect(canSkipFitDownload).not.toHaveBeenCalled()
+  })
+
+  it('imports a large summary response and resumes its exact provider offset before the run deadline', async () => {
+    vi.clearAllMocks()
+    const rows = Array.from({ length: 62 }, (_, index) => ({
+      activityId: index + 1000,
+      activityType: { typeKey: 'cycling' },
+      startTimeGMT: index === 0 ? '2026-11-08 23:30:00' : '2026-11-08 06:30:00',
+      syntheticExtra: 'x'.repeat(10_000),
+    }))
+    let clock = 0
+    importCanonicalActivity.mockImplementationOnce(async () => {
+      clock = 18_500
+      return { id: 'saved-first', lapImportStatus: 'UNAVAILABLE' }
+    })
+    const page = await importGarminActivityPage(
+      owner,
+      {
+        startDate: '2026-11-08',
+        endDate: '2026-11-08',
+        start: 0,
+        pageSize: 1000,
+        summariesOnly: { startDate: '2026-11-08', endDate: '2026-11-08', timezone: 'UTC' },
+      },
+      {
+        pause: async () => {},
+        deadlineAt: 20_000,
+        timeNow: () => clock,
+        fetcher: fetcher({ list: rows, searchLimit: '1000' }),
+      },
+    )
+    expect(page).toMatchObject({
+      providerIds: ['1000'],
+      pageIds: ['1000'],
+      nextStart: 1,
+      hasMore: true,
+    })
+    expect(importCanonicalActivity).toHaveBeenCalledTimes(1)
+    const next = await importGarminActivityPage(
+      owner,
+      {
+        startDate: '2026-11-08',
+        endDate: '2026-11-08',
+        start: 1,
+        pageSize: 1000,
+        summariesOnly: { startDate: '2026-11-08', endDate: '2026-11-08', timezone: 'UTC' },
+      },
+      { pause: async () => {}, fetcher: fetcher({ list: rows.slice(1), searchLimit: '1000' }) },
+    )
+    expect(next.nextStart).toBe(62)
+    expect(next.providerIds).toHaveLength(61)
+    expect(importCanonicalActivity).toHaveBeenCalledTimes(62)
+  })
+
+  it.each([401, 403, 429])(
+    'does not persist summaries when Garmin search returns %i',
+    async (status) => {
+      vi.clearAllMocks()
+      await expect(
+        importGarminActivityPage(
+          owner,
+          {
+            startDate: '2026-11-08',
+            endDate: '2026-11-08',
+            start: 0,
+            pageSize: 1000,
+            summariesOnly: { startDate: '2026-11-08', endDate: '2026-11-08', timezone: 'UTC' },
+          },
+          {
+            pause: async () => {},
+            fetcher: fetcher({ searchStatus: status, searchLimit: '1000', retryAfter: '120' }),
+          },
+        ),
+      ).rejects.toMatchObject({
+        code: status === 401 ? 'TOKEN_REJECTED' : status === 403 ? 'ACCESS_DENIED' : 'RATE_LIMITED',
+      })
+      expect(importCanonicalActivity).not.toHaveBeenCalled()
+      if (status === 429)
+        expect(pauseGarminProviderUntil).toHaveBeenCalledWith(
+          owner,
+          expect.any(Date),
+          expect.any(Uint8Array),
+        )
+    },
+  )
+
+  it('imports 62 all-sport summaries through capped pages without detail or FIT requests', async () => {
+    vi.clearAllMocks()
+    const records = Array.from({ length: 62 }, (_, index) => ({
+      activityId: index + 1000,
+      activityType: { typeKey: ['running', 'walking', 'cycling', 'swimming', 'yoga'][index % 5] },
+      startTimeGMT: '2026-11-08 06:30:00',
+      distance: 1200 + index,
+      duration: 600,
+      calories: 120,
+      activityName: 'Synthetic workout',
+      averageHR: index % 2 ? 130 : null,
+      lapCount: 12,
+      splitSummaries: [{ distance: 1000 }],
+    }))
+    const network = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input))
+      if (url.pathname.includes('/personal-api-key/token')) return new Response('synthetic-bearer')
+      if (url.pathname.includes('/search/activities')) {
+        expect(url.searchParams.get('limit')).toBe('1000')
+        const start = Number(url.searchParams.get('start'))
+        return Response.json(records.slice(start, start + 20))
+      }
+      throw new Error('Unexpected detail or FIT request')
+    })
+    const ids: string[] = []
+    let start = 0
+    for (;;) {
+      const page = await importGarminActivityPage(
+        owner,
+        {
+          startDate: '2026-11-06',
+          endDate: '2026-11-10',
+          start,
+          pageSize: 1000,
+          summariesOnly: { startDate: '2026-11-08', endDate: '2026-11-08', timezone: 'UTC' },
+        },
+        { fetcher: network, pause: async () => {} },
+      )
+      ids.push(...page.providerIds)
+      if (page.nextStart === null) break
+      start = page.nextStart
+    }
+    expect(new Set(ids).size).toBe(62)
+    expect(importCanonicalActivity).toHaveBeenCalledTimes(62)
+    expect(canSkipFitDownload).not.toHaveBeenCalled()
+    expect(importCanonicalActivity.mock.calls.map(([, value]) => value)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sportType: 'CYCLING',
+          laps: null,
+          calories: 120,
+          activityTitle: 'Synthetic workout',
+        }),
+        expect.objectContaining({ sportType: 'WALKING', laps: null }),
+        expect.objectContaining({ sportType: 'OTHER', laps: null }),
+      ]),
+    )
+  })
+
+  it('validates the full summary page before writes and filters by athlete-local dates', async () => {
+    vi.clearAllMocks()
+    const window = {
+      startDate: '2026-11-08',
+      endDate: '2026-11-09',
+      start: 0,
+      pageSize: 1000 as const,
+      summariesOnly: { startDate: '2026-11-09', endDate: '2026-11-09', timezone: 'Asia/Tokyo' },
+    }
+    const row = {
+      activityId: 1,
+      activityType: { typeKey: 'cycling' },
+      startTimeGMT: '2026-11-08 23:30:00',
+      duration: 1.5,
+    }
+    const options = {
+      pause: async () => {},
+      fetcher: fetcher({ list: [row], searchLimit: '1000' }),
+    }
+    await importGarminActivityPage(owner, window, options)
+    expect(importCanonicalActivity).toHaveBeenCalledWith(
+      owner,
+      expect.objectContaining({
+        startedAt: '2026-11-08T23:30:00.000Z',
+        sourceTimezone: null,
+        totalMs: 1500,
+        avgSpeedMps: null,
+        laps: null,
+      }),
+      expect.objectContaining({ summaryOnly: true }),
+    )
+    vi.clearAllMocks()
+    await expect(
+      importGarminActivityPage(owner, window, {
+        pause: async () => {},
+        fetcher: fetcher({
+          list: [row, { ...row, activityId: 2, distance: -1 }],
+          searchLimit: '1000',
+        }),
+      }),
+    ).rejects.toThrow(GarminImportError)
+    expect(importCanonicalActivity).not.toHaveBeenCalled()
+  })
+
   it('reuses account verification only for pages with the same saved credential', async () => {
     vi.clearAllMocks()
     const identitySession: { accountId?: string; credentialNonce?: Uint8Array } = {}

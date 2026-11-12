@@ -592,4 +592,50 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
     expect(await getActivity(ownerA, legacy.id)).toBeNull()
     expect((await getActivity(ownerA, verified.id))?.id).toBe(verified.id)
   })
+
+  it('retains unchanged sparse FIT data but invalidates changed summary laps and forces a new FIT download', async () => {
+    const observedAt = new Date('2026-11-12T02:00:00Z')
+    const activity = canonicalActivitySchema.parse({
+      ...makeActivity(ownerA.userId, 'GARMIN', 'summary-fit-invalidation'),
+      laps: [
+        {
+          lapIndex: 0,
+          sourceRecordType: 'FIT_LAP',
+          startedAt: '2026-11-08T06:30:00Z',
+          distanceMeters: 5000,
+          elapsedMs: 1800000,
+          movingMs: null,
+          avgHrBpm: null,
+          avgSpeedMps: null,
+          cadenceStepsPerMinute: null,
+        },
+      ],
+    })
+    const saved = await importCanonicalActivity(ownerA, activity, {
+      fitCheckedAt: observedAt,
+      sourceObservedAt: observedAt,
+    })
+    await importCanonicalActivity(
+      ownerA,
+      { ...activity, distanceMeters: null, laps: null },
+      { summaryOnly: true, sourceObservedAt: observedAt },
+    )
+    const retained = await prisma.activity.findUniqueOrThrow({ where: { id: saved.id } })
+    expect(retained).toMatchObject({ lapImportStatus: 'RETAINED', fitCheckedAt: observedAt })
+    expect(
+      await prisma.activityLap.count({ where: { userId: ownerA.userId, activityId: saved.id } }),
+    ).toBe(1)
+    const changed = { ...activity, distanceMeters: 10000, laps: null }
+    await importCanonicalActivity(ownerA, changed, {
+      summaryOnly: true,
+      sourceObservedAt: observedAt,
+    })
+    const invalidated = await prisma.activity.findUniqueOrThrow({ where: { id: saved.id } })
+    expect(invalidated).toMatchObject({ lapImportStatus: 'UNAVAILABLE', fitCheckedAt: null })
+    expect(
+      await prisma.activityLap.count({ where: { userId: ownerA.userId, activityId: saved.id } }),
+    ).toBe(0)
+    expect(await canSkipFitDownload(ownerA, changed, { refresh: true, observedAt })).toBe(false)
+    expect(await getActivity(ownerB, saved.id)).toBeNull()
+  })
 })

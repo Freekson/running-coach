@@ -17,12 +17,61 @@ import {
   garminActivitySource,
   normalizeGarminDailySummary,
   normalizeGarminSleep,
+  normalizeGarminActivitySummary,
 } from './normalization'
 
 const ownerAId = '00000000-0000-4000-8000-000000000001'
 const ownerBId = '00000000-0000-4000-8000-000000000002'
 const ownerA = getOwnerContext({ id: ownerAId, role: 'USER', email: null })
 const ownerB = getOwnerContext({ id: ownerBId, role: 'USER', email: null })
+
+it.each([
+  ['trail_running', 'RUNNING'],
+  ['cycling', 'CYCLING'],
+  ['walking', 'WALKING'],
+  ['lap_swimming', 'SWIMMING'],
+  ['yoga', 'OTHER'],
+])(
+  'normalizes %s list summaries without inventing missing metrics or laps',
+  (typeKey, sportType) => {
+    const result = normalizeGarminActivitySummary(ownerA, {
+      activityId: 999,
+      activityType: { typeKey },
+      startTimeGMT: '2026-11-08 08:00:00',
+      duration: 1.234,
+      calories: 42,
+      activityName: 'Synthetic session',
+      lapCount: 4,
+      splitSummaries: [{ duration: 1 }],
+    })
+    expect(result).toMatchObject({
+      source: { userId: ownerAId, externalActivityId: '999' },
+      sportType,
+      sourceSportType: typeKey,
+      totalMs: 1234,
+      elapsedMs: null,
+      distanceMeters: null,
+      avgSpeedMps: null,
+      calories: 42,
+      activityTitle: 'Synthetic session',
+      laps: null,
+      sourceTimezone: null,
+    })
+  },
+)
+
+it('rejects inconsistent summary timestamps and unvalidated persisted metadata', () => {
+  const row = {
+    activityId: 999,
+    activityType: { typeKey: 'cycling' },
+    startTimeGMT: '2026-11-08 08:00:00',
+  }
+  expect(() => normalizeGarminActivitySummary(ownerA, { ...row, beginTimestamp: 1 })).toThrow()
+  expect(() => normalizeGarminActivitySummary(ownerA, { ...row, calories: -1 })).toThrow()
+  expect(() =>
+    normalizeGarminActivitySummary(ownerA, { ...row, activityName: 'x'.repeat(201) }),
+  ).toThrow()
+})
 
 const activity = {
   activityId: 321,

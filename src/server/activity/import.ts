@@ -88,6 +88,8 @@ function activityFields(
     cadence: activity.cadenceStepsPerMinute,
     elevationGainMeters: activity.elevationGainMeters,
     elevationLossMeters: activity.elevationLossMeters,
+    calories: activity.calories ?? null,
+    activityTitle: activity.activityTitle ?? null,
     gpsAssetRef: activity.gpsAssetRef,
     lapImportStatus,
     sourceObservedAt,
@@ -242,6 +244,7 @@ export async function importCanonicalActivity(
     sourceObservedAt?: Date
     fitCheckedAt?: Date
     garminAccountId?: string
+    summaryOnly?: boolean
     beforeWrite?: (tx: Prisma.TransactionClient) => Promise<void>
   } = {},
 ): Promise<{ id: string; lapImportStatus: LapImportStatus }> {
@@ -281,6 +284,24 @@ export async function importCanonicalActivity(
           )
             return { id: existing.id, lapImportStatus: lapStatus(existing.lapImportStatus) }
           const comparison = activityFields(activity, 'UNAVAILABLE', sourceObservedAt)
+          comparison.calories ??= existing?.calories ?? null
+          comparison.activityTitle ??= existing?.activityTitle ?? null
+          // Merge sparse summaries before comparing them with the saved FIT identity.
+          if (options.summaryOnly && existing) {
+            comparison.externalActivityUuid ??= existing.externalActivityUuid
+            comparison.sourceTimezone ??= existing.sourceTimezone
+            comparison.gpsAssetRef ??= existing.gpsAssetRef
+            comparison.distanceMeters ??= existing.distanceMeters?.toNumber() ?? null
+            comparison.totalMs ??= existing.totalMs
+            comparison.elapsedMs ??= existing.elapsedMs
+            comparison.movingMs ??= existing.movingMs
+            comparison.avgSpeedMps ??= existing.avgSpeedMps?.toNumber() ?? null
+            comparison.avgHrBpm ??= existing.avgHrBpm
+            comparison.maxHrBpm ??= existing.maxHrBpm
+            comparison.cadence ??= existing.cadence?.toNumber() ?? null
+            comparison.elevationGainMeters ??= existing.elevationGainMeters?.toNumber() ?? null
+            comparison.elevationLossMeters ??= existing.elevationLossMeters?.toNumber() ?? null
+          }
           const summaryMatches = existing !== null && sameActivitySummary(existing, comparison)
           const retainLaps =
             activity.laps === null &&
@@ -326,22 +347,32 @@ export async function importCanonicalActivity(
               OR: [{ firstActivityId: saved.id }, { secondActivityId: saved.id }],
             },
           })
-          if (activity.sportType !== 'OTHER' && activity.distanceMeters !== null) {
+          const duplicateActivity = options.summaryOnly
+            ? {
+                ...activity,
+                distanceMeters: comparison.distanceMeters,
+                elapsedMs: comparison.elapsedMs === null ? null : Number(comparison.elapsedMs),
+              }
+            : activity
+          if (
+            duplicateActivity.sportType !== 'OTHER' &&
+            duplicateActivity.distanceMeters !== null
+          ) {
             const near = await tx.activity.findMany({
               where: {
                 userId,
                 id: { not: saved.id },
                 sourceProvider: { not: activity.source.provider },
-                sportType: activity.sportType,
+                sportType: duplicateActivity.sportType,
                 startedAt: {
-                  gte: new Date(Date.parse(activity.startedAt) - 120_000),
-                  lte: new Date(Date.parse(activity.startedAt) + 120_000),
+                  gte: new Date(Date.parse(duplicateActivity.startedAt) - 120_000),
+                  lte: new Date(Date.parse(duplicateActivity.startedAt) + 120_000),
                 },
               },
             })
             for (const row of near) {
               const other = candidateShape(row)
-              if (!other || !isCrossProviderDuplicateCandidate(activity, other)) continue
+              if (!other || !isCrossProviderDuplicateCandidate(duplicateActivity, other)) continue
               const [firstActivityId, secondActivityId] =
                 saved.id < row.id ? [saved.id, row.id] : [row.id, saved.id]
               await tx.activityDuplicateCandidate.upsert({

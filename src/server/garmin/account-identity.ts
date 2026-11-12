@@ -15,7 +15,10 @@ const dailyIdentitySchema = z.object({
 })
 
 export class GarminAccountIdentityError extends Error {
-  constructor(readonly code: 'INVALID_KEY' | 'UNVERIFIABLE' | 'RATE_LIMITED') {
+  constructor(
+    readonly code: 'INVALID_KEY' | 'UNVERIFIABLE' | 'RATE_LIMITED',
+    readonly retryAfterMs?: number,
+  ) {
     super('Garmin account identity could not be verified')
   }
 }
@@ -38,7 +41,8 @@ export async function verifyGarminBearerAccount(
     'json',
     options.timeoutMs,
   )
-  if (response.status === 429) throw new GarminAccountIdentityError('RATE_LIMITED')
+  if (response.status === 429)
+    throw new GarminAccountIdentityError('RATE_LIMITED', response.retryAfterMs)
   if (response.status !== 200) throw new GarminAccountIdentityError('UNVERIFIABLE')
   const parsed = dailyIdentitySchema.safeParse(response.value)
   if (!parsed.success || parsed.data.calendarDate !== date)

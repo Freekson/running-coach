@@ -6,6 +6,8 @@ Adapters require an `OwnerContext` issued from a verified session by `getOwnerCo
 
 ## Units and missing values
 
+RUN-77 adds optional nullable `calories` (nonnegative integer) and `activityTitle` (trimmed, at most 200 characters) to the canonical activity contract, reusing existing database columns. Existing producers can omit these fields. Garmin maps `summaryDTO.calories` and `activityName`; list summaries carry the metric fields directly. Missing values never erase saved calories or titles. Cycling, walking and swimming now map to their canonical sport categories; unknown types retain the original source sport and use `OTHER`.
+
 | Canonical field                    | Unit or meaning                  | Garmin source                                                         |
 | ---------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
 | `distanceMeters`, elevation fields | meters                           | `summaryDTO.distance`, `elevationGain`, `elevationLoss`               |

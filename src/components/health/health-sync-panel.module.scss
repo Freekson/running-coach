@@ -51,10 +51,6 @@
   .spinning {
     animation: none;
   }
-
-  .detailsChevron {
-    transition: none;
-  }
 }
 
 .syncSummary {
@@ -82,204 +78,10 @@
   background: var(--color-warning);
 }
 
-.details {
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
-  background: var(--color-surface);
-  overflow: hidden;
-}
-
-.detailsSummary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  min-height: 88px;
-  padding: 18px 20px;
-  cursor: pointer;
-  color: var(--color-text);
-  list-style: none;
-}
-
-.detailsSummary::-webkit-details-marker {
-  display: none;
-}
-
-.detailsChevron {
-  flex: none;
-  color: var(--color-text-muted);
-  transition: transform 0.2s ease;
-}
-
-.details[open] .detailsChevron {
-  transform: rotate(180deg);
-}
-
-.detailsBody {
-  display: grid;
-  gap: 18px;
-  margin: 0 20px;
-  padding: 30px 0 20px;
-  border-top: 1px solid var(--color-border);
-}
-
-.detailGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.detailCard {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-width: 0;
-  min-height: 178px;
-  padding: 18px;
-  border-radius: 16px;
-  background: var(--color-surface-raised);
-}
-
-.detailCard > svg {
-  color: var(--color-primary);
-}
-
-.detailCard > span,
-.detailsNote,
-.detailsProgress p {
-  color: var(--color-text-muted);
-  font-size: var(--type-size-label);
-}
-
-.detailCard strong {
-  color: var(--color-text);
-  font-family: var(--font-heading), system-ui, sans-serif;
-  font-size: var(--type-size-body-large);
-  font-weight: var(--type-weight-semibold);
-  line-height: var(--type-leading-compact);
-  overflow-wrap: anywhere;
-}
-
 .panel > p {
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--type-size-caption);
-}
-
-.detailsNote {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin: 0;
-}
-
-.detailsNote svg {
-  flex: none;
-}
-
-.detailsProgress {
-  display: grid;
-  gap: 6px;
-}
-
-.detailsProgress p {
-  margin: 0;
-}
-
-.diagnostics {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-  padding-top: 20px;
-  border-top: 1px solid var(--color-border);
-}
-
-.diagnosticsHeading h3,
-.diagnosticsHeading p,
-.runList p,
-.noRuns {
-  margin: 0;
-}
-
-.diagnosticsHeading h3 {
-  color: var(--color-text);
-  font-family: var(--font-heading), system-ui, sans-serif;
-  font-size: var(--type-size-body-large);
-  font-weight: var(--type-weight-semibold);
-}
-
-.diagnosticsHeading p,
-.diagnosticMeta dt,
-.runList p,
-.noRuns {
-  color: var(--color-text-muted);
-  font-size: var(--type-size-label);
-}
-
-.diagnosticMeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px 32px;
-  margin: 0;
-}
-
-.diagnosticMeta div {
-  display: grid;
-  gap: 4px;
-}
-
-.diagnosticMeta dd {
-  margin: 0;
-  color: var(--color-text);
-  overflow-wrap: anywhere;
-}
-
-.diagnosticMeta div:first-child dd {
-  text-transform: capitalize;
-}
-
-.runList {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.runList li {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-surface-raised);
-}
-
-.runHeading {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-
-.runHeading strong {
-  color: var(--color-text);
-  font-weight: var(--type-weight-semibold);
-}
-
-.runList li[data-result='FAILED'] .runHeading strong {
-  color: var(--color-error);
-}
-
-.runHeading time {
-  color: var(--color-text-muted);
-  font-size: var(--type-size-caption);
-}
-
-.runList code {
-  color: var(--color-text);
-  overflow-wrap: anywhere;
 }
 
 .panel [role='alert'] {
@@ -289,22 +91,5 @@
 @media (max-width: 600px) {
   .topline {
     justify-content: flex-start;
-  }
-
-  .detailsSummary {
-    padding: 16px;
-  }
-
-  .detailsBody {
-    margin: 0 16px;
-    padding-top: 18px;
-  }
-
-  .detailGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .detailCard {
-    min-height: 0;
   }
 }

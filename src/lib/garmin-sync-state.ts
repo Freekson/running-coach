@@ -22,21 +22,6 @@ export const garminSyncStateSchema = z.strictObject({
   errorCode: z.string().nullable(),
   sleepRetryDates: z.array(z.iso.date()).max(30).optional(),
   sleepFailedDates: z.array(z.iso.date()).max(30).optional(),
-  recentRuns: z
-    .array(
-      z.strictObject({
-        kind: z.enum(['SYNC', 'REQUEST']),
-        status: z.enum(['RUNNING', 'SUCCEEDED', 'FAILED']),
-        startedAt: z.iso.datetime(),
-        finishedAt: z.iso.datetime().nullable(),
-        datesProcessed: z.number().int().nonnegative(),
-        errorCode: z.string().nullable(),
-        retryAt: z.iso.datetime().nullable(),
-        recoveredApiErrors: z.array(z.string()).max(3),
-      }),
-    )
-    .max(5)
-    .optional(),
 })
 
 export type GarminSyncState = z.infer<typeof garminSyncStateSchema>

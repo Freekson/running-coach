@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ToastProvider } from '@/components/ui/Toast'
-import { HealthSyncDetails, HealthSyncPanel } from './HealthSyncPanel'
+import { HealthSyncPanel } from './HealthSyncPanel'
 
 const meta = {
   title: 'Athlete/Health sync panel',
@@ -97,43 +97,5 @@ export const UpToDate: Story = {
       lastSuccessAt: '2026-11-09T05:00:00Z',
       window: { start: '2026-11-03', end: '2026-11-09' },
     },
-  },
-}
-
-export const DetailsExpanded: Story = {
-  args: {
-    initial: {
-      ...meta.args.initial,
-      status: 'SUCCESS',
-      lastSuccessAt: '2026-11-09T13:48:00Z',
-      window: { start: '2026-10-11', end: '2026-11-09' },
-      processed: 10,
-      recentRuns: [
-        {
-          kind: 'SYNC',
-          status: 'FAILED',
-          startedAt: '2026-11-09T13:40:00Z',
-          finishedAt: '2026-11-09T13:40:15Z',
-          datesProcessed: 4,
-          errorCode: 'SLEEP_HTTP_503',
-          retryAt: null,
-          recoveredApiErrors: [],
-        },
-        {
-          kind: 'SYNC',
-          status: 'SUCCEEDED',
-          startedAt: '2026-11-09T13:48:00Z',
-          finishedAt: '2026-11-09T13:48:20Z',
-          datesProcessed: 10,
-          errorCode: null,
-          retryAt: null,
-          recoveredApiErrors: ['SLEEP_HTTP_503'],
-        },
-      ],
-    },
-  },
-  render: ({ initial }) => <HealthSyncDetails state={initial} />,
-  play: ({ canvasElement }) => {
-    canvasElement.querySelector('summary')?.click()
   },
 }

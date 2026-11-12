@@ -142,10 +142,16 @@ describe.skipIf(!enabled)('Garmin health sync on isolated PostgreSQL', () => {
       nextAttemptAt: null,
       errorCode: 'SLEEP_INVALID_RESPONSE',
     })
-    expect(first.recentRuns?.[0]).toMatchObject({
+    expect(
+      await prisma.syncRun.findFirst({
+        where: { userId: user.id, jobType: 'GARMIN_HEALTH' },
+        orderBy: { startedAt: 'desc' },
+        select: { status: true, errorCode: true, checkpointSummary: true },
+      }),
+    ).toMatchObject({
       status: 'SUCCEEDED',
       errorCode: 'SLEEP_INVALID_RESPONSE',
-      recoveredApiErrors: ['SLEEP_HTTP_503'],
+      checkpointSummary: { recoveredApiErrorCodes: ['SLEEP_HTTP_503'] },
     })
     expect(importDay.mock.calls.slice(1, 10).every((call) => call[3]?.sources === 'BOTH')).toBe(
       true,

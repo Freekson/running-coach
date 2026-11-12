@@ -1,35 +1,62 @@
 .panel {
   display: grid;
-  gap: 16px;
-  padding: clamp(18px, 2.5vw, 24px);
+  gap: 8px;
   min-width: 0;
+  max-width: 100%;
 }
-
-.panel > p {
-  margin: 6px 0 0;
+.panel p {
+  margin: 0;
   color: var(--color-text-muted);
+  font-size: var(--type-size-caption);
 }
-
 .panel [role='alert'] {
   color: var(--color-error);
 }
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.verificationActions {
+.topline {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 18px;
+  min-width: 0;
 }
-
-.verificationActions p {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--color-error);
+.summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: var(--type-size-caption);
+  overflow-wrap: anywhere;
+}
+.summary i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+.summary[data-status='SUCCESS'] i {
+  background: var(--color-success);
+}
+.summary[data-status='PAUSED'] i,
+.summary[data-status='PARTIAL_FAILURE'] i {
+  background: var(--color-warning);
+}
+.spinning {
+  animation: activity-refresh 0.9s linear infinite;
+}
+@keyframes activity-refresh {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
+  .topline {
+    justify-content: flex-start;
+  }
 }

@@ -23,6 +23,11 @@
   --color-sleep-rem: #a29ccc;
   --color-sleep-awake: #c4a073;
   --icon-gap: 8px;
+  --control-height: 40px;
+  --control-height-compact: 36px;
+  --control-padding-block: 7px;
+  --control-padding-inline: 12px;
+  --control-leading: 1.4;
   --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
   --type-size-hero: clamp(2.25rem, 4vw, 4rem);
   --type-size-page: clamp(1.75rem, 3vw, 2.25rem);
@@ -40,6 +45,13 @@
   --type-leading-tight: 1.1;
   --type-leading-body: 1.55;
   --type-leading-compact: 1.4;
+}
+
+@media (pointer: coarse) {
+  :root {
+    --control-height: 44px;
+    --control-height-compact: 44px;
+  }
 }
 
 * {
@@ -88,13 +100,14 @@ a:active {
   align-items: center;
   justify-content: center;
   gap: var(--icon-gap);
-  min-height: 40px;
-  padding: 9px 16px;
+  min-height: var(--control-height);
+  padding: var(--control-padding-block) var(--control-padding-inline);
   border: 1px solid transparent;
   border-radius: 10px;
   background: var(--color-primary);
   color: var(--color-primary-foreground);
   font: inherit;
+  line-height: var(--control-leading);
   font-weight: var(--type-weight-semibold);
   text-decoration: none;
   cursor: pointer;
@@ -103,8 +116,8 @@ a:active {
 }
 
 .button--compact {
-  min-height: 40px;
-  padding: 9px 16px;
+  min-height: var(--control-height-compact);
+  padding: 5px 10px;
 }
 
 .button__spinner {
@@ -174,13 +187,14 @@ a:active {
 
 .field {
   width: 100%;
-  min-height: 40px;
-  padding: 7px 12px;
+  min-height: var(--control-height);
+  padding: var(--control-padding-block) var(--control-padding-inline);
   border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
+  line-height: var(--control-leading);
 }
 
 input[type='number'] {

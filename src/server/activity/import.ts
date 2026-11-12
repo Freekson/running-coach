@@ -11,6 +11,7 @@ import {
 } from '@/server/activity/normalization'
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
+import { activityReadScope } from './visibility'
 
 export class InvalidActivityImportError extends Error {
   constructor() {
@@ -524,19 +525,11 @@ export async function listActivities(owner: OwnerContext, limit: number, cursor?
   listLimitSchema.parse(limit)
   const boundary = cursor === undefined ? null : decodeActivityCursor(cursor, userId)
   const prisma = await getPrismaClient()
-  const garmin = await prisma.integrationConnection.findUnique({
-    where: { userId_provider: { userId, provider: 'GARMIN' } },
-    select: { externalAccountId: true },
-  })
+  const scope = await activityReadScope(owner)
   const rows = await prisma.activity.findMany({
     where: {
       userId,
-      OR: [
-        { sourceProvider: { not: 'GARMIN' } },
-        ...(garmin?.externalAccountId
-          ? [{ sourceProvider: 'GARMIN' as const, garminAccountId: garmin.externalAccountId }]
-          : []),
-      ],
+      ...scope,
       ...(boundary
         ? {
             AND: [
@@ -568,20 +561,12 @@ export async function getActivity(owner: OwnerContext, id: string) {
   const userId = ownerId(owner)
   uuidSchema.parse(id)
   const prisma = await getPrismaClient()
-  const garmin = await prisma.integrationConnection.findUnique({
-    where: { userId_provider: { userId, provider: 'GARMIN' } },
-    select: { externalAccountId: true },
-  })
+  const scope = await activityReadScope(owner)
   const row = await prisma.activity.findFirst({
     where: {
       userId,
       id,
-      OR: [
-        { sourceProvider: { not: 'GARMIN' } },
-        ...(garmin?.externalAccountId
-          ? [{ sourceProvider: 'GARMIN' as const, garminAccountId: garmin.externalAccountId }]
-          : []),
-      ],
+      ...scope,
     },
     select: {
       ...summarySelect,

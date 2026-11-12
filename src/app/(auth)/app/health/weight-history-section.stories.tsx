@@ -44,5 +44,14 @@ export const EmptyHistory: Story = {
   args: { initialWeights: [], initialChartWeights: [] },
 }
 export const Mobile: Story = {
+  args: { initialPeriod: '7D' },
   globals: { viewport: { value: 'mobile1', isRotated: false } },
+}
+export const MobileEmptyHistory: Story = {
+  ...EmptyHistory,
+  globals: Mobile.globals,
+}
+export const MobileWeeklyAverages: Story = {
+  args: { ...LongHistory.args, initialPeriod: 'ALL' },
+  globals: Mobile.globals,
 }

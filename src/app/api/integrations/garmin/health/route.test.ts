@@ -10,7 +10,6 @@ const {
   allowGarminImport,
   getGarminImportBlock,
   verifySavedGarminAccount,
-  recordGarminHealthRequestDiagnostic,
   healthInitialImportReady,
 } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
@@ -36,7 +35,6 @@ const {
     } | null>
   >(async () => null),
   verifySavedGarminAccount: vi.fn(async () => {}),
-  recordGarminHealthRequestDiagnostic: vi.fn(async () => {}),
   healthInitialImportReady: vi.fn(async () => true),
 }))
 vi.mock('server-only', () => ({}))
@@ -50,7 +48,6 @@ vi.mock('@/server/garmin/health-sync', () => ({
   getGarminHealthSyncState,
   localDay: (date: Date) => date.toISOString().slice(0, 10),
   GarminHealthSyncUnavailableError: class extends Error {},
-  recordGarminHealthRequestDiagnostic,
 }))
 vi.mock('@/server/health/history', () => ({ getHealthPreferredTimezone }))
 vi.mock('@/server/garmin/data-import', () => ({ healthInitialImportReady }))
@@ -102,7 +99,6 @@ it('rejects unauthenticated, cross-origin and client-selected day requests', asy
   expect((await POST(post(undefined, 'https://other.example'))).status).toBe(403)
   expect((await POST(post({ browserTimezone: 'UTC', date: '2026-11-07' }))).status).toBe(400)
   expect(runGarminHealthSync).not.toHaveBeenCalled()
-  expect(recordGarminHealthRequestDiagnostic).not.toHaveBeenCalled()
 })
 
 it('derives the owner from the verified session, including for an admin', async () => {
@@ -139,10 +135,6 @@ it('does not import when saved-key account verification fails', async () => {
   expect(response.status).toBe(422)
   expect(await response.json()).toEqual({ code: 'UNVERIFIABLE' })
   expect(runGarminHealthSync).not.toHaveBeenCalled()
-  expect(recordGarminHealthRequestDiagnostic).toHaveBeenCalledWith(
-    { userId: '00000000-0000-4000-8000-000000000001' },
-    'UNVERIFIABLE',
-  )
 })
 
 it('applies the shared Garmin request limit before starting a sync', async () => {
@@ -158,11 +150,6 @@ it('applies the shared Garmin request limit before starting a sync', async () =>
     retryAt: '2026-11-09T06:01:00.000Z',
   })
   expect(runGarminHealthSync).not.toHaveBeenCalled()
-  expect(recordGarminHealthRequestDiagnostic).toHaveBeenCalledWith(
-    { userId: '00000000-0000-4000-8000-000000000001' },
-    'APP_RATE_LIMITED',
-    new Date('2026-11-09T06:01:00Z'),
-  )
 })
 
 it('does not verify a saved key while the shared request limit is active', async () => {
@@ -242,27 +229,17 @@ it('identifies a provider-requested pause separately from the app request limit'
     code: 'PROVIDER_PAUSED',
     retryAt: '2026-11-09T06:05:00.000Z',
   })
-  expect(recordGarminHealthRequestDiagnostic).toHaveBeenCalledWith(
-    { userId: '00000000-0000-4000-8000-000000000001' },
-    'PROVIDER_PAUSED',
-    new Date('2026-11-09T06:05:00Z'),
-  )
 })
 
-it('records a pre-run server failure without changing the safe API response', async () => {
+it('returns a safe response for an unexpected server failure', async () => {
   runGarminHealthSync.mockRejectedValueOnce(new Error('private provider detail'))
   const response = await POST(post())
   expect(response.status).toBe(503)
   expect(await response.json()).toEqual({ error: 'Health import unavailable' })
-  expect(recordGarminHealthRequestDiagnostic).toHaveBeenCalledWith(
-    { userId: '00000000-0000-4000-8000-000000000001' },
-    'UNAVAILABLE',
-  )
 })
 
-it('keeps the original rate-limit response if diagnostic storage fails', async () => {
+it('returns the generic rate limit when no retry metadata is available', async () => {
   allowGarminImport.mockResolvedValueOnce(false)
-  recordGarminHealthRequestDiagnostic.mockRejectedValueOnce(new Error('storage failed'))
   const response = await POST(post())
   expect(response.status).toBe(429)
   expect(await response.json()).toEqual({ code: 'RATE_LIMITED', retryAt: null })

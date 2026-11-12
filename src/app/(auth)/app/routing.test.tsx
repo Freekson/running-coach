@@ -54,6 +54,22 @@ vi.mock('@/server/provider/vault', () => ({
     updatedAt: null,
   })),
 }))
+vi.mock('@/server/activity/history', () => ({
+  getActivityHistory: vi.fn(async () => ({
+    items: [],
+    total: 0,
+    importedCount: 0,
+    page: 1,
+    pageSize: 10,
+    pageCount: 1,
+    sports: [],
+    providers: [],
+    timezone: 'UTC',
+    dateBounds: { min: '2020-01-01', max: '2026-11-12' },
+    imported: false,
+    savedAt: null,
+  })),
+}))
 vi.mock('@/server/garmin/sync', () => ({
   getGarminSyncState: vi.fn(async () => ({
     status: 'NOT_CONNECTED',
@@ -105,8 +121,8 @@ import AppLayout from './layout'
 import AppPage from './page'
 import DashboardPage from './dashboard/page'
 import TrainingPage from './training/page'
-import CalendarPage from './calendar/page'
-import GoalsPage from './goals/page'
+import { ActivityHistory } from './training/activity-history'
+import { getActivityHistory } from '@/server/activity/history'
 import SettingsPage from './settings/page'
 import HealthPage from './health/page'
 import HealthLoading from './health/loading'
@@ -121,6 +137,9 @@ import {
 } from '@/server/athlete/profile'
 import { getProviderConnectionStatus } from '@/server/provider/vault'
 import { getHealthTrendRows } from '@/server/health/history'
+import { HealthSyncPanel } from '@/components/health/HealthSyncPanel'
+import { HealthHistoryPanel } from '@/components/health/HealthHistoryPanel'
+import { WeightHistorySection } from './health/weight-history-section'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -140,11 +159,11 @@ describe('authenticated /app routes', () => {
 
   it('preserves a signed-out deep link through sign-in', async () => {
     getCurrentUser.mockResolvedValue(null)
-    requestPath.mockReturnValue('/app/calendar')
-    await expect(AppLayout({ children: <CalendarPage /> })).rejects.toThrow(
-      'Redirect to /sign-in?next=%2Fapp%2Fcalendar',
+    requestPath.mockReturnValue('/app/training')
+    await expect(AppLayout({ children: <TrainingPage /> })).rejects.toThrow(
+      'Redirect to /sign-in?next=%2Fapp%2Ftraining',
     )
-    await expect(CalendarPage()).rejects.toThrow('Redirect to /sign-in?next=%2Fapp%2Fcalendar')
+    await expect(TrainingPage()).rejects.toThrow('Redirect to /sign-in?next=%2Fapp%2Ftraining')
   })
 
   it('falls back to dashboard for an invalid destination header', async () => {
@@ -178,31 +197,25 @@ describe('authenticated /app routes', () => {
     getCurrentUser.mockResolvedValue(null)
     await expect(DashboardPage()).rejects.toThrow('Redirect to /sign-in?next=%2Fapp%2Fdashboard')
     await expect(AppPage()).rejects.toThrow('Redirect to /sign-in?next=%2Fapp%2Fdashboard')
-    for (const page of [
-      TrainingPage,
-      CalendarPage,
-      GoalsPage,
-      HealthPage,
-      SettingsPage,
-      AdminPage,
-    ]) {
+    for (const page of [TrainingPage, HealthPage, SettingsPage, AdminPage]) {
       await expect(page()).rejects.toThrow('Redirect to /sign-in?next=%2Fapp%2Fdashboard')
     }
-    expect(redirect).toHaveBeenCalledTimes(8)
+    expect(redirect).toHaveBeenCalledTimes(6)
+    expect(getActivityHistory).not.toHaveBeenCalled()
     expect(getAthleteSettings).not.toHaveBeenCalled()
     expect(getAthleteProfile).not.toHaveBeenCalled()
   })
 
   it('provides honest content for each linked route', async () => {
     getCurrentUser.mockResolvedValue({ id: 'user-a', role: 'USER', email: 'a@example.test' })
-    for (const page of [CalendarPage, GoalsPage]) {
-      const result = await page()
-      expect(result.type).toBe(AppShell)
-      expect(result.props.children.props.description).toMatch(/later/)
-    }
     const training = await TrainingPage()
     expect(training.type).toBe(AppShell)
-    expect(training.props.children.props.children[2].props.description).toMatch(/later/)
+    expect(training.props.children.props.children[1].type).toBe(ActivityHistory)
+    expect(getActivityHistory).toHaveBeenCalledWith(
+      { userId: 'user-a' },
+      expect.objectContaining({ page: 1, range: 'all' }),
+      { timezone: undefined },
+    )
     const settings = await SettingsPage()
     expect(settings.type).toBe(AppShell)
     expect(settings.props.children.props.initial.profile.measurementSystem).toBe('METRIC')
@@ -217,9 +230,49 @@ describe('authenticated /app routes', () => {
       'Health & Recovery',
     )
     const healthSections = health.props.children.props.children
+    expect(healthSections).toHaveLength(3)
+    expect(healthSections[1].type).toBe(HealthHistoryPanel)
+    expect(healthSections[2].type).toBe(WeightHistorySection)
+    expect(healthHeader.props.children[1].type).toBe(HealthSyncPanel)
     expect(healthSections.at(-1).props.initialPeriod).toBe('7D')
     expect(healthSections.at(-1).props.initialWeights).toEqual([])
     expect(getAthleteSettings).toHaveBeenCalledWith({ userId: 'user-a' }, '7D')
+  })
+
+  it('validates Training query parameters and derives the owner from the session', async () => {
+    getCurrentUser.mockResolvedValue({ id: 'athlete-a', role: 'USER', email: null })
+    const result = await TrainingPage({
+      searchParams: Promise.resolve({
+        q: 'Trail',
+        sport: 'RUNNING',
+        page: '2',
+        userId: 'another-owner',
+      }),
+    })
+    expect(getActivityHistory).toHaveBeenCalledWith(
+      { userId: 'athlete-a' },
+      expect.objectContaining({ q: 'Trail', sport: 'RUNNING', page: 2 }),
+      { timezone: undefined },
+    )
+    expect(result.props.children.props.children[1].type).toBe(ActivityHistory)
+  })
+
+  it('shows a safe Training read error and rejects invalid filters without querying history', async () => {
+    getCurrentUser.mockResolvedValue({ id: 'athlete-a', role: 'USER', email: null })
+    vi.mocked(getActivityHistory).mockRejectedValueOnce(new Error('private database details'))
+    const failed = await TrainingPage()
+    expect(failed.props.children.props.children[1].props.children.props.description).toContain(
+      'could not be loaded',
+    )
+    expect(failed.props.children.props.children[1].props.children.props.description).not.toContain(
+      'private',
+    )
+    vi.mocked(getActivityHistory).mockClear()
+    const invalid = await TrainingPage({ searchParams: Promise.resolve({ pageSize: '99999' }) })
+    expect(invalid.props.children.props.children[1].props.children.props.description).toContain(
+      'filters are invalid',
+    )
+    expect(getActivityHistory).not.toHaveBeenCalled()
   })
 
   it('keeps the protected app shell and health heading during health loading', async () => {

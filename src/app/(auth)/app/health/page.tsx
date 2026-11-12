@@ -8,7 +8,7 @@ import { getHealthPreferredTimezone, getHealthTrendRows } from '@/server/health/
 import { getGarminHealthSyncState } from '@/server/garmin/health-sync'
 import { healthInitialImportReady } from '@/server/garmin/data-import'
 import { addHealthDays } from '@/lib/health-history'
-import { HealthSyncDetails, HealthSyncPanel } from '@/components/health/HealthSyncPanel'
+import { HealthSyncPanel } from '@/components/health/HealthSyncPanel'
 import { HealthHistoryPanel } from '@/components/health/HealthHistoryPanel'
 import { chartPeriodCookie, chartPeriods } from '../settings/weight-history'
 import { WeightHistorySection } from './weight-history-section'
@@ -44,18 +44,13 @@ export default async function HealthPage() {
             <h1>Health &amp; Recovery</h1>
             <p>Your recovery trends and Garmin health data.</p>
           </div>
-          <HealthSyncPanel
-            initial={syncState}
-            initialImportReady={initialImportReady}
-            hideDetails
-          />
+          <HealthSyncPanel initial={syncState} initialImportReady={initialImportReady} />
         </header>
         <HealthHistoryPanel
           rows={rows}
           asOfInstant={now.toISOString()}
           preferredTimezone={preferredTimezone}
         />
-        <HealthSyncDetails state={syncState} />
         <WeightHistorySection
           initialPeriod={period}
           initialWeights={settings.weights}

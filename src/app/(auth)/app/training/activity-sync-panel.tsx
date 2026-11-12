@@ -1,14 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Activity } from 'lucide-react'
-import Link from 'next/link'
+import { RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { z } from 'zod'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { EmptyState, LoadingState } from '@/components/ui/States'
-import { SectionHeading } from '@/components/ui/SectionHeading'
+import { Button, ButtonLink } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { garminSyncStateSchema, type GarminSyncState } from '@/lib/garmin-sync-state'
 import { garminAccountIssueMessage } from '@/lib/garmin-account-message'
@@ -34,8 +30,14 @@ function syncFailureMessage(status: number, code: string | null): string {
   return 'Activity sync could not start. Try again later.'
 }
 
-export function ActivitySyncPanel({ initial }: { initial: GarminSyncState }) {
-  const router = useRouter()
+export function ActivitySyncPanel({
+  initial,
+  savedAt = null,
+}: {
+  initial: GarminSyncState
+  savedAt?: string | null
+}) {
+  const { refresh } = useRouter()
   const toast = useToast()
   const clientReady = useClientReady()
   const [override, setOverride] = useState<{
@@ -46,6 +48,7 @@ export function ActivitySyncPanel({ initial }: { initial: GarminSyncState }) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const [refreshTick, setRefreshTick] = useState(0)
+  const [observedAt] = useState(() => Date.now())
 
   useEffect(() => {
     if (state.status !== 'SYNCING' && state.status !== 'PAUSED') return
@@ -62,7 +65,11 @@ export function ActivitySyncPanel({ initial }: { initial: GarminSyncState }) {
         .then(async (response) => {
           if (!response.ok) return
           const parsed = garminSyncStateSchema.safeParse(await response.json())
-          if (active && parsed.success) setOverride({ initial, value: parsed.data })
+          if (active && parsed.success) {
+            setOverride({ initial, value: parsed.data })
+            // A completed or paused batch can have saved activities since the page loaded.
+            if (parsed.data.status !== state.status) refresh()
+          }
         })
         .catch(() => {})
         .finally(() => {
@@ -73,9 +80,9 @@ export function ActivitySyncPanel({ initial }: { initial: GarminSyncState }) {
       active = false
       window.clearTimeout(timer)
     }
-  }, [state.status, state.nextAttemptAt, initial, refreshTick])
+  }, [state.status, state.nextAttemptAt, initial, refreshTick, refresh])
 
-  async function sync(extendDays?: number) {
+  async function sync() {
     if (pending) return
     setPending(true)
     setError('')
@@ -85,7 +92,7 @@ export function ActivitySyncPanel({ initial }: { initial: GarminSyncState }) {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         cache: 'no-store',
-        body: JSON.stringify(extendDays ? { extendDays } : {}),
+        body: '{}',
       })
       if (!response.ok) {
         let code: string | null = null
@@ -104,7 +111,7 @@ export function ActivitySyncPanel({ initial }: { initial: GarminSyncState }) {
       if (!parsed.success) throw new Error('Invalid sync response')
       const next = parsed.data
       setOverride({ initial, value: next })
-      router.refresh()
+      refresh()
       if (next.status === 'SUCCESS')
         toast('success', 'Garmin activities are up to date.', 'garmin-activity-sync')
       else if (next.status === 'PARTIAL')
@@ -127,71 +134,51 @@ export function ActivitySyncPanel({ initial }: { initial: GarminSyncState }) {
     }
   }
 
-  if (state.status === 'ACTION_REQUIRED' && state.errorCode === 'ACCOUNT_VERIFICATION_REQUIRED')
-    return (
-      <EmptyState
-        title="Verify your saved Garmin key"
-        description="This key has no verified Garmin account identity. Verify it before importing activities."
-        action={
-          <div className={styles.verificationActions}>
-            <Button type="button" onClick={() => void sync()} loading={pending}>
-              Verify &amp; import
-            </Button>
-            <Link href="/app/settings">Open Settings</Link>
-            {error && <p role="alert">{error}</p>}
-          </div>
-        }
-      />
-    )
-  if (state.status === 'NOT_CONNECTED' || state.status === 'ACTION_REQUIRED')
-    return (
-      <EmptyState
-        title={
-          state.status === 'NOT_CONNECTED'
-            ? 'Connect Garmin to import activities'
-            : 'Garmin connection needs attention'
-        }
-        description={
-          garminAccountIssueMessage(state.errorCode) ??
-          'Add or check your Garmin key in Settings, then return here.'
-        }
-        action={<Link href="/app/settings">Open Settings</Link>}
-      />
-    )
-
+  const verify =
+    state.status === 'ACTION_REQUIRED' && state.errorCode === 'ACCOUNT_VERIFICATION_REQUIRED'
+  const needsConnection =
+    state.status === 'NOT_CONNECTED' || (state.status === 'ACTION_REQUIRED' && !verify)
+  const timestamp = state.lastSuccessAt ?? savedAt
+  const stale =
+    clientReady && timestamp != null && observedAt - Date.parse(timestamp) > 24 * 3_600_000
   return (
-    <Card as="section" className={styles.panel} aria-labelledby="activity-sync-heading">
-      <SectionHeading
-        icon={Activity}
-        id="activity-sync-heading"
-        title="Garmin activities"
-        subtitle="Import completed runs and resume saved backfill progress."
-      />
-      {state.status === 'UNAVAILABLE' ? (
-        <p role="status">Garmin activity sync is unavailable for this deployment.</p>
-      ) : (
-        <div className={styles.actions}>
+    <section className={styles.panel} aria-label="Garmin activity sync">
+      <div className={styles.topline} aria-busy={pending}>
+        <span className={styles.summary} data-status={state.status}>
+          <i aria-hidden="true" />
+          {state.status === 'NOT_CONNECTED'
+            ? 'Garmin disconnected'
+            : state.status === 'SYNCING' || pending
+              ? 'Syncing Garmin activities'
+              : timestamp
+                ? `${state.lastSuccessAt ? 'Synced' : 'Saved'} · ${clientReady ? (formatLocalDateTime(timestamp) ?? 'Time unavailable') : 'Loading local time…'}`
+                : 'Garmin activities not synced yet'}
+        </span>
+        {needsConnection ? (
+          <ButtonLink href="/app/settings" variant="secondary">
+            {state.status === 'NOT_CONNECTED' ? 'Connect Garmin' : 'Check Garmin settings'}
+          </ButtonLink>
+        ) : state.status === 'UNAVAILABLE' ? (
+          <span>Activity sync unavailable</span>
+        ) : (
           <Button
-            type="button"
+            variant="secondary"
             onClick={() => void sync()}
-            loading={pending}
             disabled={pending || state.status === 'SYNCING' || state.status === 'PAUSED'}
           >
-            {state.status === 'PARTIAL' ? 'Continue sync' : 'Sync activities'}
+            <RefreshCw
+              size={18}
+              strokeWidth={2}
+              className={pending ? styles.spinning : undefined}
+              aria-hidden="true"
+              focusable="false"
+            />
+            {verify ? 'Verify & sync' : 'Sync now'}
           </Button>
-          {state.status === 'SUCCESS' && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => void sync(7)}
-              disabled={pending}
-            >
-              Import 7 older days
-            </Button>
-          )}
-        </div>
-      )}
-      {pending && <LoadingState label="Syncing Garmin activities…" />}
+        )}
+      </div>
+      {stale && <p role="status">Saved history may be out of date.</p>}
+      {verify && <p>Verify your saved Garmin key before importing activities.</p>}
       {!pending && state.status === 'SYNCING' && (
         <p role="status">An activity sync is already running.</p>
       )}
@@ -199,19 +186,17 @@ export function ActivitySyncPanel({ initial }: { initial: GarminSyncState }) {
         <p role="status">Garmin asked us to pause. Sync will be available after the retry time.</p>
       )}
       {!pending && !error && (state.status === 'ERROR' || state.status === 'PARTIAL_FAILURE') && (
-        <p role="alert">The last activity sync stopped early. You can retry when available.</p>
+        <p role="status">
+          The last activity sync stopped early. Saved activities remain available.
+        </p>
       )}
-      {state.nextDate && <p role="status">Next day to check: {state.nextDate}</p>}
-      {state.lastAttemptAt && <p>Last batch processed {state.processed} activities.</p>}
-      {state.lastSuccessAt && (
-        <p>
-          Last completed window:{' '}
-          {clientReady
-            ? (formatLocalDateTime(state.lastSuccessAt) ?? 'Time unavailable')
-            : 'Loading local time…'}
+      {state.status === 'ACTION_REQUIRED' && !verify && (
+        <p role="status">
+          {garminAccountIssueMessage(state.errorCode) ??
+            'Check your Garmin connection in Settings. Saved activities remain available.'}
         </p>
       )}
       {error && <p role="alert">{error}</p>}
-    </Card>
+    </section>
   )
 }

@@ -15,7 +15,6 @@ import {
   GarminHealthSyncUnavailableError,
   getGarminHealthSyncState,
   localDay,
-  recordGarminHealthRequestDiagnostic,
   runGarminHealthSync,
 } from '@/server/garmin/health-sync'
 import { allowGarminImport, getGarminImportBlock } from '@/server/garmin/import-rate-limit'
@@ -27,19 +26,6 @@ const headers = { 'Cache-Control': 'private, no-store' }
 const bodySchema = z.strictObject({
   browserTimezone: z.string().min(1).max(100),
 })
-
-async function recordRequestFailure(
-  owner: Parameters<typeof recordGarminHealthRequestDiagnostic>[0],
-  code: Parameters<typeof recordGarminHealthRequestDiagnostic>[1],
-  retryAt?: Date | null,
-) {
-  try {
-    if (retryAt) await recordGarminHealthRequestDiagnostic(owner, code, retryAt)
-    else await recordGarminHealthRequestDiagnostic(owner, code)
-  } catch {
-    // Diagnostics must not replace the original API error.
-  }
-}
 
 async function boundedBody(request: Request): Promise<string | null> {
   const reader = request.body?.getReader()
@@ -64,7 +50,6 @@ async function boundedBody(request: Request): Promise<string | null> {
 }
 
 export async function POST(request: Request) {
-  let diagnosticOwner: ReturnType<typeof getOwnerContext> | null = null
   try {
     const user = await getCurrentUser()
     if (!user) return new Response(null, { status: 401, headers })
@@ -85,7 +70,6 @@ export async function POST(request: Request) {
     const parsed = bodySchema.safeParse(decoded)
     if (!parsed.success) return new Response(null, { status: 400, headers })
     const owner = getOwnerContext(user)
-    diagnosticOwner = owner
     if (!(await healthInitialImportReady(owner)))
       return Response.json({ code: 'INITIAL_IMPORT_REQUIRED' }, { status: 409, headers })
     const state = await getGarminHealthSyncState(owner)
@@ -109,7 +93,6 @@ export async function POST(request: Request) {
     }
     if (!(await allowGarminImport(owner))) {
       const block = await getGarminImportBlock(owner)
-      await recordRequestFailure(owner, block?.code ?? 'RATE_LIMITED', block?.retryAt)
       return Response.json(
         {
           code: block?.code ?? 'RATE_LIMITED',
@@ -123,20 +106,6 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof AccountUnavailableError)
       return new Response(null, { status: 403, headers })
-    if (diagnosticOwner) {
-      const code =
-        error instanceof GarminAccountIdentityError ||
-        error instanceof GarminAccountMismatchError ||
-        error instanceof GarminHealthSyncUnavailableError ||
-        error instanceof GarminHealthImportError
-          ? error.code
-          : error instanceof CredentialConfigurationError
-            ? 'KEY_STORAGE_UNCONFIGURED'
-            : error instanceof CredentialUnavailableError
-              ? 'CREDENTIAL_CHANGED'
-              : 'UNAVAILABLE'
-      await recordRequestFailure(diagnosticOwner, code)
-    }
     if (error instanceof GarminAccountIdentityError)
       return Response.json(
         { code: error.code },

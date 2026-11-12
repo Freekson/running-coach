@@ -135,86 +135,102 @@ export class FitActivityIdentityError extends Error {}
 
 export class FitLapUnavailableError extends Error {}
 
-function normalizeFitLaps(
+// FIT summary timestamps are write times, including for summary-first exports.
+// https://forums.garmin.com/developer/fit-sdk/b/news-announcements/posts/important-fit-activity-file-message-change
+function fitSummaryBounds(start: unknown, elapsedSeconds: unknown) {
+  if (!(start instanceof Date) || !Number.isFinite(start.getTime())) return null
+  const elapsed = optionalMetric.safeParse(elapsedSeconds)
+  if (!elapsed.success || elapsed.data == null) return null
+  const elapsedMs = toMilliseconds(elapsed.data)
+  if (elapsedMs === null) return null
+  const startMs = start.getTime()
+  const endMs = startMs + elapsedMs
+  if (!Number.isFinite(new Date(endMs).getTime())) return null
+  return { startMs, endMs, elapsedMs }
+}
+
+export function normalizeFitLaps(
   bytes: Buffer,
   activityStartedAt: string,
   activityDistanceMeters: number | null,
   activityElapsedMs: number | null,
+  options: {
+    allowMissingDistance?: boolean
+    deadlineAt?: number
+    allowConfirmedEmpty?: boolean
+  } = {},
 ): CanonicalLap[] | null {
-  const { messages } = decodeFitDownload(bytes)
+  const { messages } = decodeFitDownload(bytes, options.deadlineAt)
   const sessions = messages.sessionMesgs ?? []
   const fileType = messages.fileIdMesgs?.[0]?.type
   if (fileType !== 'activity' || sessions.length === 0)
     throw new FitActivityIdentityError('Cannot verify FIT activity identity')
-  if (activityDistanceMeters === null) return null
-  const bounds: { startMs: number; endMs: number; distanceMeters: number }[] = []
+  if (activityDistanceMeters === null && !options.allowMissingDistance) return null
+  const bounds: {
+    startMs: number
+    endMs: number
+    distanceMeters: number | null
+    confirmedNoLaps: boolean
+  }[] = []
   let firstStart = Number.POSITIVE_INFINITY
   let lastEnd = Number.NEGATIVE_INFINITY
   let fitDistance = 0
+  let hasFitDistance = true
   for (const session of sessions) {
-    const start = session.startTime
-    const end = session.timestamp
+    const duration = fitSummaryBounds(session.startTime, session.totalElapsedTime)
     const distance = session.totalDistance
     if (
-      !(start instanceof Date) ||
-      Number.isNaN(start.getTime()) ||
-      !(end instanceof Date) ||
-      Number.isNaN(end.getTime()) ||
-      end.getTime() < start.getTime() ||
+      !duration ||
       (distance !== undefined &&
         (typeof distance !== 'number' || !Number.isFinite(distance) || distance < 0))
     )
       throw new FitActivityIdentityError('Cannot verify FIT activity identity')
-    if (distance === undefined) return null
-    const startMs = start.getTime()
-    const endMs = end.getTime()
-    bounds.push({ startMs, endMs, distanceMeters: distance })
+    if (distance === undefined && !options.allowMissingDistance) return null
+    if (distance === undefined) hasFitDistance = false
+    const { startMs, endMs } = duration
+    bounds.push({
+      startMs,
+      endMs,
+      distanceMeters: distance ?? null,
+      confirmedNoLaps: session.numLaps === 0,
+    })
     firstStart = Math.min(firstStart, startMs)
     lastEnd = Math.max(lastEnd, endMs)
-    fitDistance += distance
+    fitDistance += distance ?? 0
   }
   const fitElapsedMs = lastEnd - firstStart
   if (
     Math.abs(firstStart - Date.parse(activityStartedAt)) > 120_000 ||
-    Math.abs(fitDistance - activityDistanceMeters) >
-      Math.max(100, Math.max(fitDistance, activityDistanceMeters) * 0.02) ||
+    (hasFitDistance &&
+      activityDistanceMeters !== null &&
+      Math.abs(fitDistance - activityDistanceMeters) >
+        Math.max(100, Math.max(fitDistance, activityDistanceMeters) * 0.02)) ||
     (activityElapsedMs !== null &&
       Math.abs(fitElapsedMs - activityElapsedMs) >
         Math.max(60_000, Math.max(fitElapsedMs, activityElapsedMs) * 0.05))
   )
     throw new FitActivityIdentityError('FIT session does not match Garmin activity')
   const laps = messages.lapMesgs ?? []
-  if (laps.length === 0) return null
+  if (laps.length > 10_000) throw new FitLapUnavailableError('Too many FIT laps')
+  if (laps.length === 0)
+    return options.allowConfirmedEmpty && sessions.every((session) => session.numLaps === 0)
+      ? []
+      : null
   const parsedLaps = laps
     .map((lap, index) => {
-      const start = lap.startTime
-      const end = lap.timestamp
-      if (
-        !(start instanceof Date) ||
-        Number.isNaN(start.getTime()) ||
-        !(end instanceof Date) ||
-        Number.isNaN(end.getTime()) ||
-        end.getTime() < start.getTime()
+      const duration = fitSummaryBounds(lap.startTime, lap.totalElapsedTime)
+      if (!duration) throw new FitLapUnavailableError('Invalid FIT lap bounds or duration')
+      const { startMs, endMs, elapsedMs } = duration
+      const containsLap = (session: (typeof bounds)[number]) =>
+        startMs >= session.startMs - 2_000 && endMs <= session.endMs + 2_000
+      let sessionIndex = bounds.findIndex(
+        (session) => !session.confirmedNoLaps && containsLap(session),
       )
-        throw new FitLapUnavailableError('Invalid FIT lap bounds')
-      const startMs = start.getTime()
-      const endMs = end.getTime()
-      const sessionIndex = bounds.findIndex(
-        (session) => startMs >= session.startMs - 2_000 && endMs <= session.endMs + 2_000,
-      )
+      if (sessionIndex < 0) sessionIndex = bounds.findIndex(containsLap)
       if (sessionIndex < 0) throw new FitLapUnavailableError('FIT lap is outside its session')
-      const elapsed = optionalMetric.safeParse(lap.totalElapsedTime)
-      if (
-        !elapsed.success ||
-        (elapsed.data != null && elapsed.data * 1000 > Number.MAX_SAFE_INTEGER)
-      )
-        throw new FitLapUnavailableError('Invalid FIT lap duration')
-      const elapsedMs = toMilliseconds(elapsed.data)
-      if (elapsedMs !== null && Math.abs(elapsedMs - (endMs - startMs)) > 2_000)
-        throw new FitLapUnavailableError('FIT lap duration does not match its timestamps')
       const distance = optionalMetric.safeParse(lap.totalDistance)
       const heartRate = optionalCount.safeParse(lap.avgHeartRate)
-      const speed = optionalMetric.safeParse(lap.avgSpeed)
+      const speed = optionalMetric.safeParse(lap.enhancedAvgSpeed ?? lap.avgSpeed)
       if (!distance.success || !heartRate.success || !speed.success)
         throw new FitLapUnavailableError('Invalid FIT lap metrics')
       const distanceMeters = distance.data ?? null
@@ -225,7 +241,8 @@ function normalizeFitLaps(
         distanceMeters,
         canonical: canonicalLapSchema.parse({
           lapIndex: index,
-          startedAt: start.toISOString(),
+          startedAt: new Date(startMs).toISOString(),
+          ...normalizeLapMetrics(lap, new Date(endMs), elapsedMs),
           distanceMeters,
           elapsedMs,
           movingMs: null,
@@ -238,19 +255,61 @@ function normalizeFitLaps(
     })
     .sort((a, b) => a.startMs - b.startMs || a.canonical.lapIndex - b.canonical.lapIndex)
   const distanceBySession = bounds.map(() => 0)
+  const elapsedBySession = bounds.map(() => 0)
+  const lapCountBySession = bounds.map(() => 0)
   let previousEnd = Number.NEGATIVE_INFINITY
   for (const lap of parsedLaps) {
     if (lap.startMs < previousEnd - 2_000) throw new FitLapUnavailableError('Overlapping FIT laps')
     previousEnd = Math.max(previousEnd, lap.endMs)
+    elapsedBySession[lap.sessionIndex] += lap.endMs - lap.startMs
+    lapCountBySession[lap.sessionIndex]++
     if (lap.distanceMeters !== null) {
       const total = distanceBySession[lap.sessionIndex] + lap.distanceMeters
       const sessionDistance = bounds[lap.sessionIndex].distanceMeters
-      if (total > sessionDistance + Math.max(100, sessionDistance * 0.02))
+      if (
+        sessionDistance !== null &&
+        total > sessionDistance + Math.max(100, sessionDistance * 0.02)
+      )
         throw new FitLapUnavailableError('FIT laps exceed session distance')
       distanceBySession[lap.sessionIndex] = total
     }
   }
+  for (const [index, session] of bounds.entries()) {
+    if (session.confirmedNoLaps) {
+      if (lapCountBySession[index] > 0)
+        throw new FitLapUnavailableError('FIT lap count does not match its session')
+      continue
+    }
+    if (
+      Math.abs(elapsedBySession[index] - (session.endMs - session.startMs)) >
+      Math.max(2_000, parsedLaps.length * 2)
+    )
+      throw new FitLapUnavailableError('FIT laps do not cover session duration')
+  }
   return parsedLaps.map((lap, index) => ({ ...lap.canonical, lapIndex: index }))
+}
+
+function normalizeLapMetrics(
+  lap: import('@garmin/fitsdk').LapMesg,
+  end: Date,
+  elapsedMs: number | null,
+) {
+  const timerMs = toMilliseconds(optionalMetric.parse(lap.totalTimerTime))
+  if (timerMs !== null && elapsedMs !== null && timerMs > elapsedMs + 2_000)
+    throw new FitLapUnavailableError('FIT timer exceeds elapsed duration')
+  const cadence = optionalMetric.parse(lap.avgCadence)
+  const fractional = optionalMetric.parse(lap.avgFractionalCadence)
+  return {
+    endedAt: end.toISOString(),
+    timerMs,
+    maxHrBpm: optionalCount.parse(lap.maxHeartRate) ?? null,
+    cadenceCyclesPerMinute: cadence == null ? null : cadence + (fractional ?? 0),
+    avgPowerWatts: optionalMetric.parse(lap.avgPower) ?? null,
+    maxPowerWatts: optionalMetric.parse(lap.maxPower) ?? null,
+    maxSpeedMps: optionalMetric.parse(lap.enhancedMaxSpeed ?? lap.maxSpeed) ?? null,
+    elevationGainMeters: optionalMetric.parse(lap.totalAscent) ?? null,
+    elevationLossMeters: optionalMetric.parse(lap.totalDescent) ?? null,
+  }
 }
 
 export const garminActivitySource = {

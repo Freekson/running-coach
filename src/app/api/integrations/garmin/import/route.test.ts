@@ -159,3 +159,39 @@ it('returns the persisted retry time when Garmin limits an import', async () => 
     expect.objectContaining({ userId: '00000000-0000-4000-8000-000000000001' }),
   )
 })
+
+it('accepts only an owner-scoped Activities laps stage and rejects client-selected activity IDs', async () => {
+  expect(
+    (
+      await POST(
+        post({ streamId: 'activities', stage: 'laps', action: 'retry', browserTimezone: 'UTC' }),
+      )
+    ).status,
+  ).toBe(200)
+  expect(runGarminDataImport.mock.calls[0][1]).toMatchObject({
+    streamId: 'activities',
+    stage: 'laps',
+    action: 'retry',
+  })
+  for (const extra of [{ activityId: 'other-user-activity' }, { userId: 'other-user' }])
+    expect(
+      (
+        await POST(
+          post({
+            streamId: 'activities',
+            stage: 'laps',
+            action: 'resume',
+            browserTimezone: 'UTC',
+            ...extra,
+          }),
+        )
+      ).status,
+    ).toBe(400)
+  expect(
+    (
+      await POST(
+        post({ streamId: 'sleep', stage: 'laps', action: 'resume', browserTimezone: 'UTC' }),
+      )
+    ).status,
+  ).toBe(400)
+})

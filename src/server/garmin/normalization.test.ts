@@ -1,5 +1,6 @@
 import { Encoder, Profile, type FileIdMesg, type LapMesg, type SessionMesg } from '@garmin/fitsdk'
 import { describe, expect, it, vi } from 'vitest'
+import { syntheticActivityFit } from './fit-test-fixtures'
 
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: () => true }))
@@ -15,6 +16,7 @@ import {
 import { getOwnerContext } from '@/server/authorization/ownership'
 import {
   garminActivitySource,
+  normalizeFitLaps,
   normalizeGarminDailySummary,
   normalizeGarminSleep,
   normalizeGarminActivitySummary,
@@ -171,6 +173,38 @@ function fitWithTwoSessions(): Buffer {
 }
 
 describe('Garmin activity normalization', () => {
+  it('uses the same rich lap metrics for Training FIT refreshes and the Settings lap stage', () => {
+    const bytes = syntheticActivityFit({ start: '2026-11-01T06:30:00Z' })
+    const refreshed = garminActivitySource.normalizeActivity(
+      ownerA,
+      {
+        ...activity,
+        summaryDTO: {
+          ...activity.summaryDTO,
+          distance: 4000,
+          elapsedDuration: 1200,
+          duration: 1160,
+        },
+      },
+      { sourceFile: bytes },
+    )
+    const staged = normalizeFitLaps(bytes, refreshed.startedAt, 4000, 1_200_000, {
+      allowMissingDistance: true,
+      allowConfirmedEmpty: true,
+    })
+    expect(refreshed.laps).toEqual(staged)
+    expect(refreshed.laps?.[0]).toMatchObject({
+      avgPowerWatts: 230,
+      maxPowerWatts: 300,
+      timerMs: 290_000,
+      maxHrBpm: 170,
+      cadenceCyclesPerMinute: 80.5,
+      elevationGainMeters: 12,
+      elevationLossMeters: 9,
+      endedAt: '2026-11-01T06:35:00.000Z',
+    })
+  })
+
   it('converts verified units, preserves provenance and optional FIT laps', () => {
     const source: ActivitySource = garminActivitySource
     const result = source.normalizeActivity(ownerA, activity, { sourceFile: fitWithLap() })
@@ -354,7 +388,7 @@ describe('Garmin activity normalization', () => {
       garminActivitySource.normalizeActivity(ownerA, activity, {
         sourceFile: fitWithLap({ lapElapsedSeconds: 300 }),
       }),
-    ).toThrow('FIT lap duration does not match its timestamps')
+    ).toThrow('FIT laps do not cover session duration')
   })
 })
 

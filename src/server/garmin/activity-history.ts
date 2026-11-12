@@ -34,7 +34,7 @@ const timezoneSchema = z
       return false
     }
   })
-const schema = z
+export const activityHistoryCheckpointSchema = z
   .strictObject({
     version: z.union([z.literal(1), z.literal(2)]),
     generation: z.number().int().positive(),
@@ -75,7 +75,7 @@ const schema = z
         }
       : {}),
   }))
-export type ActivityHistoryCheckpoint = z.infer<typeof schema>
+export type ActivityHistoryCheckpoint = z.infer<typeof activityHistoryCheckpointSchema>
 
 function addDays(date: string, days: number) {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
@@ -92,7 +92,7 @@ function newWindow(
   timezone: string,
   generation: number,
 ): ActivityHistoryCheckpoint {
-  return schema.parse({
+  return activityHistoryCheckpointSchema.parse({
     version: 2,
     generation,
     startDate,
@@ -198,7 +198,7 @@ export function activityHistoryState(
     activityCount: 0,
   }
   if (!cursor) return empty
-  const parsed = schema.safeParse(cursor.cursorOrCheckpoint)
+  const parsed = activityHistoryCheckpointSchema.safeParse(cursor.cursorOrCheckpoint)
   if (!parsed.success) return { ...empty, status: 'paused', errorCode: 'INVALID_CHECKPOINT' }
   const cp = parsed.data
   const totalDays = garminHistoryWindowDays(cp.startDate, cp.endDate)!
@@ -277,7 +277,7 @@ export async function runActivityHistory(
     const history = await prisma.syncCursor.findFirst({
       where: { userId, connectionId: connection.id, dataType: ACTIVITY_HISTORY_CURSOR },
     })
-    const historyCheckpoint = schema.safeParse(history?.cursorOrCheckpoint)
+    const historyCheckpoint = activityHistoryCheckpointSchema.safeParse(history?.cursorOrCheckpoint)
     if (
       options.action === 'sync' &&
       (!historyCheckpoint.success || historyCheckpoint.data.nextDate !== null)
@@ -296,7 +296,7 @@ export async function runActivityHistory(
       dataType === ACTIVITY_HISTORY_CURSOR
         ? history
         : await prisma.syncCursor.findFirst({ where: cursorKey })
-    const parsed = schema.safeParse(cursor?.cursorOrCheckpoint)
+    const parsed = activityHistoryCheckpointSchema.safeParse(cursor?.cursorOrCheckpoint)
     if (cursor && !parsed.success) throw new GarminDataImportError('INVALID_CHECKPOINT')
     if (!cursor && options.action !== 'import' && options.action !== 'sync')
       throw new GarminDataImportError('NOT_STARTED')

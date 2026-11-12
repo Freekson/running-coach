@@ -7,6 +7,7 @@ import {
   canonicalActivitySchema,
   isCrossProviderDuplicateCandidate,
   type CanonicalActivity,
+  type CanonicalLap,
 } from '@/server/activity/normalization'
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
@@ -208,6 +209,15 @@ function lapRows(activity: CanonicalActivity, userId: string, activityId: string
     avgHrBpm: lap.avgHrBpm,
     avgSpeedMps: lap.avgSpeedMps,
     cadenceStepsPerMinute: lap.cadenceStepsPerMinute,
+    endedAt: lap.endedAt == null ? null : new Date(lap.endedAt),
+    timerMs: safeMilliseconds(lap.timerMs ?? null),
+    maxHrBpm: lap.maxHrBpm ?? null,
+    cadenceCyclesPerMinute: lap.cadenceCyclesPerMinute ?? null,
+    avgPowerWatts: lap.avgPowerWatts ?? null,
+    maxPowerWatts: lap.maxPowerWatts ?? null,
+    maxSpeedMps: lap.maxSpeedMps ?? null,
+    elevationGainMeters: lap.elevationGainMeters ?? null,
+    elevationLossMeters: lap.elevationLossMeters ?? null,
   }))
 }
 
@@ -309,7 +319,18 @@ export async function importCanonicalActivity(
             (existing?.lapImportStatus === 'IMPORTED' || existing?.lapImportStatus === 'RETAINED')
           const lapImportStatus: LapImportStatus =
             activity.laps !== null ? 'IMPORTED' : retainLaps ? 'RETAINED' : 'UNAVAILABLE'
-          const fields = { ...comparison, lapImportStatus }
+          const fitWork =
+            activity.laps !== null
+              ? { fitImportState: 'COMPLETE', fitImportErrorCode: null, fitNextAttemptAt: null }
+              : !summaryMatches
+                ? {
+                    fitImportState: 'PENDING',
+                    fitImportErrorCode: null,
+                    fitNextAttemptAt: null,
+                    fitImportAttempts: 0,
+                  }
+                : {}
+          const fields = { ...comparison, lapImportStatus, ...fitWork }
           const saved = await tx.activity.upsert({
             where: {
               userId_sourceProvider_externalActivityId_garminAccountId: identity,
@@ -397,6 +418,50 @@ export async function importCanonicalActivity(
     }
   }
   throw new Error('Activity import retry exhausted')
+}
+
+/** The caller fences its provider/stream leases in the same transaction. */
+export async function replaceGarminActivityLaps(
+  tx: Prisma.TransactionClient,
+  owner: OwnerContext,
+  snapshot: Activity,
+  laps: CanonicalLap[],
+  checkedAt: Date,
+): Promise<void> {
+  const userId = ownerId(owner)
+  if (snapshot.userId !== userId || snapshot.sourceProvider !== 'GARMIN')
+    throw new InvalidActivityImportError()
+  const canonical = candidateShape(snapshot)
+  if (!canonical) throw new InvalidActivityImportError()
+  const validated = canonicalActivitySchema.parse({ ...canonical, laps })
+  const changed = await tx.activity.updateMany({
+    where: {
+      userId,
+      id: snapshot.id,
+      garminAccountId: snapshot.garminAccountId,
+      updatedAt: snapshot.updatedAt,
+      fitImportState: 'RUNNING',
+    },
+    data: {
+      fitImportState: 'COMPLETE',
+      fitImportErrorCode: null,
+      fitNextAttemptAt: null,
+      lapImportStatus: 'IMPORTED',
+      fitCheckedAt: checkedAt,
+    },
+  })
+  if (changed.count !== 1) throw new InvalidActivityImportError()
+  const previous = await tx.activityLap.findMany({
+    where: { userId, activityId: snapshot.id },
+    select: { id: true, startedAt: true, sourceRecordType: true },
+  })
+  // A verified empty FIT cannot silently erase previously valid breakdowns.
+  if (laps.length === 0 && previous.length > 0) throw new InvalidActivityImportError()
+  await tx.activityLap.deleteMany({ where: { userId, activityId: snapshot.id } })
+  if (laps.length)
+    await tx.activityLap.createMany({
+      data: stableLapRows(lapRows(validated, userId, snapshot.id), previous),
+    })
 }
 
 const summarySelect = {
@@ -532,6 +597,15 @@ export async function getActivity(owner: OwnerContext, id: string) {
           avgHrBpm: true,
           avgSpeedMps: true,
           cadenceStepsPerMinute: true,
+          endedAt: true,
+          timerMs: true,
+          maxHrBpm: true,
+          cadenceCyclesPerMinute: true,
+          avgPowerWatts: true,
+          maxPowerWatts: true,
+          maxSpeedMps: true,
+          elevationGainMeters: true,
+          elevationLossMeters: true,
         },
       },
     },
@@ -549,6 +623,15 @@ export async function getActivity(owner: OwnerContext, id: string) {
       avgHrBpm: lap.avgHrBpm,
       avgSpeedMps: lap.avgSpeedMps?.toNumber() ?? null,
       cadenceStepsPerMinute: lap.cadenceStepsPerMinute?.toNumber() ?? null,
+      endedAt: lap.endedAt?.toISOString() ?? null,
+      timerMs: lap.timerMs == null ? null : Number(lap.timerMs),
+      maxHrBpm: lap.maxHrBpm,
+      cadenceCyclesPerMinute: lap.cadenceCyclesPerMinute?.toNumber() ?? null,
+      avgPowerWatts: lap.avgPowerWatts?.toNumber() ?? null,
+      maxPowerWatts: lap.maxPowerWatts?.toNumber() ?? null,
+      maxSpeedMps: lap.maxSpeedMps?.toNumber() ?? null,
+      elevationGainMeters: lap.elevationGainMeters?.toNumber() ?? null,
+      elevationLossMeters: lap.elevationLossMeters?.toNumber() ?? null,
     })),
   }
 }

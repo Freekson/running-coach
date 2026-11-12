@@ -79,7 +79,7 @@ model User {
   integrationConnections      IntegrationConnection[]
   activities                  Activity[]
   activityDuplicateCandidates ActivityDuplicateCandidate[]
-  garminImportRateLimit        GarminImportRateLimit?
+  garminImportRateLimit       GarminImportRateLimit?
   dailyHealthMetrics          DailyHealthMetric[]
   syncRuns                    SyncRun[]
 
@@ -274,17 +274,17 @@ model IntegrationCredential {
 }
 
 model SyncCursor {
-  id                 String    @id @default(uuid()) @db.Uuid
-  userId             String    @map("user_id") @db.Uuid
-  connectionId       String    @map("connection_id") @db.Uuid
-  dataType           String    @map("data_type")
-  cursorOrCheckpoint Json      @map("cursor_or_checkpoint")
-  lastSyncedAt       DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  connectionId        String    @map("connection_id") @db.Uuid
+  dataType            String    @map("data_type")
+  cursorOrCheckpoint  Json      @map("cursor_or_checkpoint")
+  lastSyncedAt        DateTime? @map("last_synced_at") @db.Timestamptz(6)
   leaseToken          String?   @map("lease_token") @db.Uuid
   leaseExpiresAt      DateTime? @map("lease_expires_at") @db.Timestamptz(6)
   nextAttemptAt       DateTime? @map("next_attempt_at") @db.Timestamptz(6)
-  consecutiveFailures Int      @default(0) @map("consecutive_failures")
-  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   connection IntegrationConnection @relation(fields: [userId, connectionId], references: [userId, id], onDelete: Cascade)
 
@@ -346,6 +346,10 @@ model Activity {
   rawObjectRef         String?        @map("raw_object_ref")
   gpsAssetRef          String?        @map("gps_asset_ref")
   lapImportStatus      String         @default("UNAVAILABLE") @map("lap_import_status") @db.VarChar(24)
+  fitImportState       String         @default("PENDING") @map("fit_import_state") @db.VarChar(24)
+  fitImportErrorCode   String?        @map("fit_import_error_code") @db.VarChar(40)
+  fitImportAttempts    Int            @default(0) @map("fit_import_attempts")
+  fitNextAttemptAt     DateTime?      @map("fit_next_attempt_at") @db.Timestamptz(6)
   fitCheckedAt         DateTime?      @map("fit_checked_at") @db.Timestamptz(6)
   sourceObservedAt     DateTime?      @map("source_observed_at") @db.Timestamptz(6)
   externalModifiedAt   DateTime?      @map("external_modified_at") @db.Timestamptz(6)
@@ -360,6 +364,7 @@ model Activity {
   @@unique([userId, id])
   @@unique([userId, sourceProvider, externalActivityId, garminAccountId], map: "activities_owner_provider_external_account_key")
   @@index([userId, listStartedAt(sort: Desc), id(sort: Desc)])
+  @@index([userId, sourceProvider, garminAccountId, fitImportState, startedAt, id], map: "activities_fit_work_idx")
   @@map("activities")
 }
 
@@ -376,6 +381,16 @@ model ActivityLap {
   avgHrBpm              Int?      @map("avg_hr_bpm")
   avgSpeedMps           Decimal?  @map("avg_speed_mps") @db.Decimal(12, 6)
   cadenceStepsPerMinute Decimal?  @map("cadence_steps_per_minute") @db.Decimal(7, 2)
+
+  endedAt                DateTime? @map("ended_at") @db.Timestamptz(6)
+  timerMs                BigInt?   @map("timer_ms")
+  maxHrBpm               Int?      @map("max_hr_bpm")
+  cadenceCyclesPerMinute Decimal?  @map("cadence_cycles_per_minute") @db.Decimal(7, 2)
+  avgPowerWatts          Decimal?  @map("avg_power_watts") @db.Decimal(9, 2)
+  maxPowerWatts          Decimal?  @map("max_power_watts") @db.Decimal(9, 2)
+  maxSpeedMps            Decimal?  @map("max_speed_mps") @db.Decimal(12, 6)
+  elevationGainMeters    Decimal?  @map("elevation_gain_meters") @db.Decimal(9, 2)
+  elevationLossMeters    Decimal?  @map("elevation_loss_meters") @db.Decimal(9, 2)
 
   activity Activity @relation(fields: [userId, activityId], references: [userId, id], onDelete: Cascade)
 

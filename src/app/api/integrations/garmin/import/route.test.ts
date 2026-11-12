@@ -119,13 +119,19 @@ it('derives the owner from the session and rejects a client-selected owner', asy
   })
 })
 
-it.each(['import', 'resume', 'retry', 'reimport', 'verify'])(
-  'keeps Activities unavailable for the %s action',
+it.each(['import', 'resume', 'retry', 'reimport', 'sync'])(
+  'delegates the Activities %s action using the session owner',
   async (action) => {
     const response = await POST(post({ streamId: 'activities', action, browserTimezone: 'UTC' }))
-    expect(response.status).toBe(422)
-    expect(await response.json()).toEqual({ code: 'NOT_SUPPORTED' })
-    expect(runGarminDataImport).not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    expect(ownerId(runGarminDataImport.mock.calls[0][0])).toBe(
+      '00000000-0000-4000-8000-000000000001',
+    )
+    expect(runGarminDataImport.mock.calls[0][1]).toEqual({
+      streamId: 'activities',
+      action,
+      browserTimezone: 'UTC',
+    })
     expect(verifySavedGarminAccount).not.toHaveBeenCalled()
   },
 )

@@ -36,7 +36,7 @@ vi.mock('@/server/db/client', () => ({ getPrismaClient }))
 
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { canonicalActivitySchema } from './normalization'
-import { getActivity, importCanonicalActivity, listActivities } from './import'
+import { canSkipFitDownload, getActivity, importCanonicalActivity, listActivities } from './import'
 
 const userA = '00000000-0000-4000-8000-000000000001'
 const userB = '00000000-0000-4000-8000-000000000002'
@@ -132,9 +132,88 @@ beforeEach(() => {
   )
   getPrismaClient.mockResolvedValue({
     $transaction: transaction,
-    activity: { findFirst: findOne, findMany },
+    activity: { findFirst: findOne, findMany, findUnique: findExisting },
     integrationConnection: { findUnique: vi.fn(async () => ({ externalAccountId: '123456' })) },
   })
+})
+
+it('merges sparse unchanged summaries and retains FIT laps and their check timestamp', async () => {
+  findExisting.mockResolvedValue(storedActivity({ avgHrBpm: 145, maxHrBpm: 175 }))
+  await importCanonicalActivity(
+    ownerA,
+    {
+      ...input,
+      distanceMeters: null,
+      totalMs: null,
+      elapsedMs: null,
+      avgSpeedMps: null,
+      laps: null,
+    },
+    { summaryOnly: true, garminAccountId: 'synthetic-account' },
+  )
+  expect(upsert).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: {
+        userId_sourceProvider_externalActivityId_garminAccountId: {
+          userId: userA,
+          sourceProvider: 'GARMIN',
+          externalActivityId: 'synthetic-1',
+          garminAccountId: 'synthetic-account',
+        },
+      },
+      update: expect.objectContaining({
+        distanceMeters: 5000.125,
+        totalMs: BigInt(1800000),
+        avgHrBpm: 145,
+        maxHrBpm: 175,
+        avgSpeedMps: 2.77,
+        lapImportStatus: 'RETAINED',
+        fitCheckedAt: undefined,
+      }),
+    }),
+  )
+  expect(deleteLaps).not.toHaveBeenCalled()
+  expect(createLaps).not.toHaveBeenCalled()
+})
+
+it('invalidates old FIT laps and freshness when a summary changes their verified identity', async () => {
+  const observedAt = new Date('2026-11-12T02:00:00Z')
+  findExisting.mockResolvedValue(storedActivity({ fitCheckedAt: observedAt }))
+  const changed = { ...input, distanceMeters: 10000, laps: null }
+  await importCanonicalActivity(ownerA, changed, {
+    summaryOnly: true,
+    garminAccountId: 'synthetic-account',
+    sourceObservedAt: observedAt,
+  })
+  expect(upsert.mock.calls[0][0].update).toMatchObject({
+    distanceMeters: 10000,
+    lapImportStatus: 'UNAVAILABLE',
+    fitCheckedAt: null,
+  })
+  expect(deleteLaps).toHaveBeenCalledWith({ where: { userId: userA, activityId: savedId } })
+  expect(createLaps).not.toHaveBeenCalled()
+  findExisting.mockResolvedValue(
+    storedActivity({
+      distanceMeters: new Prisma.Decimal(10000),
+      lapImportStatus: 'UNAVAILABLE',
+      fitCheckedAt: null,
+    }),
+  )
+  for (const refresh of [false, true])
+    expect(
+      await canSkipFitDownload(ownerA, changed, {
+        refresh,
+        observedAt,
+        garminAccountId: 'synthetic-account',
+      }),
+    ).toBe(false)
+})
+
+it('rejects another owner even in summaries-only mode', async () => {
+  await expect(
+    importCanonicalActivity(ownerB, { ...input, laps: null }, { summaryOnly: true }),
+  ).rejects.toThrow()
+  expect(transaction).not.toHaveBeenCalled()
 })
 
 describe('owner-scoped activity persistence', () => {

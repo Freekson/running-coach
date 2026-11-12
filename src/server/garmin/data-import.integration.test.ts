@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { config } from 'dotenv'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PrismaClient } from '@prisma/client'
 import { testGarminAccountId } from '@/server/garmin/test-identity'
 
@@ -12,6 +12,11 @@ import { getPrismaClient } from '@/server/db/client'
 import { saveProviderApiKey } from '@/server/provider/vault'
 import { addCalendarDays, getGarminImportState, runGarminDataImport } from './data-import'
 import { GarminHealthImportError, type importGarminHealthDate } from './health-import'
+import { importGarminActivityPage } from './activity-import'
+import { getActivity } from '@/server/activity/import'
+import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
+import { ACTIVITY_HISTORY_CURSOR, activityHistoryWindow } from './activity-history'
+import * as importRateLimit from './import-rate-limit'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
 if (requested) config()
@@ -80,6 +85,13 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
     }
     delete process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION
     delete process.env.CREDENTIAL_ENCRYPTION_KEY_V1
+  })
+
+  beforeEach(async () => {
+    await prisma.garminImportRateLimit.updateMany({
+      where: { userId: { in: [owner.userId, retryOwner.userId] } },
+      data: { count: 1, windowStartedAt: new Date(Date.now() - 61_000), providerRetryAt: null },
+    })
   })
 
   it('seeds only verified Daily coverage and keeps Sleep and other owners independent', async () => {
@@ -167,4 +179,193 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
     expect(retriedDates).toEqual(['2026-11-09'])
     expect(retried.find((stream) => stream.streamId === 'sleep')?.failedDateCount).toBe(0)
   })
+
+  it('persists all-sport summaries, resumes and reimports sparsely without changing health or another owner', async () => {
+    const before = (await getGarminImportState(owner, now)).filter(
+      (stream) => stream.streamId !== 'activities',
+    )
+    let rows = [
+      {
+        activityId: 8001,
+        activityType: { typeKey: 'cycling' },
+        startTimeGMT: '2026-11-08 03:00:00',
+        distance: 20000,
+        averageHR: 130,
+        calories: 400,
+        activityName: 'Synthetic cycling',
+        duration: 3600,
+      },
+      {
+        activityId: 8002,
+        activityType: { typeKey: 'walking' },
+        startTimeGMT: '2026-11-08 06:00:00',
+        distance: 2000,
+        averageHR: 100,
+        calories: 100,
+        activityName: 'Synthetic walking',
+        duration: 1800,
+      },
+    ]
+    const network: typeof fetch = async (input) => {
+      const url = new URL(String(input))
+      if (url.pathname.includes('/personal-api-key/token')) return new Response('synthetic-bearer')
+      if (url.pathname.includes('/usersummary/daily'))
+        return Response.json({
+          calendarDate: url.searchParams.get('calendarDate'),
+          userProfileId: Number(testGarminAccountId(owner)),
+        })
+      if (url.pathname.includes('/search/activities'))
+        return Response.json(rows.slice(Number(url.searchParams.get('start'))))
+      throw new Error('Summary import requested detail or FIT')
+    }
+    const importActivityPage: typeof importGarminActivityPage = (context, window, options) =>
+      importGarminActivityPage(context, window, {
+        ...options,
+        fetcher: network,
+        pause: async () => {},
+      })
+    async function run(action: 'import' | 'resume' | 'reimport') {
+      await prisma.garminImportRateLimit.updateMany({
+        where: { userId: owner.userId },
+        data: { count: 1, windowStartedAt: new Date(Date.now() - 61_000) },
+      })
+      return runGarminDataImport(
+        owner,
+        { streamId: 'activities', action, browserTimezone: 'UTC' },
+        { now: () => now, importActivityPage, maxPagesPerRun: 1 },
+      )
+    }
+    await run('import')
+    await run('resume')
+    await run('resume')
+    const state = await run('resume')
+    expect(state.find((stream) => stream.streamId === 'activities')).toMatchObject({
+      activityCount: 2,
+      pagesFetched: 4,
+      checkedDays: state.find((stream) => stream.streamId === 'activities')!.totalDays,
+      status: 'completed',
+    })
+    expect(state.filter((stream) => stream.streamId !== 'activities')).toEqual(before)
+    const saved = await prisma.activity.findMany({
+      where: { userId: owner.userId },
+      orderBy: { externalActivityId: 'asc' },
+    })
+    expect(saved).toHaveLength(2)
+    expect(saved.map((row) => row.sportType)).toEqual(['CYCLING', 'WALKING'])
+    expect(saved[0]).toMatchObject({ calories: 400, activityTitle: 'Synthetic cycling' })
+    expect(saved.every((row) => row.garminAccountId === testGarminAccountId(owner))).toBe(true)
+    expect(await getActivity(other, saved[0].id)).toBeNull()
+    rows = rows.map((row) => ({ ...row, distance: row.distance + 50 }))
+    const sparseNetwork: typeof importGarminActivityPage = (context, window, options) =>
+      importGarminActivityPage(context, window, {
+        ...options,
+        pause: async () => {},
+        fetcher: async (input, init) => {
+          const response = await network(input, init)
+          if (new URL(String(input)).pathname.includes('/search/activities'))
+            return Response.json(rows.map((row) => ({ ...row, averageHR: undefined })))
+          return response
+        },
+      })
+    await prisma.garminImportRateLimit.updateMany({
+      where: { userId: owner.userId },
+      data: { count: 1, windowStartedAt: new Date(Date.now() - 61_000) },
+    })
+    await runGarminDataImport(
+      owner,
+      { streamId: 'activities', action: 'reimport', browserTimezone: 'UTC' },
+      { now: () => now, importActivityPage: sparseNetwork, maxPagesPerRun: 1 },
+    )
+    const updated = await prisma.activity.findMany({
+      where: { userId: owner.userId },
+      orderBy: { externalActivityId: 'asc' },
+    })
+    expect(updated.map((row) => row.id)).toEqual(saved.map((row) => row.id))
+    expect(updated[0].distanceMeters?.toNumber()).toBe(20050)
+    expect(updated[0].avgHrBpm).toBe(130)
+    expect(await prisma.activityLap.count({ where: { userId: owner.userId } })).toBe(0)
+  }, 120_000)
+
+  it.each(['credential replacement', 'provider lease replacement'] as const)(
+    'preserves a newer reimport after %s revokes a planning request',
+    async (scenario) => {
+      const user = await prisma.user.create({
+        data: { authSubject: `${prefix}-rotation-race-${scenario}` },
+      })
+      const context = getOwnerContext({ id: user.id, role: 'USER', email: null })
+      const accountId = testGarminAccountId(context)
+      await saveProviderApiKey(context, 'GARMIN', 'synthetic-original-race-key', {
+        verifiedGarminAccountId: accountId,
+      })
+      const connection = await prisma.integrationConnection.findUniqueOrThrow({
+        where: { userId_provider: { userId: user.id, provider: 'GARMIN' } },
+        select: { id: true },
+      })
+      const key = { connectionId: connection.id, dataType: ACTIVITY_HISTORY_CURSOR }
+      await prisma.syncCursor.create({
+        data: {
+          userId: user.id,
+          ...key,
+          cursorOrCheckpoint: {
+            ...activityHistoryWindow('2026-11-10', 'UTC'),
+            nextDate: '2026-09-12',
+          },
+        },
+      })
+      const raceNow = new Date('2026-11-12T02:00:00Z')
+      const emptyPage: typeof importGarminActivityPage = async () => ({
+        imported: [],
+        providerIds: [],
+        pageIds: [],
+        hasMore: false,
+        nextStart: null,
+        beforeCheckpoint: async () => {},
+      })
+      const stalePage = vi.fn(emptyPage)
+      const allowOriginal = importRateLimit.allowGarminImport
+      let newer: Awaited<ReturnType<typeof prisma.syncCursor.findUnique>>
+      const replacement = vi
+        .spyOn(importRateLimit, 'allowGarminImport')
+        .mockImplementationOnce(async (requestOwner) => {
+          const allowed = await allowOriginal(requestOwner)
+          if (scenario === 'credential replacement') {
+            await saveProviderApiKey(requestOwner, 'GARMIN', 'synthetic-replacement-race-key', {
+              verifiedGarminAccountId: accountId,
+            })
+          } else {
+            await prisma.syncCursor.updateMany({
+              where: { userId: user.id, connectionId: connection.id, dataType: 'GARMIN_REQUESTS' },
+              data: { leaseExpiresAt: new Date(raceNow.getTime() - 1) },
+            })
+          }
+          await runGarminDataImport(
+            requestOwner,
+            { streamId: 'activities', action: 'reimport', browserTimezone: 'UTC' },
+            { now: () => raceNow, importActivityPage: emptyPage, maxPagesPerRun: 1 },
+          )
+          newer = await prisma.syncCursor.findUnique({ where: { connectionId_dataType: key } })
+          expect(newer?.cursorOrCheckpoint).toMatchObject({ generation: 2, endDate: '2026-11-11' })
+          return allowed
+        })
+      try {
+        const staleRequest = runGarminDataImport(
+          context,
+          { streamId: 'activities', action: 'resume', browserTimezone: 'UTC' },
+          { now: () => raceNow, importActivityPage: stalePage },
+        )
+        if (scenario === 'credential replacement')
+          await expect(staleRequest).rejects.toBeInstanceOf(CredentialUnavailableError)
+        else await expect(staleRequest).rejects.toThrow('BUSY')
+        expect(stalePage).not.toHaveBeenCalled()
+        const current = await prisma.syncCursor.findUniqueOrThrow({
+          where: { connectionId_dataType: key },
+        })
+        expect(current.cursorOrCheckpoint).toEqual(newer!.cursorOrCheckpoint)
+        expect(current.leaseToken).toBeNull()
+      } finally {
+        replacement.mockRestore()
+      }
+    },
+    30_000,
+  )
 })

@@ -271,7 +271,7 @@ it('imports only the selected stream and shows persisted date coverage', async (
   expect(host.querySelector('#garmin-import-help')).toBeNull()
   expect(button('How it works').getAttribute('aria-expanded')).toBe('false')
   const choices = host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
-  expect(choices[2].disabled).toBe(true)
+  expect(choices[2].disabled).toBe(false)
   await act(async () => choices[1].click())
   fetchMock.mockResolvedValueOnce({
     ok: true,
@@ -328,7 +328,7 @@ it('imports only the selected stream and shows persisted date coverage', async (
   expect(host.textContent).not.toContain('Stop import')
 })
 
-it('keeps historical Activities not imported and unavailable after a recent sync', async () => {
+it('offers historical activity summaries independently of recent sync with a laps placeholder', async () => {
   const activity: GarminImportStreamState = {
     streamId: 'activities',
     status: 'not_started',
@@ -353,14 +353,15 @@ it('keeps historical Activities not imported and unavailable after a recent sync
     ),
   )
   const choice = host.querySelector<HTMLInputElement>('input[aria-label="Select Activities"]')
-  expect(choice?.disabled).toBe(true)
-  expect(host.textContent).toContain('Coming later')
+  expect(choice?.disabled).toBe(false)
+  expect(host.textContent).toContain('Activity summaries')
+  expect(host.textContent).toContain('Normalized laps')
   expect(host.querySelector('button[aria-label="Show Activities details"]')).toBeNull()
-  expect(host.querySelector('button[aria-label="Hide Activities details"]')).toBeNull()
-  expect(host.querySelector('#garmin-activities-details')).toBeNull()
+  expect(host.querySelector('button[aria-label="Hide Activities details"]')).not.toBeNull()
+  expect(host.querySelector('#garmin-activities-details')).not.toBeNull()
   await act(async () => choice?.click())
-  expect(choice?.checked).toBe(false)
-  expect(button('Import selected').disabled).toBe(true)
+  expect(choice?.checked).toBe(true)
+  expect(button('Import selected').disabled).toBe(false)
   expect(fetchMock).not.toHaveBeenCalled()
 })
 
@@ -513,7 +514,7 @@ it('stops automatic retries when failed-date coverage does not improve', async (
   expect(fetchMock).toHaveBeenCalledTimes(1)
   expect(notify).toHaveBeenCalledWith(
     'warning',
-    'Import paused with unresolved dates. Review the stream status.',
+    'Import paused with unresolved work. Review the stream status.',
     'garmin-data-import',
   )
 })

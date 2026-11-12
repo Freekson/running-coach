@@ -33,6 +33,7 @@ const zoneName = z
 const garminActivitySchema = z.object({
   activityId: z.union([z.string().trim().min(1), z.number().int().nonnegative().safe()]),
   activityUUID: z.string().trim().min(1).nullish(),
+  activityName: z.string().trim().max(200).nullish(),
   activityTypeDTO: z.object({ typeKey: z.string().trim().min(1) }),
   timeZoneUnitDTO: z.object({ timeZone: zoneName }).nullish(),
   summaryDTO: z.object({
@@ -48,6 +49,7 @@ const garminActivitySchema = z.object({
     averageRunningCadenceInStepsPerMinute: optionalMetric,
     elevationGain: optionalMetric,
     elevationLoss: optionalMetric,
+    calories: z.number().int().min(0).max(2_147_483_647).nullish(),
   }),
 })
 
@@ -268,7 +270,7 @@ export const garminActivitySource = {
         externalActivityUuid: input.activityUUID ?? null,
         recordType: 'API_ACTIVITY',
       },
-      sportType: input.activityTypeDTO.typeKey === 'running' ? 'RUNNING' : 'OTHER',
+      sportType: garminSport(input.activityTypeDTO.typeKey),
       sourceSportType: input.activityTypeDTO.typeKey,
       startedAt,
       sourceTimezone: timezone,
@@ -283,6 +285,8 @@ export const garminActivitySource = {
       cadenceStepsPerMinute: input.summaryDTO.averageRunningCadenceInStepsPerMinute ?? null,
       elevationGainMeters: input.summaryDTO.elevationGain ?? null,
       elevationLossMeters: input.summaryDTO.elevationLoss ?? null,
+      calories: input.summaryDTO.calories ?? null,
+      activityTitle: input.activityName || null,
       laps:
         options?.sourceFile === undefined
           ? null
@@ -295,6 +299,41 @@ export const garminActivitySource = {
     })
   },
 } satisfies ActivitySource
+
+function garminSport(type: string) {
+  if (/(^|_)running$/.test(type)) return 'RUNNING'
+  if (/(^|_)cycling$/.test(type)) return 'CYCLING'
+  if (/(^|_)walking$/.test(type)) return 'WALKING'
+  if (/(^|_)swimming$/.test(type)) return 'SWIMMING'
+  return 'OTHER'
+}
+
+/** List summaries contain metrics directly; splitSummaries are never ordered laps. */
+export function normalizeGarminActivitySummary(owner: OwnerContext, payload: unknown) {
+  const row = z
+    .object({
+      activityId: garminActivitySchema.shape.activityId,
+      activityUUID: garminActivitySchema.shape.activityUUID,
+      activityType: z.object({ typeKey: z.string().trim().min(1) }),
+      startTimeGMT: utcWallTime,
+      startTimeLocal: utcWallTime.nullish(),
+      beginTimestamp: z.number().int().safe().nullish(),
+    })
+    .passthrough()
+    .parse(payload)
+  if (
+    row.beginTimestamp != null &&
+    Math.abs(Date.parse(utcInstant(row.startTimeGMT)) - row.beginTimestamp) > 1000
+  )
+    throw new Error('Inconsistent Garmin activity timestamp')
+  return garminActivitySource.normalizeActivity(owner, {
+    activityId: row.activityId,
+    activityUUID: row.activityUUID,
+    activityName: row.activityName,
+    activityTypeDTO: row.activityType,
+    summaryDTO: row,
+  })
+}
 
 function healthBase(owner: OwnerContext, sourceTimezone: string) {
   return {

@@ -4,6 +4,12 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import {
+  healthStreamIds,
+  type HealthStreamId,
+  type ImportStreamId,
+  type GarminImportStreamState,
+} from '@/lib/garmin-import-state'
+import {
   earliestGarminHistoryDate,
   garminHistoryWindowDays,
   GARMIN_MAX_HISTORY_DAYS,
@@ -26,16 +32,26 @@ import { claimGarminProviderLease, releaseGarminProviderLease } from './provider
 import { isGarminImportAllowed } from './sync-policy'
 import { createGarminStreamCoordinator, processGarminStreamWork } from './stream-coordinator'
 
+import { GarminDataImportError } from './data-import-error'
+import {
+  ACTIVITY_HISTORY_CURSOR,
+  ACTIVITY_RECENT_CURSOR,
+  activityHistoryState,
+  runActivityHistory,
+  type ActivityHistoryDependencies,
+} from './activity-history'
+export { GarminDataImportError } from './data-import-error'
+export type {
+  HealthStreamId,
+  ImportStreamId,
+  GarminImportStreamState,
+} from '@/lib/garmin-import-state'
 export { GARMIN_HISTORY_YEARS }
 export const GARMIN_DAILY_BATCH_DAYS = 365
 export const GARMIN_SLEEP_BATCH_DAYS = 30
 const MAX_RETRY_DATES_PER_INVOCATION = 10
 const RUN_BUDGET_MS = 22_000
 const LEASE_MS = 100_000
-
-export const healthStreamIds = ['daily_summary', 'sleep'] as const
-export type HealthStreamId = (typeof healthStreamIds)[number]
-export type ImportStreamId = HealthStreamId | 'activities'
 
 type HealthAdapter = {
   dataType: string
@@ -107,25 +123,6 @@ const checkpointSchema = z
   })
 type Checkpoint = z.infer<typeof checkpointSchema>
 
-export type GarminImportStreamState = {
-  streamId: ImportStreamId
-  status:
-    'not_started' | 'running' | 'waiting_retry' | 'paused' | 'completed_with_warnings' | 'completed'
-  startDate: string | null
-  endDate: string | null
-  nextDate: string | null
-  lastCheckedDate: string | null
-  checkedDays: number
-  totalDays: number | null
-  failedDateCount: number
-  retryAfter: string | null
-  lastSyncAt: string | null
-  errorCode: string | null
-  generation: number | null
-  activityCount?: number
-  currentRange?: { start: string; end: string } | null
-}
-
 export function addCalendarDays(date: string, count: number): string {
   return new Date(Date.parse(`${date}T00:00:00.000Z`) + count * 86_400_000)
     .toISOString()
@@ -192,22 +189,6 @@ function validTimezone(timezone: string): boolean {
   }
 }
 
-export class GarminDataImportError extends Error {
-  constructor(
-    readonly code:
-      | 'NOT_CONNECTED'
-      | 'APPROVAL_REQUIRED'
-      | 'BUSY'
-      | 'RATE_LIMITED'
-      | 'INVALID_TIMEZONE'
-      | 'INVALID_CHECKPOINT'
-      | 'NOT_STARTED'
-      | 'NOT_READY',
-  ) {
-    super(code)
-  }
-}
-
 export function isTerminalGarminImportError(code: string): boolean {
   return (
     code === 'NOT_CONNECTED' ||
@@ -235,7 +216,7 @@ function emptyState(streamId: ImportStreamId): GarminImportStreamState {
   }
 }
 
-async function getHealthImportStates(
+async function getImportStates(
   owner: OwnerContext,
   observedAt = new Date(),
 ): Promise<GarminImportStreamState[]> {
@@ -247,29 +228,35 @@ async function getHealthImportStates(
       id: true,
       externalAccountId: true,
       status: true,
-      credential: { select: { connectionId: true } },
+      credential: { select: { connectionId: true, rotatedAt: true } },
     },
   })
-  if (!connection?.credential) return healthStreamIds.map(emptyState)
+  if (!connection?.credential) return [...healthStreamIds, 'activities' as const].map(emptyState)
   const [cursors, pause, runs] = await Promise.all([
     prisma.syncCursor.findMany({
       where: {
         userId,
         connectionId: connection.id,
-        dataType: { in: healthStreamIds.map(cursorType) },
+        dataType: {
+          in: [...healthStreamIds.map(cursorType), ACTIVITY_HISTORY_CURSOR, ACTIVITY_RECENT_CURSOR],
+        },
       },
     }),
     getGarminProviderPauseUntil(owner),
     Promise.all(
-      healthStreamIds.map((id) =>
+      [
+        ...healthStreamIds.map((id) => `GARMIN_IMPORT_${id.toUpperCase()}`),
+        ACTIVITY_HISTORY_CURSOR,
+        ACTIVITY_RECENT_CURSOR,
+      ].map((jobType) =>
         prisma.syncRun.findFirst({
           where: {
             userId,
             connectionId: connection.id,
-            jobType: `GARMIN_IMPORT_${id.toUpperCase()}`,
+            jobType,
           },
           orderBy: { startedAt: 'desc' },
-          select: { jobType: true, status: true, errorCode: true },
+          select: { jobType: true, status: true, errorCode: true, finishedAt: true },
         }),
       ),
     ),
@@ -340,20 +327,33 @@ async function getHealthImportStates(
           : null,
     }
   })
-  return result
-}
-
-function getHistoricalActivitiesState(): GarminImportStreamState {
-  // RUN-26 is recent sync; the historical adapter has no checkpoint yet.
-  return emptyState('activities')
+  const ready = Boolean(connection.externalAccountId && connection.status === 'CONNECTED')
+  const activityState = (type: string, index: number) =>
+    activityHistoryState(
+      cursors.find((row) => row.dataType === type),
+      ready,
+      pause,
+      runs[index]?.status === 'FAILED' &&
+        !(
+          connection.credential?.rotatedAt &&
+          runs[index]?.finishedAt &&
+          runs[index].finishedAt < connection.credential.rotatedAt
+        )
+        ? (runs[index]?.errorCode ?? null)
+        : null,
+      observedAt,
+    )
+  const activities = activityState(ACTIVITY_HISTORY_CURSOR, healthStreamIds.length)
+  const recent = activityState(ACTIVITY_RECENT_CURSOR, healthStreamIds.length + 1)
+  if (recent.status !== 'not_started') activities.recentSync = recent
+  return [...result, activities]
 }
 
 export async function getGarminImportState(
   owner: OwnerContext,
   observedAt = new Date(),
 ): Promise<GarminImportStreamState[]> {
-  const health = await getHealthImportStates(owner, observedAt)
-  return [...health, getHistoricalActivitiesState()]
+  return getImportStates(owner, observedAt)
 }
 
 export async function healthInitialImportReady(owner: OwnerContext): Promise<boolean> {
@@ -382,11 +382,11 @@ export async function healthInitialImportReady(owner: OwnerContext): Promise<boo
 
 type RunOptions = {
   streamId: ImportStreamId
-  action: 'import' | 'resume' | 'retry' | 'reimport'
+  action: 'import' | 'resume' | 'retry' | 'reimport' | 'sync'
   browserTimezone: string
 }
 type HealthRunOptions = RunOptions & { streamId: HealthStreamId }
-type Dependencies = {
+type Dependencies = ActivityHistoryDependencies & {
   now?: () => Date
   importDay?: typeof importGarminHealthDate
   zoneForDay?: typeof healthZoneForDay
@@ -713,15 +713,26 @@ const streamCoordinator = createGarminStreamCoordinator<
   GarminImportStreamState[],
   Dependencies
 >(
-  healthStreamIds.map((streamId) => ({
-    streamId,
-    execute: (owner, options, dependencies) =>
-      runGarminHealthImport(owner, { ...options, streamId }, dependencies),
-  })),
+  [
+    ...healthStreamIds.map((streamId) => ({
+      streamId,
+      execute: (owner: OwnerContext, options: RunOptions, dependencies: Dependencies) => {
+        if (options.action === 'sync') throw new GarminDataImportError('NOT_READY')
+        return runGarminHealthImport(owner, { ...options, streamId }, dependencies)
+      },
+    })),
+    {
+      streamId: 'activities',
+      execute: async (owner, options, dependencies) => {
+        await runActivityHistory(owner, options, dependencies)
+        return getGarminImportState(owner, dependencies.now?.())
+      },
+    },
+  ],
   () => new GarminDataImportError('NOT_READY'),
 )
 
-/** Dispatches by stream; a future activity adapter can use paginated work and its own cursor. */
+/** Dispatches only the selected stream through the shared bounded work loop. */
 export function runGarminDataImport(
   owner: OwnerContext,
   options: RunOptions,

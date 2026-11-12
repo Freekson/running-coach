@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { z } from 'zod'
+import type { Prisma } from '@prisma/client'
 import {
   canSkipFitDownload,
   importCanonicalActivity,
@@ -8,6 +9,7 @@ import {
 } from '@/server/activity/import'
 import type { CanonicalActivity } from '@/server/activity/normalization'
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
+import { localDay } from './health-sync'
 import {
   apiKeySchema,
   assertProviderApiKeySnapshotCurrent,
@@ -21,6 +23,7 @@ import {
   FitActivityIdentityError,
   FitLapUnavailableError,
   garminActivitySource,
+  normalizeGarminActivitySummary,
 } from './normalization'
 import { requestFit, requestJson } from './personal-api-poc'
 
@@ -29,8 +32,10 @@ const activityIdSchema = z.union([
   z.string().max(32).regex(/^\d+$/),
 ])
 const searchSchema = z.union([
-  z.array(z.object({ activityId: activityIdSchema })),
-  z.object({ activities: z.array(z.object({ activityId: activityIdSchema })) }),
+  z.array(z.object({ activityId: activityIdSchema }).passthrough()).max(1000),
+  z.object({
+    activities: z.array(z.object({ activityId: activityIdSchema }).passthrough()).max(1000),
+  }),
 ])
 const detailIdentitySchema = z.object({ activityId: activityIdSchema })
 const importDateSchema = z.iso.date()
@@ -71,14 +76,17 @@ type Dependencies = {
   deadlineAt?: number
   timeNow?: () => number
   identitySession?: { accountId?: string; credentialNonce?: Uint8Array }
+  expectedAccountId?: string
+  beforeSummaryWrite?: (tx: Prisma.TransactionClient) => Promise<void>
 }
 
 type Window = {
   startDate: string
   endDate: string
   start: number
-  pageSize?: 1 | 2 | 3
+  pageSize?: 1 | 2 | 3 | 50 | 1000
   refreshLaps?: boolean
+  summariesOnly?: { timezone: string; startDate: string; endDate: string }
 }
 
 function providerRetryAt(delayMs?: number): Date {
@@ -138,7 +146,7 @@ export async function importGarminActivitiesForDate(
   )
 }
 
-/** A single small search page. The caller owns the durable checkpoint and run budget. */
+/** A bounded search page. The caller owns the durable checkpoint and run budget. */
 export async function importGarminActivityPage(
   owner: OwnerContext,
   window: Window,
@@ -147,11 +155,18 @@ export async function importGarminActivityPage(
   ownerId(owner)
   const startDate = importDateSchema.parse(window.startDate)
   const endDate = importDateSchema.parse(window.endDate)
-  const start = z.number().int().min(0).max(10_000).parse(window.start)
+  const start = z
+    .number()
+    .int()
+    .min(0)
+    .max(window.summariesOnly ? 100_000 : 10_000)
+    .parse(window.start)
   const maxActivities = window.pageSize ?? MAX_ACTIVITIES
   if (startDate > endDate) throw new GarminImportError('INVALID_DATE')
   const credential = await readProviderApiKeySnapshot(owner, 'GARMIN')
   if (!credential.accountId) throw new GarminImportError('UNAVAILABLE')
+  if (dependencies.expectedAccountId && dependencies.expectedAccountId !== credential.accountId)
+    throw new GarminImportError('ACCOUNT_MISMATCH')
   const key = apiKeySchema.parse(credential.key)
   const fetcher = dependencies.fetcher ?? fetch
   const timeoutMs = z
@@ -214,8 +229,10 @@ export async function importGarminActivityPage(
         timeoutMs: requestLimit(),
       })
     } catch (error) {
-      if (error instanceof GarminAccountIdentityError && error.code === 'RATE_LIMITED')
-        throw new GarminImportError('RATE_LIMITED')
+      if (error instanceof GarminAccountIdentityError && error.code === 'RATE_LIMITED') {
+        await pauseGarminProviderUntil(owner, providerRetryAt(error.retryAfterMs), credential.nonce)
+        throw new GarminImportError('RATE_LIMITED', error.retryAfterMs)
+      }
       throw new GarminImportError('ACCOUNT_UNVERIFIABLE')
     }
   }
@@ -227,7 +244,7 @@ export async function importGarminActivityPage(
   await paced()
   const query = new URLSearchParams({
     start: String(start),
-    limit: String(maxActivities + 1),
+    limit: String(window.summariesOnly ? maxActivities : maxActivities + 1),
     startDate,
     endDate,
   })
@@ -238,12 +255,77 @@ export async function importGarminActivityPage(
     'GET',
     'json',
     requestLimit(),
+    window.summariesOnly ? 8 * 1024 * 1024 : undefined,
   )
   await assertStatus(owner, credential.nonce, search, 200)
   const parsedSearch = searchSchema.safeParse(search.value)
   if (!parsedSearch.success) throw new GarminImportError('INVALID_RESPONSE')
   await recordProviderApiKeyAccess(owner, 'GARMIN', credential.nonce, 'VERIFIED')
   const listed = Array.isArray(parsedSearch.data) ? parsedSearch.data : parsedSearch.data.activities
+  if (window.summariesOnly) {
+    const selection = window.summariesOnly
+    const sourceObservedAt = dependencies.observedAt?.() ?? new Date()
+    let summaries: CanonicalActivity[]
+    try {
+      summaries = listed.map((row) => normalizeGarminActivitySummary(owner, row))
+    } catch {
+      throw new GarminImportError('INVALID_RESPONSE')
+    }
+    const listedIds = listed.map((row) => String(row.activityId))
+    if (listed.length > maxActivities || new Set(listedIds).size !== listedIds.length)
+      throw new GarminImportError('INVALID_RESPONSE')
+    const imported: { id: string; lapImportStatus: LapImportStatus }[] = []
+    const providerIds: string[] = []
+    let processed = 0
+    // Preserve the provider's offset order so a deadline resumes at the exact saved prefix.
+    for (const activity of summaries) {
+      if (dependencies.deadlineAt !== undefined && remainingMs() < 2_000) {
+        if (processed === 0) throw new GarminImportError('TIMEOUT')
+        break
+      }
+      const date = localDay(new Date(activity.startedAt), selection.timezone)
+      if (date < selection.startDate || date > selection.endDate) {
+        processed++
+        continue
+      }
+      imported.push(
+        await importCanonicalActivity(owner, activity, {
+          garminAccountId: verifiedAccountId,
+          sourceObservedAt,
+          summaryOnly: true,
+          beforeWrite: async (tx) => {
+            await dependencies.beforeSummaryWrite?.(tx)
+            await assertProviderApiKeySnapshotCurrent(
+              tx,
+              owner,
+              'GARMIN',
+              credential.nonce,
+              verifiedAccountId,
+            )
+          },
+        }),
+      )
+      providerIds.push(String(activity.source.externalActivityId))
+      processed++
+    }
+    return {
+      imported,
+      providerIds,
+      pageIds: listedIds.slice(0, processed),
+      beforeCheckpoint: async (tx: Prisma.TransactionClient) => {
+        await dependencies.beforeSummaryWrite?.(tx)
+        await assertProviderApiKeySnapshotCurrent(
+          tx,
+          owner,
+          'GARMIN',
+          credential.nonce,
+          verifiedAccountId,
+        )
+      },
+      hasMore: listed.length > 0,
+      nextStart: listed.length > 0 ? start + processed : null,
+    }
+  }
   const ids = listed.slice(0, maxActivities).map((record) => String(record.activityId))
   if (new Set(ids).size !== ids.length) throw new GarminImportError('INVALID_RESPONSE')
   const imported: { id: string; lapImportStatus: LapImportStatus }[] = []

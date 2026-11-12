@@ -243,7 +243,9 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
       activityCount: 2,
       pagesFetched: 4,
       checkedDays: state.find((stream) => stream.streamId === 'activities')!.totalDays,
-      status: 'completed',
+      summaryStatus: 'completed',
+      status: 'paused',
+      laps: { eligible: 2, pending: 2 },
     })
     expect(state.filter((stream) => stream.streamId !== 'activities')).toEqual(before)
     const saved = await prisma.activity.findMany({

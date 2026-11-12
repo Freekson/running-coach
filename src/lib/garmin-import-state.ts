@@ -17,8 +17,27 @@ export type GarminImportStreamState = {
   lastSyncAt: string | null
   errorCode: string | null
   generation: number | null
+  summaryStatus?: GarminImportStreamState['status']
+  summaryErrorCode?: string | null
+  summaryRetryAfter?: string | null
+  laps?: GarminLapImportState
   pagesFetched?: number
   recentSync?: GarminImportStreamState
   activityCount?: number
   currentRange?: { start: string; end: string } | null
+}
+
+export type GarminLapImportState = {
+  status: GarminImportStreamState['status']
+  eligible: number
+  processed: number
+  complete: number
+  failed: number
+  unavailable: number
+  pending: number
+  retryable: number
+  totalLaps: number
+  retryAfter: string | null
+  lastSyncAt: string | null
+  errorCode: string | null
 }

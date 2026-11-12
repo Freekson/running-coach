@@ -25,11 +25,14 @@ function rateLimitedResponse(code: string, retryAt: Date | null): Response {
     },
   )
 }
-const bodySchema = z.strictObject({
-  streamId: z.enum(['daily_summary', 'sleep', 'activities']),
-  action: z.enum(['import', 'resume', 'retry', 'reimport', 'verify', 'sync']),
-  browserTimezone: z.string().min(1).max(100),
-})
+const bodySchema = z
+  .strictObject({
+    streamId: z.enum(['daily_summary', 'sleep', 'activities']),
+    action: z.enum(['import', 'resume', 'retry', 'reimport', 'verify', 'sync']),
+    browserTimezone: z.string().min(1).max(100),
+    stage: z.enum(['summaries', 'laps']).optional(),
+  })
+  .refine((body) => body.stage === undefined || body.streamId === 'activities')
 
 async function boundedBody(request: Request): Promise<string | null> {
   const reader = request.body?.getReader()
@@ -87,7 +90,7 @@ export async function POST(request: Request) {
     const parsed = bodySchema.safeParse(decoded)
     if (!parsed.success) return new Response(null, { status: 400, headers })
     owner = getOwnerContext(user)
-    const { streamId, action, browserTimezone } = parsed.data
+    const { streamId, action, browserTimezone, stage } = parsed.data
     if (action === 'verify') {
       if (!(await allowGarminImport(owner))) {
         const block = await getGarminImportBlock(owner)
@@ -96,9 +99,12 @@ export async function POST(request: Request) {
       await verifySavedGarminAccount(owner)
       return Response.json(await getGarminImportState(owner), { headers })
     }
-    return Response.json(await runGarminDataImport(owner, { streamId, action, browserTimezone }), {
-      headers,
-    })
+    return Response.json(
+      await runGarminDataImport(owner, { streamId, action, browserTimezone, stage }),
+      {
+        headers,
+      },
+    )
   } catch (error) {
     if (error instanceof AccountUnavailableError)
       return new Response(null, { status: 403, headers })

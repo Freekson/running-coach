@@ -1,4 +1,4 @@
-import { deflateRawSync } from 'node:zlib'
+import { zipFixture } from './fit-test-fixtures'
 import { Encoder, Profile, type FileIdMesg, type LapMesg, type SessionMesg } from '@garmin/fitsdk'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -32,34 +32,10 @@ function syntheticFit(): Buffer {
   return Buffer.from(encoder.close())
 }
 
-function zipFit(fit: Buffer): Buffer {
-  const name = Buffer.from('activity.fit')
-  const compressed = deflateRawSync(fit)
-  const local = Buffer.alloc(30)
-  local.writeUInt32LE(0x04034b50, 0)
-  local.writeUInt16LE(8, 8)
-  local.writeUInt32LE(compressed.length, 18)
-  local.writeUInt32LE(fit.length, 22)
-  local.writeUInt16LE(name.length, 26)
-  const central = Buffer.alloc(46)
-  central.writeUInt32LE(0x02014b50, 0)
-  central.writeUInt16LE(8, 10)
-  central.writeUInt32LE(compressed.length, 20)
-  central.writeUInt32LE(fit.length, 24)
-  central.writeUInt16LE(name.length, 28)
-  const end = Buffer.alloc(22)
-  end.writeUInt32LE(0x06054b50, 0)
-  end.writeUInt16LE(1, 8)
-  end.writeUInt16LE(1, 10)
-  end.writeUInt32LE(central.length + name.length, 12)
-  end.writeUInt32LE(local.length + name.length + compressed.length, 16)
-  return Buffer.concat([local, name, compressed, central, name, end])
-}
-
 describe('FIT structure probe', () => {
   it.each([
     ['FIT', syntheticFit()],
-    ['ZIP', zipFit(syntheticFit())],
+    ['ZIP', zipFixture([{ name: 'activity.fit', bytes: syntheticFit() }])],
   ] as const)('extracts lap structure from %s without returning records', (format, bytes) => {
     const report = inspectFitDownload(bytes, 1)
     expect(report.format).toBe(format)

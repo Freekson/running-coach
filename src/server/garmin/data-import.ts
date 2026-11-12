@@ -34,6 +34,12 @@ import { createGarminStreamCoordinator, processGarminStreamWork } from './stream
 
 import { GarminDataImportError } from './data-import-error'
 import {
+  ACTIVITY_LAPS_CURSOR,
+  getActivityLapState,
+  runActivityLapHistory,
+  type ActivityLapDependencies,
+} from './lap-history'
+import {
   ACTIVITY_HISTORY_CURSOR,
   ACTIVITY_RECENT_CURSOR,
   activityHistoryState,
@@ -238,7 +244,12 @@ async function getImportStates(
         userId,
         connectionId: connection.id,
         dataType: {
-          in: [...healthStreamIds.map(cursorType), ACTIVITY_HISTORY_CURSOR, ACTIVITY_RECENT_CURSOR],
+          in: [
+            ...healthStreamIds.map(cursorType),
+            ACTIVITY_HISTORY_CURSOR,
+            ACTIVITY_RECENT_CURSOR,
+            ACTIVITY_LAPS_CURSOR,
+          ],
         },
       },
     }),
@@ -248,6 +259,7 @@ async function getImportStates(
         ...healthStreamIds.map((id) => `GARMIN_IMPORT_${id.toUpperCase()}`),
         ACTIVITY_HISTORY_CURSOR,
         ACTIVITY_RECENT_CURSOR,
+        ACTIVITY_LAPS_CURSOR,
       ].map((jobType) =>
         prisma.syncRun.findFirst({
           where: {
@@ -256,7 +268,13 @@ async function getImportStates(
             jobType,
           },
           orderBy: { startedAt: 'desc' },
-          select: { jobType: true, status: true, errorCode: true, finishedAt: true },
+          select: {
+            jobType: true,
+            status: true,
+            errorCode: true,
+            finishedAt: true,
+            startedAt: true,
+          },
         }),
       ),
     ),
@@ -346,6 +364,41 @@ async function getImportStates(
   const activities = activityState(ACTIVITY_HISTORY_CURSOR, healthStreamIds.length)
   const recent = activityState(ACTIVITY_RECENT_CURSOR, healthStreamIds.length + 1)
   if (recent.status !== 'not_started') activities.recentSync = recent
+  activities.summaryErrorCode = activities.errorCode
+  activities.summaryRetryAfter =
+    [cursors.find((row) => row.dataType === ACTIVITY_HISTORY_CURSOR)?.nextAttemptAt, pause]
+      .filter((date): date is Date => Boolean(date && date > observedAt))
+      .sort((a, b) => b.getTime() - a.getTime())[0]
+      ?.toISOString() ?? null
+  activities.summaryStatus =
+    activities.generation !== null && activities.nextDate === null ? 'completed' : activities.status
+  if (
+    connection.externalAccountId &&
+    activities.startDate &&
+    activities.endDate &&
+    activities.errorCode !== 'INVALID_CHECKPOINT'
+  ) {
+    const lapRun = runs[healthStreamIds.length + 2]
+    activities.laps = await getActivityLapState(
+      owner,
+      connection.id,
+      connection.externalAccountId,
+      cursors.find((row) => row.dataType === ACTIVITY_LAPS_CURSOR),
+      ready,
+      pause,
+      lapRun?.status === 'FAILED' &&
+        !(connection.credential?.rotatedAt && lapRun.startedAt < connection.credential.rotatedAt)
+        ? lapRun.errorCode
+        : null,
+      observedAt,
+    )
+    if (activities.summaryStatus === 'completed') {
+      activities.status =
+        activities.laps.status === 'not_started' ? 'paused' : activities.laps.status
+      activities.retryAfter = activities.laps.retryAfter
+      activities.errorCode = activities.laps.errorCode
+    }
+  }
   return [...result, activities]
 }
 
@@ -381,17 +434,19 @@ export async function healthInitialImportReady(owner: OwnerContext): Promise<boo
 }
 
 type RunOptions = {
+  stage?: 'summaries' | 'laps'
   streamId: ImportStreamId
   action: 'import' | 'resume' | 'retry' | 'reimport' | 'sync'
   browserTimezone: string
 }
 type HealthRunOptions = RunOptions & { streamId: HealthStreamId }
-type Dependencies = ActivityHistoryDependencies & {
-  now?: () => Date
-  importDay?: typeof importGarminHealthDate
-  zoneForDay?: typeof healthZoneForDay
-  maxDatesPerRun?: number
-}
+type Dependencies = ActivityHistoryDependencies &
+  ActivityLapDependencies & {
+    now?: () => Date
+    importDay?: typeof importGarminHealthDate
+    zoneForDay?: typeof healthZoneForDay
+    maxDatesPerRun?: number
+  }
 
 /** One user request processes a bounded range and saves its checkpoint before returning. */
 async function runGarminHealthImport(
@@ -723,8 +778,9 @@ const streamCoordinator = createGarminStreamCoordinator<
     })),
     {
       streamId: 'activities',
-      execute: async (owner, options, dependencies) => {
-        await runActivityHistory(owner, options, dependencies)
+      execute: async (owner, options: RunOptions, dependencies) => {
+        if (options.stage === 'laps') await runActivityLapHistory(owner, options, dependencies)
+        else await runActivityHistory(owner, options, dependencies)
         return getGarminImportState(owner, dependencies.now?.())
       },
     },

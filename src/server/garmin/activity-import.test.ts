@@ -39,7 +39,10 @@ vi.mock('@/server/provider/vault', async () => ({
   assertProviderApiKeySnapshotCurrent,
 }))
 vi.mock('@/server/activity/import', () => ({ importCanonicalActivity, canSkipFitDownload }))
-vi.mock('./import-rate-limit', () => ({ pauseGarminProviderUntil }))
+vi.mock('./import-rate-limit', async (original) => ({
+  ...(await original<typeof import('./import-rate-limit')>()),
+  pauseGarminProviderUntil,
+}))
 vi.mock('./account-identity', () => ({
   GarminAccountIdentityError: class GarminAccountIdentityError extends Error {},
   verifyGarminBearerAccount: vi.fn(async () => '123456'),

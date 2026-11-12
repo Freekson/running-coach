@@ -18,7 +18,7 @@ import {
 } from '@/server/provider/vault'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 import { GarminAccountIdentityError, verifyGarminBearerAccount } from './account-identity'
-import { pauseGarminProviderUntil } from './import-rate-limit'
+import { boundedGarminRetryAt, pauseGarminProviderUntil } from './import-rate-limit'
 import {
   FitActivityIdentityError,
   FitLapUnavailableError,
@@ -90,8 +90,7 @@ type Window = {
 }
 
 function providerRetryAt(delayMs?: number): Date {
-  const delay = delayMs !== undefined && Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 60_000
-  return new Date(Math.min(8_640_000_000_000_000, Date.now() + delay))
+  return boundedGarminRetryAt(new Date(), delayMs)
 }
 
 async function assertStatus(
@@ -146,23 +145,12 @@ export async function importGarminActivitiesForDate(
   )
 }
 
-/** A bounded search page. The caller owns the durable checkpoint and run budget. */
-export async function importGarminActivityPage(
+/** Authenticates once per bounded activity invocation; never exports bearer tokens to UI. */
+export async function openGarminActivitySession(
   owner: OwnerContext,
-  window: Window,
   dependencies: Dependencies = {},
 ) {
   ownerId(owner)
-  const startDate = importDateSchema.parse(window.startDate)
-  const endDate = importDateSchema.parse(window.endDate)
-  const start = z
-    .number()
-    .int()
-    .min(0)
-    .max(window.summariesOnly ? 100_000 : 10_000)
-    .parse(window.start)
-  const maxActivities = window.pageSize ?? MAX_ACTIVITIES
-  if (startDate > endDate) throw new GarminImportError('INVALID_DATE')
   const credential = await readProviderApiKeySnapshot(owner, 'GARMIN')
   if (!credential.accountId) throw new GarminImportError('UNAVAILABLE')
   if (dependencies.expectedAccountId && dependencies.expectedAccountId !== credential.accountId)
@@ -233,6 +221,8 @@ export async function importGarminActivityPage(
         await pauseGarminProviderUntil(owner, providerRetryAt(error.retryAfterMs), credential.nonce)
         throw new GarminImportError('RATE_LIMITED', error.retryAfterMs)
       }
+      if (error instanceof GarminAccountIdentityError && error.providerStatus !== undefined)
+        await assertStatus(owner, credential.nonce, { status: error.providerStatus }, 200)
       throw new GarminImportError('ACCOUNT_UNVERIFIABLE')
     }
   }
@@ -242,6 +232,49 @@ export async function importGarminActivityPage(
     session.credentialNonce = credential.nonce
   }
   await paced()
+  return {
+    credential,
+    fetcher,
+    timeoutMs,
+    pacingMs,
+    remainingMs,
+    requestLimit,
+    paced,
+    authorization,
+    verifiedAccountId,
+    assertStatus: (response: { status: string | number; retryAfterMs?: number }) =>
+      assertStatus(owner, credential.nonce, response, 200),
+  }
+}
+
+/** A bounded search page. The caller owns the durable checkpoint and run budget. */
+export async function importGarminActivityPage(
+  owner: OwnerContext,
+  window: Window,
+  dependencies: Dependencies = {},
+) {
+  ownerId(owner)
+  const startDate = importDateSchema.parse(window.startDate)
+  const endDate = importDateSchema.parse(window.endDate)
+  const start = z
+    .number()
+    .int()
+    .min(0)
+    .max(window.summariesOnly ? 100_000 : 10_000)
+    .parse(window.start)
+  const maxActivities = window.pageSize ?? MAX_ACTIVITIES
+  if (startDate > endDate) throw new GarminImportError('INVALID_DATE')
+  const {
+    credential,
+    fetcher,
+    timeoutMs,
+    pacingMs,
+    remainingMs,
+    requestLimit,
+    paced,
+    authorization,
+    verifiedAccountId,
+  } = await openGarminActivitySession(owner, dependencies)
   const query = new URLSearchParams({
     start: String(start),
     limit: String(window.summariesOnly ? maxActivities : maxActivities + 1),

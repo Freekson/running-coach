@@ -27,6 +27,15 @@ export const canonicalLapSchema = z.object({
   avgHrBpm: nullableInteger,
   avgSpeedMps: nullableNonnegative,
   cadenceStepsPerMinute: nullableNonnegative,
+  endedAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  timerMs: nullableInteger.optional(),
+  maxHrBpm: z.number().int().min(0).max(255).nullable().optional(),
+  cadenceCyclesPerMinute: nonnegative.max(99999).nullable().optional(),
+  avgPowerWatts: nonnegative.max(9999999).nullable().optional(),
+  maxPowerWatts: nonnegative.max(9999999).nullable().optional(),
+  maxSpeedMps: nonnegative.max(999999).nullable().optional(),
+  elevationGainMeters: nonnegative.max(9999999).nullable().optional(),
+  elevationLossMeters: nonnegative.max(9999999).nullable().optional(),
   sourceRecordType: z.literal('FIT_LAP'),
 })
 

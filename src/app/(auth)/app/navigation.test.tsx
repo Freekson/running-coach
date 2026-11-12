@@ -25,9 +25,12 @@ beforeEach(() => usePathname.mockReturnValue('/app/dashboard'))
 describe('app navigation', () => {
   it('shows only existing user routes and marks the active section', () => {
     const markup = renderToStaticMarkup(<AppNavigation role="USER" />)
-    for (const route of ['dashboard', 'training', 'calendar', 'goals', 'health', 'settings']) {
-      expect(markup).toContain(`href="/app/${route}"`)
-    }
+    expect([...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual([
+      '/app/dashboard',
+      '/app/training',
+      '/app/health',
+      '/app/settings',
+    ])
     expect(markup).not.toContain('/app/admin')
     expect(markup).toContain('href="/app/dashboard"')
     expect(markup).toMatch(/href="\/app\/dashboard"[^>]*aria-current="page"/)
@@ -38,6 +41,13 @@ describe('app navigation', () => {
     const markup = renderToStaticMarkup(<AppNavigation role="ADMIN" />)
     expect(markup).toMatch(/href="\/app\/admin"[^>]*aria-current="page"/)
     expect(markup.match(/href="\/app\/admin"/g)).toHaveLength(1)
+    expect([...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual([
+      '/app/dashboard',
+      '/app/training',
+      '/app/health',
+      '/app/settings',
+      '/app/admin',
+    ])
   })
 
   it('shows an email fallback and sign-out when the user has no name', () => {

@@ -114,12 +114,15 @@ Sign-in accepts only simple relative `/app` paths as return destinations.
 Individual pages and server services must still authorize data and role-specific
 actions; the layout does not replace owner checks or ADMIN checks.
 
+The app shell uses a desktop sidebar and a fixed mobile bottom navigation for
+Dashboard, Training, Health, and Settings. On mobile, the header's account
+disclosure contains the signed-in identity, sign-out action, and Admin access
+for admins. Navigation and sign-out preserve the unsaved-settings guard.
+
 | Path             | Owner / status                                        |
 | ---------------- | ----------------------------------------------------- |
 | `/app/dashboard` | RUN-43; RUN-17 placeholder lives here until then      |
-| `/app/training`  | Future workout/training work; no page yet             |
-| `/app/calendar`  | RUN-31; no page yet                                   |
-| `/app/goals`     | RUN-32; no page yet                                   |
+| `/app/training`  | RUN-44 activity history, filters and pagination       |
 | `/app/settings`  | RUN-19; no page yet                                   |
 | `/app/admin`     | RUN-18; no page yet; requires an explicit ADMIN check |
 

@@ -68,7 +68,7 @@ export class GarminHealthSyncUnavailableError extends Error {
   }
 }
 
-const knownDiagnosticCodes = new Set([
+const knownSyncErrorCodes = new Set([
   'APP_RATE_LIMITED',
   'PROVIDER_PAUSED',
   'RATE_LIMITED',
@@ -97,105 +97,7 @@ function safeSyncErrorCode(code: string | null | undefined): string | null {
   if (/^(?:SLEEP|SUMMARY)_HTTP_[1-5]\d{2}$/.test(code)) return code
   if (/^(?:SLEEP|SUMMARY)_(?:TIMEOUT|NETWORK|INVALID_RESPONSE|DATE_MISMATCH)$/.test(code))
     return code
-  return knownDiagnosticCodes.has(code) ? code : 'UNKNOWN_ERROR'
-}
-
-function recoveredSleepApiErrors(summary: unknown): string[] {
-  if (!summary || typeof summary !== 'object' || Array.isArray(summary)) return []
-  const codes = 'recoveredApiErrorCodes' in summary ? summary.recoveredApiErrorCodes : null
-  if (!Array.isArray(codes)) return []
-  return codes
-    .slice(0, 3)
-    .filter(
-      (code): code is string =>
-        typeof code === 'string' &&
-        /^SLEEP_(?:HTTP_[1-5]\d{2}|TIMEOUT|NETWORK|INVALID_RESPONSE|DATE_MISMATCH)$/.test(code),
-    )
-}
-
-function diagnosticRetryAt(summary: unknown): string | null {
-  if (!summary || typeof summary !== 'object' || Array.isArray(summary)) return null
-  const retryAt = 'retryAt' in summary ? summary.retryAt : null
-  return typeof retryAt === 'string' && z.iso.datetime().safeParse(retryAt).success ? retryAt : null
-}
-
-/** Record a safe failed request without changing the actual import checkpoint or run status. */
-export async function recordGarminHealthRequestDiagnostic(
-  owner: OwnerContext,
-  code: string,
-  retryAt?: Date | null,
-): Promise<void> {
-  const errorCode = safeSyncErrorCode(code)
-  if (!errorCode) return
-  const userId = ownerId(owner)
-  const prisma = await getPrismaClient()
-  const connection = await prisma.integrationConnection.findUnique({
-    where: { userId_provider: { userId, provider: 'GARMIN' } },
-    select: { id: true, credential: { select: { connectionId: true } } },
-  })
-  if (!connection?.credential) return
-  const startedAt = new Date()
-  const existing = await prisma.syncRun.findFirst({
-    where: {
-      userId,
-      connectionId: connection.id,
-      jobType: 'GARMIN_HEALTH_REQUEST',
-      errorCode,
-      startedAt: { gte: new Date(startedAt.getTime() - 60_000) },
-    },
-    select: { id: true },
-  })
-  if (existing) return
-  await prisma.syncRun.create({
-    data: {
-      userId,
-      connectionId: connection.id,
-      jobType: 'GARMIN_HEALTH_REQUEST',
-      status: 'FAILED',
-      startedAt,
-      finishedAt: startedAt,
-      errorCode,
-      checkpointSummary:
-        retryAt && Number.isFinite(retryAt.getTime())
-          ? { retryAt: retryAt.toISOString() }
-          : undefined,
-    },
-  })
-}
-
-async function recentGarminHealthRuns(
-  prisma: Awaited<ReturnType<typeof getPrismaClient>>,
-  userId: string,
-  connectionId: string,
-): Promise<NonNullable<GarminSyncState['recentRuns']>> {
-  const rows = await prisma.syncRun.findMany({
-    where: {
-      userId,
-      connectionId,
-      jobType: { in: ['GARMIN_HEALTH', 'GARMIN_HEALTH_REQUEST'] },
-    },
-    orderBy: { startedAt: 'desc' },
-    take: 5,
-    select: {
-      jobType: true,
-      status: true,
-      startedAt: true,
-      finishedAt: true,
-      recordsWritten: true,
-      errorCode: true,
-      checkpointSummary: true,
-    },
-  })
-  return rows.map((entry) => ({
-    kind: entry.jobType === 'GARMIN_HEALTH_REQUEST' ? 'REQUEST' : 'SYNC',
-    status: entry.status,
-    startedAt: entry.startedAt.toISOString(),
-    finishedAt: entry.finishedAt?.toISOString() ?? null,
-    datesProcessed: entry.recordsWritten,
-    errorCode: safeSyncErrorCode(entry.errorCode),
-    retryAt: diagnosticRetryAt(entry.checkpointSummary),
-    recoveredApiErrors: recoveredSleepApiErrors(entry.checkpointSummary),
-  }))
+  return knownSyncErrorCodes.has(code) ? code : 'UNKNOWN_ERROR'
 }
 
 export function localDay(now: Date, timezone: string): string {
@@ -449,9 +351,8 @@ export async function getGarminHealthSyncState(
           : 'INVALID_KEY',
       sleepRetryDates: [],
       sleepFailedDates: [],
-      recentRuns: await recentGarminHealthRuns(prisma, userId, connection.id),
     }
-  const [cursor, run, recentRuns, providerPauseUntil] = await Promise.all([
+  const [cursor, run, providerPauseUntil] = await Promise.all([
     prisma.syncCursor.findUnique({
       where: { connectionId_dataType: { connectionId: connection.id, dataType: 'HEALTH' } },
     }),
@@ -459,7 +360,6 @@ export async function getGarminHealthSyncState(
       where: { userId, connectionId: connection.id, jobType: 'GARMIN_HEALTH' },
       orderBy: { startedAt: 'desc' },
     }),
-    recentGarminHealthRuns(prisma, userId, connection.id),
     getGarminProviderPauseUntil(owner),
   ])
   const parsed = checkpointSchema.safeParse(cursor?.cursorOrCheckpoint)
@@ -535,7 +435,6 @@ export async function getGarminHealthSyncState(
     errorCode: safeSyncErrorCode(currentRun?.errorCode),
     sleepRetryDates,
     sleepFailedDates,
-    recentRuns,
   }
 }
 

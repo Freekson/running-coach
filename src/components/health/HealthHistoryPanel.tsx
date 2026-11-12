@@ -259,7 +259,7 @@ function SleepChart({
               : (point.sleepDurationMs ?? 0)
           }),
         )
-  const width = Math.min(24, 700 / points.length)
+  const width = 700 / points.length
   const showDurationTooltip = (index: number, height: number) => {
     const plotWidth = plotRef.current?.clientWidth || 1000
     const plotHeight = plotRef.current?.clientHeight || 205

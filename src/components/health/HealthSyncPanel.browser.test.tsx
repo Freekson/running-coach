@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { GarminSyncState } from '@/lib/garmin-sync-state'
 import { formatLocalDateTime } from '@/lib/local-time'
-import { HealthSyncDetails, HealthSyncPanel } from './HealthSyncPanel'
+import { HealthSyncPanel } from './HealthSyncPanel'
 import styles from './health-sync-panel.module.scss'
 
 const { refresh, notify } = vi.hoisted(() => ({ refresh: vi.fn(), notify: vi.fn() }))
@@ -104,147 +104,33 @@ it('keeps the saved-key verification action available after an unverifiable resp
   expect(host.querySelector<HTMLButtonElement>('button')!.disabled).toBe(false)
 })
 
-it('places sync controls in the header and details after the charts without extra requests', async () => {
+it('shows only the current status and sync action without a details disclosure', async () => {
   const fetchSpy = vi.fn()
   vi.stubGlobal('fetch', fetchSpy)
   await act(async () =>
     root.render(
-      <>
-        <HealthSyncPanel
-          initial={{ ...idle, status: 'SUCCESS', lastSuccessAt: '2026-11-09T09:27:00Z' }}
-          hideDetails
-        />
-        <HealthSyncDetails
-          state={{ ...idle, status: 'SUCCESS', lastSuccessAt: '2026-11-09T09:27:00Z' }}
-        />
-      </>,
+      <HealthSyncPanel
+        initial={{ ...idle, status: 'SUCCESS', lastSuccessAt: '2026-11-09T09:27:00Z' }}
+      />,
     ),
   )
-  expect(host.querySelectorAll('details')).toHaveLength(1)
-  expect(host.textContent).toContain('Synced')
-  expect(host.textContent).toContain('Garmin sync details')
+  expect(host.querySelector('details')).toBeNull()
+  expect(host.textContent).not.toContain('Garmin sync details')
   expect(host.textContent).toContain(formatLocalDateTime('2026-11-09T09:27:00Z'))
-  expect(host.querySelector('details summary')?.textContent).toContain('Last completed')
-  expect(host.querySelectorAll(`details .${styles.detailCard}`)).toHaveLength(3)
-  expect(host.textContent).toContain('Refresh window')
-  expect(host.textContent).not.toContain('2026-11-09 09:27 UTC')
-  expect(host.textContent).not.toMatch(/GMT[+-]\d+/)
+  expect(host.querySelector('button')?.textContent).toContain('Sync now')
   expect(fetchSpy).not.toHaveBeenCalled()
-})
-
-it('shows the verified sync window and the last request in separate cards', async () => {
-  await act(async () =>
-    root.render(
-      <HealthSyncDetails
-        state={{
-          ...idle,
-          status: 'PARTIAL',
-          window: { start: '2026-10-11', end: '2026-11-09' },
-          processed: 10,
-        }}
-      />,
-    ),
-  )
-  const cards = host.querySelectorAll(`.${styles.detailCard}`)
-  expect(cards).toHaveLength(3)
-  expect(cards[0].textContent).toContain('10 dates')
-  expect(cards[1].textContent).toContain('Oct 11 – Nov 9')
-  expect(cards[1].textContent).toContain('2026')
-  expect(cards[2].textContent).toContain('7 days')
-  expect(host.querySelector('summary')?.textContent).toContain('Last completed not yet')
-})
-
-it('shows recent owned sync attempts and API error codes in the diagnostic log', async () => {
-  await act(async () =>
-    root.render(
-      <HealthSyncDetails
-        state={{
-          ...idle,
-          status: 'PAUSED',
-          errorCode: 'SLEEP_HTTP_503',
-          nextAttemptAt: '2026-11-09T08:15:00Z',
-          recentRuns: [
-            {
-              kind: 'SYNC',
-              status: 'FAILED',
-              startedAt: '2026-11-09T08:00:00Z',
-              finishedAt: '2026-11-09T08:00:10Z',
-              datesProcessed: 3,
-              errorCode: 'SLEEP_HTTP_503',
-              retryAt: null,
-              recoveredApiErrors: ['SLEEP_HTTP_503'],
-            },
-            {
-              kind: 'SYNC',
-              status: 'SUCCEEDED',
-              startedAt: '2026-11-09T07:00:00Z',
-              finishedAt: '2026-11-09T07:00:10Z',
-              datesProcessed: 10,
-              errorCode: null,
-              retryAt: null,
-              recoveredApiErrors: ['SLEEP_HTTP_503'],
-            },
-          ],
-        }}
-      />,
-    ),
-  )
-  const log = host.querySelector<HTMLElement>(
-    '[aria-labelledby="garmin-sync-diagnostics-heading"]',
-  )!
-  expect(log.textContent).toContain('Diagnostic log')
-  expect(log.textContent).toContain('Last error codeSLEEP_HTTP_503')
-  expect(log.textContent).toContain(formatLocalDateTime('2026-11-09T08:15:00Z'))
-  expect(log.querySelectorAll('ol li')).toHaveLength(2)
-  expect(log.textContent).toContain('3 dates processed · Sleep API HTTP 503')
-  expect(log.textContent).toContain('Error code: SLEEP_HTTP_503')
-  expect(log.textContent).toContain('10 dates processed')
-  expect(log.textContent).toContain('Sleep range API error')
-  expect(log.textContent).toContain('Recovered Sleep API error · HTTP 503: SLEEP_HTTP_503')
-  expect(log.textContent).not.toMatch(/GMT[+-]\d+/)
-})
-
-it('shows a rejected pre-sync verification request without claiming dates were processed', async () => {
-  await act(async () =>
-    root.render(
-      <HealthSyncDetails
-        state={{
-          ...idle,
-          status: 'ACTION_REQUIRED',
-          errorCode: 'ACCOUNT_VERIFICATION_REQUIRED',
-          recentRuns: [
-            {
-              kind: 'REQUEST',
-              status: 'FAILED',
-              startedAt: '2026-11-09T08:00:00Z',
-              finishedAt: '2026-11-09T08:00:00Z',
-              datesProcessed: 0,
-              errorCode: 'UNVERIFIABLE',
-              retryAt: '2026-11-09T08:01:00Z',
-              recoveredApiErrors: [],
-            },
-          ],
-        }}
-      />,
-    ),
-  )
-  const log = host.querySelector<HTMLElement>(
-    '[aria-labelledby="garmin-sync-diagnostics-heading"]',
-  )!
-  expect(log.textContent).toContain('Request rejected')
-  expect(log.textContent).toContain('Last error codeUNVERIFIABLE')
-  expect(log.textContent).toContain(`Retry after ${formatLocalDateTime('2026-11-09T08:01:00Z')}`)
-  expect(log.textContent).not.toContain('0 dates processed')
 })
 
 it('keeps saved failure progress available without repeating the error inline', async () => {
   await act(async () =>
     root.render(
-      <HealthSyncPanel initial={{ ...idle, status: 'PARTIAL_FAILURE', nextDate: '2026-11-05' }} />,
+      <HealthSyncPanel
+        initial={{ ...idle, status: 'PARTIAL_FAILURE', nextDate: '2026-11-05', processed: 2 }}
+      />,
     ),
   )
   expect(host.querySelector('[role="alert"]')).toBeNull()
-  expect(host.textContent).toContain('Next date for daily summaries: 2026-11-05')
+  expect(host.textContent).toContain('Partial Garmin health data saved')
   expect(host.querySelector<HTMLButtonElement>('button')!.disabled).toBe(false)
 })
 
@@ -388,8 +274,7 @@ it('shows saved summary progress without a duplicate sleep timeout message', asy
     ),
   )
   expect(host.textContent).not.toContain('Garmin sleep did not respond')
-  expect(host.textContent).toContain('Sleep dates still to check: 1 date')
-  expect(host.textContent).toContain('Next date for daily summaries: 2026-11-08')
-  expect(host.textContent).toContain('1 date')
+  expect(host.textContent).toContain('Partial Garmin health data saved')
+  expect(host.querySelector<HTMLButtonElement>('button')!.disabled).toBe(false)
   expect(host.textContent).not.toContain('Retry after')
 })

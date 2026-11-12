@@ -31,6 +31,41 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const PartialHistory: Story = {}
+export const SevenDays: Story = {
+  args: {
+    asOfInstant: '2026-11-12T08:00:00.000Z',
+    rows: ['2026-11-06', '2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12'].map(
+      (date, index) => {
+        const duration = [8, 5, 6, 6.5, 6.5][index] * 3_600_000
+        return {
+          date,
+          restingHrBpm: 53,
+          sleepDurationMs: duration,
+          sleepLightMs: duration - 7_200_000,
+          sleepDeepMs: 3_600_000,
+          sleepRemMs: 3_600_000,
+          sleepAwakeMs: 0,
+          sleepScore: [85, 64, 71, 77, 78][index],
+        }
+      },
+    ),
+  },
+  play: ({ canvasElement }) => {
+    canvasElement.querySelector<HTMLButtonElement>('[aria-label="Sleep period"] button')?.click()
+  },
+}
+export const Mobile: Story = {
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+}
+export const NarrowCard: Story = {
+  decorators: [
+    (Story) => (
+      <div style={{ maxWidth: 360 }}>
+        <Story />
+      </div>
+    ),
+  ],
+}
 export const SleepTooltip: Story = {
   play: async ({ canvasElement }) => {
     canvasElement

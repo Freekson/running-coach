@@ -43,7 +43,7 @@ it('directs a disconnected athlete to credential settings', async () => {
   await act(async () =>
     root.render(<ActivitySyncPanel initial={{ ...idle, status: 'NOT_CONNECTED' }} />),
   )
-  expect(host.textContent).toContain('Connect Garmin to import activities')
+  expect(host.textContent).toContain('Connect Garmin')
   expect(host.querySelector('a')?.getAttribute('href')).toBe('/app/settings')
   expect(host.textContent).not.toContain('Sync activities')
 })
@@ -61,11 +61,11 @@ it('offers verification and import when a saved key lacks account identity', asy
       />,
     ),
   )
-  expect(host.textContent).toContain('Verify & import')
+  expect(host.textContent).toContain('Verify & sync')
   await act(async () => host.querySelector<HTMLButtonElement>('button')!.click())
   expect(fetchMock).toHaveBeenCalledTimes(1)
   expect(refresh).toHaveBeenCalledOnce()
-  expect(host.textContent).toContain('Last completed window')
+  expect(host.textContent).toContain('Synced')
   expect(host.textContent).toContain(formatLocalDateTime('2026-11-09T06:00:00Z'))
   expect(host.textContent).not.toContain('2026-11-09 06:00 UTC')
 })
@@ -84,7 +84,7 @@ it('resumes an activity checkpoint from Training and refreshes its status', asyn
       <ActivitySyncPanel initial={{ ...idle, status: 'PARTIAL', nextDate: '2026-08-22' }} />,
     ),
   )
-  expect(host.textContent).toContain('Next day to check: 2026-08-22')
+  expect(host.textContent).toContain('Sync now')
   await act(async () => host.querySelector<HTMLButtonElement>('button')!.click())
   expect(fetchMock).toHaveBeenCalledWith('/api/integrations/garmin/sync', {
     method: 'POST',
@@ -94,7 +94,7 @@ it('resumes an activity checkpoint from Training and refreshes its status', asyn
     body: '{}',
   })
   expect(refresh).toHaveBeenCalledOnce()
-  expect(host.textContent).toContain('Last completed window')
+  expect(host.textContent).toContain('Synced')
   expect(notify).toHaveBeenCalledWith(
     'success',
     'Garmin activities are up to date.',
@@ -102,20 +102,11 @@ it('resumes an activity checkpoint from Training and refreshes its status', asyn
   )
 })
 
-it('keeps the explicit older import action on Training', async () => {
-  const fetchMock = vi.fn(async (...args: unknown[]) => {
-    void args
-    return { ok: true, json: async () => ({ ...idle, status: 'PARTIAL', nextDate: '2026-10-27' }) }
-  })
-  vi.stubGlobal('fetch', fetchMock)
+it('keeps the header action compact and does not offer a second history importer', async () => {
   await act(async () => root.render(<ActivitySyncPanel initial={{ ...idle, status: 'SUCCESS' }} />))
-  await act(async () =>
-    [...host.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent === 'Import 7 older days')!
-      .click(),
-  )
-  expect(fetchMock.mock.calls[0][1]).toMatchObject({ body: JSON.stringify({ extendDays: 7 }) })
-  expect(host.textContent).toContain('Next day to check: 2026-10-27')
+  expect(host.querySelector('button')?.textContent).toContain('Sync now')
+  expect(host.textContent).not.toContain('Import 7 older days')
+  expect(host.querySelectorAll('button')).toHaveLength(1)
 })
 
 it('polls a paused RUN-26 state until the activity button is available', async () => {
@@ -135,10 +126,63 @@ it('polls a paused RUN-26 state until the activity button is available', async (
     expect(host.querySelector<HTMLButtonElement>('button')!.disabled).toBe(true)
     await act(async () => vi.advanceTimersByTimeAsync(6_000))
     expect(fetchMock).toHaveBeenCalledOnce()
+    expect(refresh).not.toHaveBeenCalled()
     await act(async () => vi.advanceTimersByTimeAsync(6_000))
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(host.querySelector<HTMLButtonElement>('button')!.disabled).toBe(false)
+    expect(refresh).toHaveBeenCalledOnce()
   } finally {
     vi.useRealTimers()
   }
+})
+
+it.each(['SUCCESS', 'PARTIAL', 'PARTIAL_FAILURE', 'PAUSED'] as const)(
+  'refreshes saved history once when a running batch becomes %s',
+  async (status) => {
+    vi.useFakeTimers()
+    try {
+      const syncing: GarminSyncState = { ...idle, status: 'SYNCING' }
+      const settled: GarminSyncState = {
+        ...idle,
+        status,
+        lastSuccessAt: status === 'SUCCESS' ? '2026-11-12T00:00:00Z' : null,
+        nextAttemptAt: status === 'PAUSED' ? new Date(Date.now() + 120_000).toISOString() : null,
+      }
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => syncing })
+        .mockResolvedValueOnce({ ok: true, json: async () => settled })
+      vi.stubGlobal('fetch', fetchMock)
+      await act(async () => root.render(<ActivitySyncPanel initial={syncing} />))
+      await act(async () => vi.advanceTimersByTimeAsync(5_000))
+      expect(refresh).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTimeAsync(5_000))
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(refresh).toHaveBeenCalledOnce()
+      if (status === 'SUCCESS') expect(host.textContent).toContain('Synced')
+      if (status !== 'PAUSED') {
+        await act(async () => vi.advanceTimersByTimeAsync(60_000))
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(refresh).toHaveBeenCalledOnce()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  },
+)
+
+it('marks old saved history stale while disconnected without fetching the provider', async () => {
+  const fetchMock = vi.fn()
+  vi.stubGlobal('fetch', fetchMock)
+  await act(async () =>
+    root.render(
+      <ActivitySyncPanel
+        initial={{ ...idle, status: 'NOT_CONNECTED' }}
+        savedAt="2000-01-01T00:00:00Z"
+      />,
+    ),
+  )
+  expect(host.textContent).toContain('Garmin disconnected')
+  expect(host.textContent).toContain('Saved history may be out of date')
+  expect(fetchMock).not.toHaveBeenCalled()
 })

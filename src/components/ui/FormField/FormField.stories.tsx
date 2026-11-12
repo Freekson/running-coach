@@ -1,4 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { useState } from 'react'
+import { Button } from '../Button'
+import { DateField } from '../DateField'
+import { Select } from '../Select'
 import { FormField } from '.'
 
 const meta = {
@@ -42,4 +46,39 @@ export const Mobile: Story = {
       </div>
     ),
   ],
+}
+
+function ControlsExample() {
+  const [date, setDate] = useState('')
+  const [sport, setSport] = useState('')
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gap: 16,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
+        alignItems: 'end',
+        maxWidth: 900,
+      }}
+    >
+      <FormField id="control-search" label="Search activities" placeholder="Search by name…" />
+      <Select
+        id="control-sport"
+        label="Sport"
+        value={sport}
+        onChange={setSport}
+        options={[
+          { value: '', label: 'All sports' },
+          { value: 'RUNNING', label: 'Running' },
+        ]}
+      />
+      <DateField id="control-date" label="From" value={date} onChange={setDate} />
+      <Button>Apply filters</Button>
+    </div>
+  )
+}
+export const ConsistentControls: Story = { render: () => <ControlsExample /> }
+export const MobileControls: Story = {
+  ...ConsistentControls,
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
 }

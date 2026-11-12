@@ -63,89 +63,8 @@
 }
 
 .fields :global(.field) {
-  min-height: 50px;
-  padding: 11px 14px;
   border-radius: 10px;
   background: var(--color-surface-raised);
-}
-
-.experienceSelect {
-  position: relative;
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.experienceLabel {
-  font-size: var(--type-size-label);
-  font-weight: var(--type-weight-semibold);
-}
-
-.experienceTrigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 50px;
-  width: 100%;
-  padding: 11px 14px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 10px;
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  font-size: var(--type-size-body);
-  font-weight: var(--type-weight-regular);
-  text-align: left;
-  cursor: pointer;
-}
-
-.experienceTrigger:hover {
-  background: var(--color-surface-hover);
-}
-
-.experienceOptions {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 6px);
-  right: 0;
-  left: 0;
-  display: grid;
-  gap: 4px;
-  padding: 8px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 12px;
-  background: var(--color-surface-raised);
-  box-shadow: 0 16px 32px rgb(0 0 0 / 28%);
-}
-
-.experienceOption {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  min-height: 64px;
-  padding: 10px 14px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--color-text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.experienceOption span {
-  color: var(--color-text-muted);
-  font-size: var(--type-size-caption);
-}
-
-.experienceOption:hover,
-.experienceOption:focus-visible,
-.experienceOption[aria-selected='true'] {
-  background: color-mix(in srgb, var(--color-primary) 17%, var(--color-surface-raised));
-}
-
-.experienceOption:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: -2px;
 }
 
 .choiceField {
@@ -202,8 +121,8 @@
 .choice span {
   display: grid;
   place-items: center;
-  min-height: 44px;
-  padding: 8px 12px;
+  min-height: var(--control-height);
+  padding: var(--control-padding-block) var(--control-padding-inline);
   border: 1px solid transparent;
   border-radius: 9px;
   color: var(--color-text);
@@ -305,6 +224,7 @@
 
 .chartCard,
 .unitDetails {
+  min-width: 0;
   padding: 20px;
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -314,7 +234,7 @@
 .weightActions {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 10px;
   width: 100%;
   min-width: 0;
@@ -327,12 +247,11 @@
 }
 
 .periodSwitch {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(40px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   width: 300px;
   min-width: 0;
-  overflow-x: auto;
   padding: 4px;
   border: 1px solid var(--color-border-strong);
   border-radius: 12px;
@@ -340,7 +259,8 @@
 }
 
 .periodSwitch button {
-  min-width: 0;
+  flex: 1 1 40px;
+  min-width: min-content;
   min-height: 40px;
   padding: 6px 4px;
   border: 0;
@@ -546,6 +466,11 @@
   font-size: var(--type-size-caption);
 }
 
+.trendDates span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .recentHeading {
   display: flex;
   justify-content: space-between;
@@ -695,11 +620,52 @@
   }
 
   .weightActions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
   }
 
+  .weightActions > button {
+    width: 100%;
+    margin-left: 0;
+  }
+
   .periodSwitch {
-    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .chartSummary {
+    flex-direction: column;
+  }
+
+  .chartSummary > div {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .periodChange {
+    text-align: left;
+  }
+
+  .trendBody {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .trendDates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-left: 0;
+  }
+
+  .trendDates span:last-child {
+    text-align: right;
+  }
+
+  .trendDates span:nth-child(2):not(:last-child) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    text-align: center;
   }
 
   .recentCards {

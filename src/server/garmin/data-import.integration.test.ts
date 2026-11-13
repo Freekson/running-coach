@@ -17,6 +17,7 @@ import { getActivity } from '@/server/activity/import'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 import { ACTIVITY_HISTORY_CURSOR, activityHistoryWindow } from './activity-history'
 import * as importRateLimit from './import-rate-limit'
+import { getTrainingSyncState, runTrainingSync } from './training-sync'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
 if (requested) config()
@@ -92,6 +93,62 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
       where: { userId: { in: [owner.userId, retryOwner.userId] } },
       data: { count: 1, windowStartedAt: new Date(Date.now() - 61_000), providerRetryAt: null },
     })
+  })
+
+  it('syncs recent Training activity coverage despite an old unfinished INITIAL cursor', async () => {
+    const user = await prisma.user.create({ data: { authSubject: `${prefix}-training-recent` } })
+    const context = getOwnerContext({ id: user.id, role: 'USER', email: null })
+    await saveProviderApiKey(context, 'GARMIN', 'synthetic-training-recent-key', {
+      verifiedGarminAccountId: testGarminAccountId(context),
+    })
+    const connection = await prisma.integrationConnection.findUniqueOrThrow({
+      where: { userId_provider: { userId: user.id, provider: 'GARMIN' } },
+    })
+    await prisma.syncCursor.createMany({
+      data: [
+        {
+          userId: user.id,
+          connectionId: connection.id,
+          dataType: ACTIVITY_HISTORY_CURSOR,
+          cursorOrCheckpoint: { ...activityHistoryWindow('2026-11-10', 'UTC'), nextDate: null },
+        },
+        {
+          userId: user.id,
+          connectionId: connection.id,
+          dataType: 'ACTIVITIES',
+          cursorOrCheckpoint: { version: 1, mode: 'INITIAL', nextDate: '2026-08-23' },
+        },
+      ],
+    })
+    const at = new Date('2026-11-13T02:00:00Z')
+    expect((await getTrainingSyncState(context, at)).status).toBe('IDLE')
+    const importActivityPage = vi.fn<typeof importGarminActivityPage>(async () => ({
+      imported: [],
+      providerIds: [],
+      pageIds: [],
+      hasMore: false,
+      nextStart: null,
+      beforeCheckpoint: async () => {},
+    }))
+    const result = await runTrainingSync(context, 'UTC', {
+      now: () => at,
+      runImport: (owner, options) =>
+        runGarminDataImport(owner, options, { now: () => at, importActivityPage }),
+    })
+    expect(result).toMatchObject({
+      status: 'SUCCESS',
+      window: { start: '2026-11-03', end: '2026-11-13' },
+    })
+    expect(importActivityPage.mock.calls[0][1].summariesOnly).toEqual({
+      timezone: 'UTC',
+      startDate: '2026-11-03',
+      endDate: '2026-11-13',
+    })
+    const old = await prisma.syncCursor.findUniqueOrThrow({
+      where: { connectionId_dataType: { connectionId: connection.id, dataType: 'ACTIVITIES' } },
+    })
+    expect(old.cursorOrCheckpoint).toMatchObject({ nextDate: '2026-08-23' })
+    expect(await getTrainingSyncState(other, at)).toMatchObject({ status: 'NOT_CONNECTED' })
   })
 
   it('seeds only verified Daily coverage and keeps Sleep and other owners independent', async () => {

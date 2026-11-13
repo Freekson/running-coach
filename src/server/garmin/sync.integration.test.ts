@@ -196,6 +196,43 @@ describe.skipIf(!enabled)('Garmin sync lease and checkpoint on isolated PostgreS
     await expect(runGarminSync(pausedOwner)).rejects.toMatchObject({ code: 'PAUSED' })
   })
 
+  it('retries an invalid-response checkpoint after its local backoff without pausing another stream or owner', async () => {
+    const user = await prisma.user.create({ data: { authSubject: `${prefix}-validation-retry` } })
+    const scopedOwner = getOwnerContext({ id: user.id, role: 'USER', email: null })
+    await saveProviderApiKey(scopedOwner, 'GARMIN', 'synthetic-validation-retry-key', {
+      verifiedGarminAccountId: testGarminAccountId(scopedOwner),
+    })
+    const failed = await runGarminSync(
+      scopedOwner,
+      {},
+      {
+        importPage: async () => {
+          throw new GarminImportError('INVALID_RESPONSE')
+        },
+      },
+    )
+    expect(failed).toMatchObject({ status: 'PAUSED', errorCode: 'INVALID_RESPONSE' })
+    expect(await prisma.garminImportRateLimit.findUnique({ where: { userId: user.id } })).toBeNull()
+    expect((await getGarminSyncState(other)).status).toBe('NOT_CONNECTED')
+    const after = new Date(Date.parse(failed.nextAttemptAt!) + 1)
+    expect((await getGarminSyncState(scopedOwner, after)).status).toBe('ERROR')
+    const recovered = await runGarminSync(
+      scopedOwner,
+      {},
+      {
+        now: () => after,
+        importPage: async () => ({
+          imported: [],
+          providerIds: [],
+          hasMore: false,
+          nextStart: null,
+        }),
+      },
+    )
+    expect(recovered.status).toBe('PARTIAL')
+    expect(recovered.nextAttemptAt).toBeNull()
+  })
+
   it('skips an action-required owner and schedules another owner after access is denied', async () => {
     const deniedUser = await prisma.user.create({ data: { authSubject: `${prefix}-denied` } })
     const readyUser = await prisma.user.create({ data: { authSubject: `${prefix}-after-denial` } })

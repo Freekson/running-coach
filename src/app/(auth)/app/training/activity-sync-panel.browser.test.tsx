@@ -91,7 +91,9 @@ it('resumes an activity checkpoint from Training and refreshes its status', asyn
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
     cache: 'no-store',
-    body: '{}',
+    body: JSON.stringify({
+      browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    }),
   })
   expect(refresh).toHaveBeenCalledOnce()
   expect(host.textContent).toContain('Synced')
@@ -107,6 +109,29 @@ it('keeps the header action compact and does not offer a second history importer
   expect(host.querySelector('button')?.textContent).toContain('Sync now')
   expect(host.textContent).not.toContain('Import 7 older days')
   expect(host.querySelectorAll('button')).toHaveLength(1)
+})
+
+it('continues a bounded recent summary checkpoint within one click and stops after completion', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ...idle, status: 'PARTIAL', nextDate: '2026-11-13' }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ...idle, status: 'SUCCESS', lastSuccessAt: '2026-11-13T05:00:00Z' }),
+    })
+  vi.stubGlobal('fetch', fetchMock)
+  await act(async () => root.render(<ActivitySyncPanel initial={idle} />))
+  await act(async () => host.querySelector<HTMLButtonElement>('button')!.click())
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(refresh).toHaveBeenCalledTimes(2)
+  expect(notify).toHaveBeenCalledExactlyOnceWith(
+    'success',
+    'Garmin activities are up to date.',
+    'garmin-activity-sync',
+  )
 })
 
 it('polls a paused RUN-26 state until the activity button is available', async () => {
@@ -185,4 +210,50 @@ it('marks old saved history stale while disconnected without fetching the provid
   expect(host.textContent).toContain('Garmin disconnected')
   expect(host.textContent).toContain('Saved history may be out of date')
   expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it('shows validation backoff truthfully and unlocks retry when its timer expires even if polling fails', async () => {
+  vi.useFakeTimers()
+  try {
+    const nextAttemptAt = new Date(Date.now() + 5000).toISOString()
+    const fetchMock = vi.fn().mockRejectedValue(new Error('Offline status polling'))
+    vi.stubGlobal('fetch', fetchMock)
+    await act(async () =>
+      root.render(
+        <ActivitySyncPanel
+          initial={{ ...idle, status: 'PAUSED', errorCode: 'INVALID_RESPONSE', nextAttemptAt }}
+        />,
+      ),
+    )
+    expect(host.querySelector<HTMLButtonElement>('button')!.disabled).toBe(true)
+    expect(host.textContent).toContain('could not validate')
+    expect(host.textContent).toContain(formatLocalDateTime(nextAttemptAt))
+    expect(host.textContent).not.toContain('Garmin asked us to pause')
+    await act(async () => vi.advanceTimersByTimeAsync(6000))
+    expect(host.querySelector<HTMLButtonElement>('button')!.disabled).toBe(false)
+    expect(host.textContent).toContain('You can retry activity sync now')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('distinguishes app rate limits and honors their retry time before allowing another POST', async () => {
+  vi.useFakeTimers()
+  try {
+    const retryAt = new Date(Date.now() + 60000).toISOString()
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      json: async () => ({ code: 'APP_RATE_LIMITED', retryAt }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await act(async () => root.render(<ActivitySyncPanel initial={idle} />))
+    await act(async () => host.querySelector<HTMLButtonElement>('button')!.click())
+    expect(host.textContent).toContain('Too many Garmin sync requests')
+    expect(host.textContent).not.toContain('Garmin asked us to pause')
+    expect(host.querySelector<HTMLButtonElement>('button')!.disabled).toBe(true)
+    expect(fetchMock).toHaveBeenCalledOnce()
+  } finally {
+    vi.useRealTimers()
+  }
 })

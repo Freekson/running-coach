@@ -6,7 +6,7 @@
   border-radius: 14px;
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
+  box-shadow: var(--shadow-overlay);
   overscroll-behavior: contain;
 }
 .wide {

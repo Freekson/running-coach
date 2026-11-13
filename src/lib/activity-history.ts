@@ -178,7 +178,13 @@ export function activityProviderLabel(provider: string): string {
   return provider === 'INTERVALS' ? 'Intervals.icu' : activitySportLabel(provider)
 }
 
-export function formatActivityMetrics(row: ActivityHistoryRow, system: MeasurementSystem) {
+export function formatActivityMetrics(
+  row: Pick<
+    ActivityHistoryRow,
+    'sport' | 'distanceMeters' | 'timerMs' | 'movingMs' | 'elapsedMs' | 'avgSpeedMps' | 'avgHrBpm'
+  >,
+  system: MeasurementSystem,
+) {
   const imperial = system === 'IMPERIAL'
   const metersPerUnit = imperial ? 1609.344 : 1000
   const durationMs = row.timerMs ?? row.movingMs ?? row.elapsedMs

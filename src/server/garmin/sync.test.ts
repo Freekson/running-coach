@@ -365,6 +365,44 @@ describe('Garmin sync checkpoints', () => {
       errorCode: 'TIMEOUT',
     })
     expect(importPage).toHaveBeenCalledOnce()
+    expect(pauseGarminProviderUntil).not.toHaveBeenCalled()
+  })
+
+  it('keeps invalid-response backoff local to activities and permits retry after it expires', async () => {
+    const state = fixture()
+    const failed = await runGarminSync(
+      owner,
+      {},
+      {
+        now: () => clock,
+        importPage: async () => {
+          throw new GarminImportError('INVALID_RESPONSE')
+        },
+      },
+    )
+    expect(failed).toMatchObject({ status: 'PAUSED', errorCode: 'INVALID_RESPONSE' })
+    expect(pauseGarminProviderUntil).not.toHaveBeenCalled()
+    clock = new Date(Date.parse(failed.nextAttemptAt!) + 1)
+    expect(await getGarminSyncState(owner, clock)).toMatchObject({
+      status: 'ERROR',
+      nextAttemptAt: null,
+      errorCode: 'INVALID_RESPONSE',
+    })
+    const result = await runGarminSync(
+      owner,
+      {},
+      {
+        now: () => clock,
+        importPage: async () => ({
+          imported: [],
+          providerIds: [],
+          hasMore: false,
+          nextStart: null,
+        }),
+      },
+    )
+    expect(result.status).toBe('PARTIAL')
+    expect(state.cursor?.nextAttemptAt).toBeNull()
   })
 
   it('does not start a job while another Garmin import holds the provider pause', async () => {

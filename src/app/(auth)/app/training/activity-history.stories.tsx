@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { fn } from 'storybook/test'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { ToastProvider } from '@/components/ui/Toast'
 import { MeasurementSystemProvider } from '../measurement-system-provider'
@@ -84,6 +84,22 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 export const Default: Story = {}
+export const AutomaticFilters: Story = {
+  play: async ({ canvasElement }) => {
+    router.push.mockClear()
+    const canvas = within(canvasElement)
+    await userEvent.click(canvasElement.querySelector<HTMLButtonElement>('#activity-sport')!)
+    await userEvent.click(canvas.getByRole('option', { name: 'Cycling' }))
+    await userEvent.type(canvas.getByRole('searchbox', { name: 'Search activities' }), 'Morning')
+    await waitFor(
+      () =>
+        expect(router.push).toHaveBeenLastCalledWith('/app/training?q=Morning&sport=CYCLING', {
+          scroll: false,
+        }),
+      { timeout: 2000 },
+    )
+  },
+}
 export const Running: Story = {
   args: { query: { ...defaultActivityHistoryQuery, sport: 'RUNNING', minDistance: '21.0975' } },
 }

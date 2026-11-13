@@ -95,6 +95,21 @@ const activity = {
   },
 }
 
+it('normalizes the nested activity UUID returned by Garmin detail responses', () => {
+  const uuid = '00000000-0000-4000-8000-000000000123'
+  for (const owner of [ownerA, ownerB]) {
+    expect(
+      garminActivitySource.normalizeActivity(owner, { ...activity, activityUUID: { uuid } }).source,
+    ).toMatchObject({ userId: owner.userId, externalActivityUuid: uuid })
+  }
+  expect(() =>
+    garminActivitySource.normalizeActivity(ownerA, {
+      ...activity,
+      activityUUID: { uuid: 'not-a-uuid' },
+    }),
+  ).toThrow()
+})
+
 function fitWithLap({
   startTime = '2026-11-01T06:30:00Z',
   sessionDistance = 5000,

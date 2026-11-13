@@ -32,7 +32,12 @@ const zoneName = z
 
 const garminActivitySchema = z.object({
   activityId: z.union([z.string().trim().min(1), z.number().int().nonnegative().safe()]),
-  activityUUID: z.string().trim().min(1).nullish(),
+  activityUUID: z
+    .union([
+      z.string().trim().min(1),
+      z.object({ uuid: z.uuid() }).transform((value) => value.uuid),
+    ])
+    .nullish(),
   activityName: z.string().trim().max(200).nullish(),
   activityTypeDTO: z.object({ typeKey: z.string().trim().min(1) }),
   timeZoneUnitDTO: z.object({ timeZone: zoneName }).nullish(),

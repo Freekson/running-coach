@@ -180,6 +180,9 @@ export async function getGarminSyncState(
   const parsed = checkpointSchema.safeParse(cursor?.cursorOrCheckpoint)
   const checkpoint = parsed.success ? parsed.data : null
   const currentRun = cursor && run && run.startedAt >= connection.credential.rotatedAt ? run : null
+  const retryAt = [providerPauseUntil, cursor?.nextAttemptAt]
+    .filter((value): value is Date => Boolean(value && value > observedAt))
+    .sort((a, b) => b.getTime() - a.getTime())[0]
   const status: GarminSyncState['status'] = !importAllowed
     ? 'UNAVAILABLE'
     : connection.status !== 'CONNECTED'
@@ -208,14 +211,16 @@ export async function getGarminSyncState(
     status,
     lastAttemptAt: currentRun?.startedAt.toISOString() ?? null,
     lastSuccessAt: cursor?.lastSyncedAt?.toISOString() ?? null,
-    nextAttemptAt:
-      providerPauseUntil && providerPauseUntil > observedAt
-        ? providerPauseUntil.toISOString()
-        : (cursor?.nextAttemptAt?.toISOString() ?? null),
+    nextAttemptAt: retryAt?.toISOString() ?? null,
     window: checkpoint ? { start: checkpoint.windowStart, end: checkpoint.windowEnd } : null,
     nextDate: checkpoint?.nextDate ?? null,
     processed: currentRun?.recordsWritten ?? 0,
-    errorCode: currentRun?.status === 'FAILED' ? currentRun.errorCode : null,
+    errorCode:
+      currentRun?.status === 'FAILED'
+        ? currentRun.errorCode
+        : status === 'PAUSED'
+          ? 'PROVIDER_PAUSED'
+          : null,
   }
 }
 
@@ -459,7 +464,8 @@ export async function runGarminSync(
     const retryAt = actionRequired
       ? null
       : boundedGarminRetryAt(now(), Math.max(backoff, providerDelay))
-    if (retryAt) await pauseGarminProviderUntil(owner, retryAt, connection.credential.nonce)
+    if (retryAt && code === 'RATE_LIMITED')
+      await pauseGarminProviderUntil(owner, retryAt, connection.credential.nonce)
     await prisma.syncCursor.updateMany({
       where: { userId, ...cursorKey, leaseToken: token },
       data: {

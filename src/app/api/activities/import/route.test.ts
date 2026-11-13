@@ -28,7 +28,6 @@ vi.mock('@/server/garmin/activity-import', () => ({
   GarminImportError: class GarminImportError extends Error {},
 }))
 vi.mock('@/server/garmin/import-rate-limit', () => ({ allowGarminImport }))
-vi.mock('@/server/garmin/sync-policy', () => ({ isGarminImportAllowed: () => true }))
 vi.mock('@/server/garmin/provider-lease', () => ({
   withGarminProviderLease,
   GarminProviderLeaseUnavailableError: class GarminProviderLeaseUnavailableError extends Error {},

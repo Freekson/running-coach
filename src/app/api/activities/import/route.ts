@@ -7,7 +7,6 @@ import {
   GarminProviderLeaseUnavailableError,
   withGarminProviderLease,
 } from '@/server/garmin/provider-lease'
-import { isGarminImportAllowed } from '@/server/garmin/sync-policy'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 
 const privateHeaders = { 'Cache-Control': 'private, no-store' }
@@ -61,11 +60,6 @@ export async function POST(request: Request) {
       return Response.json(
         { error: 'Invalid import date' },
         { status: 400, headers: privateHeaders },
-      )
-    if (!isGarminImportAllowed())
-      return Response.json(
-        { error: 'Garmin import unavailable' },
-        { status: 403, headers: privateHeaders },
       )
     const owner = getOwnerContext(user)
     if (!(await allowGarminImport(owner)))

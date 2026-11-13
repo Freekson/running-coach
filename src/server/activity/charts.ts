@@ -11,7 +11,6 @@ import {
   GarminProviderLeaseUnavailableError,
 } from '@/server/garmin/provider-lease'
 import { allowGarminImport, getGarminImportBlock } from '@/server/garmin/import-rate-limit'
-import { isGarminImportAllowed } from '@/server/garmin/sync-policy'
 import { normalizeActivityRecords } from '@/server/garmin/activity-records'
 import { FitActivityIdentityError } from '@/server/garmin/normalization'
 import { activityReadScope } from './visibility'
@@ -57,7 +56,6 @@ export async function loadActivityCharts(
   if (!activity) throw new ActivityChartsError('NOT_FOUND', 404)
   if (activity.sourceProvider !== 'GARMIN' || !/^\d{1,32}$/.test(activity.externalActivityId ?? ''))
     throw new ActivityChartsError('UNSUPPORTED', 422)
-  if (!isGarminImportAllowed()) throw new ActivityChartsError('UNAVAILABLE', 403)
   const connection = await prisma.integrationConnection.findUnique({
     where: { userId_provider: { userId, provider: 'GARMIN' } },
     select: { status: true, credential: { select: { connectionId: true } } },

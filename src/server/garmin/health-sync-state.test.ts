@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const { connectionFindUnique, cursorFindUnique, runFindFirst, runFindMany, metricFindUnique } =
   vi.hoisted(() => ({
@@ -19,7 +19,6 @@ vi.mock('@/server/db/client', () => ({
   }),
 }))
 vi.mock('./import-rate-limit', () => ({ getGarminProviderPauseUntil: async () => null }))
-vi.mock('./sync-policy', () => ({ isGarminImportAllowed: () => true }))
 vi.mock('./health-import', () => ({
   GarminHealthImportError: class extends Error {},
   importGarminHealthDate: vi.fn(),
@@ -35,6 +34,8 @@ const other = getOwnerContext({ id: otherId, role: 'ADMIN', email: null })
 const startedAt = new Date('2026-11-09T07:59:04Z')
 
 beforeEach(() => {
+  vi.stubEnv('NODE_ENV', 'production')
+  vi.stubEnv('VERCEL_ENV', 'production')
   vi.clearAllMocks()
   connectionFindUnique.mockImplementation(
     async ({ where }: { where: { userId_provider: { userId: string } } }) =>
@@ -75,6 +76,7 @@ beforeEach(() => {
     sleepFetchedAt: null,
   })
 })
+afterEach(() => vi.unstubAllEnvs())
 
 it('identifies the failed sleep date from a legacy run without disclosing another owner', async () => {
   const state = await getGarminHealthSyncState(owner, new Date('2026-11-09T08:00:00Z'))

@@ -20,7 +20,6 @@ import { normalizeFitLaps } from './normalization'
 import { requestFit } from './personal-api-poc'
 import { claimGarminProviderLease, releaseGarminProviderLease } from './provider-lease'
 import { processGarminStreamWork } from './stream-coordinator'
-import { isGarminImportAllowed } from './sync-policy'
 
 export const ACTIVITY_LAPS_CURSOR = 'GARMIN_IMPORT_ACTIVITY_LAPS'
 const LEASE_MS = 100_000
@@ -190,7 +189,6 @@ export async function runActivityLapHistory(
   options: { action: 'import' | 'resume' | 'retry' | 'reimport' | 'sync'; browserTimezone: string },
   dependencies: ActivityLapDependencies = {},
 ): Promise<void> {
-  if (!isGarminImportAllowed()) throw new GarminDataImportError('APPROVAL_REQUIRED')
   const userId = ownerId(owner)
   const prisma = await getPrismaClient()
   const clock = dependencies.now ?? (() => new Date())

@@ -18,7 +18,6 @@ import {
 import { normalizeGarminDailySummary, normalizeGarminSleep } from './normalization'
 import { GarminAccountIdentityError, verifyGarminBearerAccount } from './account-identity'
 import { requestJson } from './personal-api-poc'
-import { isGarminImportAllowed } from './sync-policy'
 import { projectGarminHealth } from './provider-projection'
 
 const dateSchema = z.iso.date()
@@ -266,7 +265,6 @@ export async function importGarminHealthDate(
   dependencies: Dependencies = {},
 ) {
   const userId = ownerId(owner)
-  if (!isGarminImportAllowed()) throw new GarminHealthImportError('UNAVAILABLE')
   const parsedDate = dateSchema.safeParse(date)
   const parsedZone = timezoneSchema.safeParse(requestedTimezone)
   const parsedSleepZone = timezoneSchema.safeParse(dependencies.sleepTimezone ?? requestedTimezone)

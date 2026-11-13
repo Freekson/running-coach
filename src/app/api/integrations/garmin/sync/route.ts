@@ -136,12 +136,7 @@ export async function POST(request: Request) {
       return Response.json(
         { code: error.code },
         {
-          status:
-            error.code === 'BUSY' || error.code === 'NOT_READY'
-              ? 409
-              : error.code === 'APPROVAL_REQUIRED'
-                ? 403
-                : 422,
+          status: error.code === 'BUSY' || error.code === 'NOT_READY' ? 409 : 422,
           headers,
         },
       )
@@ -158,9 +153,7 @@ export async function POST(request: Request) {
             ? 429
             : error.code === 'INVALID_EXTENSION'
               ? 400
-              : error.code === 'APPROVAL_REQUIRED'
-                ? 403
-                : 409
+              : 409
       return Response.json({ code: error.code }, { status, headers })
     }
     return Response.json({ error: 'Sync unavailable' }, { status: 503, headers })

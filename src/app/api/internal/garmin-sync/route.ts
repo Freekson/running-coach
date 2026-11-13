@@ -13,10 +13,7 @@ const headers = { 'Cache-Control': 'private, no-store' }
 
 /** Prepared trigger; no vercel.json Cron is installed until approval and plan limits are checked. */
 export async function GET(request: Request) {
-  if (
-    process.env.GARMIN_SCHEDULE_ENABLED !== 'true' ||
-    process.env.GARMIN_SHARED_SYNC_APPROVED !== 'true'
-  )
+  if (process.env.GARMIN_SCHEDULE_ENABLED !== 'true')
     return new Response(null, { status: 404, headers })
   if (!isScheduledBearer(request.headers.get('authorization') ?? ''))
     return new Response(null, { status: 401, headers })

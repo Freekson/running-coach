@@ -25,12 +25,10 @@ const request = (secret?: string) =>
 beforeEach(() => {
   vi.clearAllMocks()
   process.env.CRON_SECRET = 'synthetic-cron-secret'
-  process.env.GARMIN_SHARED_SYNC_APPROVED = 'true'
   process.env.GARMIN_SCHEDULE_ENABLED = 'true'
 })
 afterEach(() => {
   delete process.env.CRON_SECRET
-  delete process.env.GARMIN_SHARED_SYNC_APPROVED
   delete process.env.GARMIN_SCHEDULE_ENABLED
 })
 
@@ -45,6 +43,13 @@ describe('prepared Garmin scheduled trigger', () => {
     expect((await GET(request())).status).toBe(401)
     expect((await GET(request('wrong'))).status).toBe(401)
     expect(findScheduledGarminOwnerId).not.toHaveBeenCalled()
+  })
+
+  it('does not run when scheduling is enabled but its bearer secret is unconfigured', async () => {
+    delete process.env.CRON_SECRET
+    expect((await GET(request('synthetic-cron-secret'))).status).toBe(401)
+    expect(findScheduledGarminOwnerId).not.toHaveBeenCalled()
+    expect(runGarminSync).not.toHaveBeenCalled()
   })
 
   it('runs only for the owner selected by the database', async () => {

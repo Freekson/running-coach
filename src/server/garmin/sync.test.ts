@@ -174,7 +174,6 @@ beforeEach(() => {
   getGarminProviderPauseUntil.mockResolvedValue(null)
   clock = new Date('2026-11-08T12:00:00.000Z')
   delete process.env.VERCEL_ENV
-  delete process.env.GARMIN_SHARED_SYNC_APPROVED
   delete process.env.GARMIN_SYNC_MAX_PAGES
   delete process.env.GARMIN_SYNC_PAGE_SIZE
   delete process.env.GARMIN_SYNC_TIMEOUT_MS
@@ -192,7 +191,10 @@ describe('Garmin sync checkpoints', () => {
     await expect(runGarminSync(owner)).rejects.toMatchObject({ code: 'NOT_CONNECTED' })
     expect(state.db.syncCursor.upsert).not.toHaveBeenCalled()
     process.env.VERCEL_ENV = 'production'
-    expect((await getGarminSyncState(owner)).status).toBe('UNAVAILABLE')
+    expect(await getGarminSyncState(owner)).toMatchObject({
+      status: 'ACTION_REQUIRED',
+      errorCode: 'ACCOUNT_VERIFICATION_REQUIRED',
+    })
   })
 
   it('commits a page only after import and resumes its next offset', async () => {
@@ -421,11 +423,20 @@ describe('Garmin sync checkpoints', () => {
     await expect(runGarminSync(anotherOwner)).rejects.toMatchObject({ code: 'NOT_CONNECTED' })
   })
 
-  it('keeps hosted sync gated until Garmin approval is recorded', async () => {
-    fixture()
+  it('runs bounded owner-scoped sync on hosted deployments', async () => {
+    const state = fixture()
     process.env.VERCEL_ENV = 'production'
-    expect((await getGarminSyncState(owner)).status).toBe('UNAVAILABLE')
-    await expect(runGarminSync(owner)).rejects.toMatchObject({ code: 'APPROVAL_REQUIRED' })
+    expect((await getGarminSyncState(owner)).status).toBe('IDLE')
+    const importPage = vi.fn(async () => ({
+      imported: [],
+      providerIds: [],
+      hasMore: false,
+      nextStart: null,
+    }))
+    await runGarminSync(owner, {}, { now: () => clock, importPage })
+    expect(importPage).toHaveBeenCalledTimes(4)
+    expect(importPage).toHaveBeenCalledWith(owner, expect.any(Object), expect.any(Object))
+    expect(state.cursor?.userId).toBe(firstId)
   })
 
   it('stops after four empty pages and resumes the bounded initial window', async () => {

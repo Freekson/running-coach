@@ -24,10 +24,72 @@ const base: GarminImportStreamState = {
   generation: null,
 }
 beforeEach(() => {
+  window.localStorage.clear()
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
+})
+
+it('remembers stream expansion after remounting and keeps different users separate', async () => {
+  const initial = [{ ...base, status: 'completed' as const }]
+  const preferenceKey = 'running-coach:garmin-import-expanded:v1:athlete-a'
+  await act(async () =>
+    root.render(<GarminDataImport initial={initial} preferenceKey={preferenceKey} />),
+  )
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[aria-label="Hide Activities details"]')!.click(),
+  )
+  expect(JSON.parse(window.localStorage.getItem(preferenceKey)!)).toMatchObject({
+    activities: false,
+  })
+  await act(async () => root.unmount())
+  root = createRoot(host)
+  await act(async () =>
+    root.render(<GarminDataImport initial={initial} preferenceKey={preferenceKey} />),
+  )
+  expect(host.querySelector('[aria-label="Show Activities details"]')).not.toBeNull()
+  await act(async () =>
+    root.render(
+      <GarminDataImport
+        initial={initial}
+        preferenceKey="running-coach:garmin-import-expanded:v1:athlete-b"
+      />,
+    ),
+  )
+  expect(host.querySelector('[aria-label="Hide Activities details"]')).not.toBeNull()
+})
+
+it.each(['{invalid', JSON.stringify({ activities: true })])(
+  'keeps expansion usable when storage is blocked with saved preferences %s',
+  async (saved) => {
+    const preferenceKey = 'running-coach:garmin-import-expanded:v1:athlete-a'
+    window.localStorage.setItem(preferenceKey, saved)
+    await act(async () =>
+      root.render(<GarminDataImport initial={[base]} preferenceKey={preferenceKey} />),
+    )
+    expect(host.querySelector('[aria-label="Hide Activities details"]')).not.toBeNull()
+    const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Storage blocked')
+    })
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[aria-label="Hide Activities details"]')!.click(),
+    )
+    expect(host.querySelector('[aria-label="Show Activities details"]')).not.toBeNull()
+    write.mockRestore()
+  },
+)
+
+it('restores saved preferences without automatically requesting Garmin', async () => {
+  const preferenceKey = 'running-coach:garmin-import-expanded:v1:athlete-a'
+  window.localStorage.setItem(preferenceKey, JSON.stringify({ activities: false }))
+  const network = vi.fn()
+  vi.stubGlobal('fetch', network)
+  await act(async () =>
+    root.render(<GarminDataImport initial={[base]} preferenceKey={preferenceKey} />),
+  )
+  expect(host.querySelector('[aria-label="Show Activities details"]')).not.toBeNull()
+  expect(network).not.toHaveBeenCalled()
 })
 afterEach(async () => {
   await act(async () => root.unmount())

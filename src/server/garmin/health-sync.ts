@@ -9,6 +9,7 @@ import {
   GARMIN_MAX_HISTORY_DAYS,
 } from '@/lib/garmin-import-window'
 import type { GarminSyncState } from '@/lib/garmin-sync-state'
+import type { HealthStreamId } from '@/lib/garmin-import-state'
 import type { HealthTimezoneBasis } from '@/lib/health-history'
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
@@ -18,7 +19,7 @@ import {
   type GarminHealthImportErrorCode,
   type GarminHealthSession,
 } from './health-import'
-import { getGarminProviderPauseUntil } from './import-rate-limit'
+import { allowGarminImport, getGarminProviderPauseUntil } from './import-rate-limit'
 import { claimGarminProviderLease, releaseGarminProviderLease } from './provider-lease'
 
 const LEASE_MS = 100_000
@@ -62,9 +63,17 @@ const checkpointSchema = z
 type Checkpoint = z.infer<typeof checkpointSchema>
 
 export class GarminHealthSyncUnavailableError extends Error {
-  constructor(readonly code: 'NOT_CONNECTED' | 'BUSY' | 'PAUSED') {
+  constructor(readonly code: 'NOT_CONNECTED' | 'BUSY' | 'PAUSED' | 'NOT_READY') {
     super('Garmin health sync unavailable')
   }
+}
+
+function healthCursor(stream?: HealthStreamId): string {
+  return stream ? `GARMIN_HEALTH_RECENT_${stream.toUpperCase()}` : 'HEALTH'
+}
+
+function healthJob(stream?: HealthStreamId): string {
+  return stream ? healthCursor(stream) : 'GARMIN_HEALTH'
 }
 
 const knownSyncErrorCodes = new Set([
@@ -307,6 +316,7 @@ export async function healthZoneForDay(
 export async function getGarminHealthSyncState(
   owner: OwnerContext,
   observedAt: Date = new Date(),
+  stream?: HealthStreamId,
 ): Promise<GarminSyncState> {
   const userId = ownerId(owner)
   const prisma = await getPrismaClient()
@@ -348,10 +358,12 @@ export async function getGarminHealthSyncState(
     }
   const [cursor, run, providerPauseUntil] = await Promise.all([
     prisma.syncCursor.findUnique({
-      where: { connectionId_dataType: { connectionId: connection.id, dataType: 'HEALTH' } },
+      where: {
+        connectionId_dataType: { connectionId: connection.id, dataType: healthCursor(stream) },
+      },
     }),
     prisma.syncRun.findFirst({
-      where: { userId, connectionId: connection.id, jobType: 'GARMIN_HEALTH' },
+      where: { userId, connectionId: connection.id, jobType: healthJob(stream) },
       orderBy: { startedAt: 'desc' },
     }),
     getGarminProviderPauseUntil(owner),
@@ -364,6 +376,7 @@ export async function getGarminHealthSyncState(
   // Older RUN-25 runs stored only UNAVAILABLE. A summary saved during that
   // failed attempt identifies the uncompleted sleep read without guessing a value.
   if (
+    !stream &&
     currentRun?.status === 'FAILED' &&
     currentRun.errorCode === 'UNAVAILABLE' &&
     checkpoint?.nextDate &&
@@ -442,6 +455,7 @@ export async function runGarminHealthSync(
   owner: OwnerContext,
   browserTimezone: string,
   dependencies: Dependencies = {},
+  stream?: HealthStreamId,
 ): Promise<GarminSyncState> {
   const userId = ownerId(owner)
   const now = dependencies.now ?? (() => new Date())
@@ -473,12 +487,16 @@ export async function runGarminHealthSync(
     ? profile.preferredTimezone
     : browserTimezone
   if (!validTimezone(fallbackTimezone)) throw new GarminHealthImportError('INVALID_DATE')
-  const cursorKey = { connectionId: connection.id, dataType: 'HEALTH' }
+  const cursorKey = { connectionId: connection.id, dataType: healthCursor(stream) }
   const importCursors = await prisma.syncCursor.findMany({
     where: {
       userId,
       connectionId: connection.id,
-      dataType: { in: ['GARMIN_IMPORT_DAILY_SUMMARY', 'GARMIN_IMPORT_SLEEP'] },
+      dataType: {
+        in: stream
+          ? [`GARMIN_IMPORT_${stream.toUpperCase()}`]
+          : ['GARMIN_IMPORT_DAILY_SUMMARY', 'GARMIN_IMPORT_SLEEP'],
+      },
     },
     select: { cursorOrCheckpoint: true },
   })
@@ -493,9 +511,22 @@ export async function runGarminHealthSync(
       ? [value.endDate]
       : []
   })
+  // Incremental entry points may never seed an initial or historical import.
+  if (
+    stream &&
+    (initialCoverageEnds.length !== 1 ||
+      !importCursors.every(
+        (cursor) =>
+          z
+            .object({ nextDate: z.null(), endDate: z.iso.date() })
+            .safeParse(cursor.cursorOrCheckpoint).success,
+      ))
+  )
+    throw new GarminHealthSyncUnavailableError('NOT_READY')
   const today = localDay(started, fallbackTimezone)
-  const initial = healthWindow(today, initialCoverageEnds.length === 2, fallbackTimezone)
-  if (initialCoverageEnds.length === 2) {
+  const hasHistory = initialCoverageEnds.length === (stream ? 1 : 2)
+  const initial = healthWindow(today, hasHistory, fallbackTimezone)
+  if (hasHistory) {
     const firstMissing = addDays(initialCoverageEnds.sort()[0], 1)
     const overlap = addDays(today, -6)
     const oldest = earliestGarminHistoryDate(today)
@@ -525,7 +556,9 @@ export async function runGarminHealthSync(
     completedCursor?.lastSyncedAt &&
     started.getTime() - completedCursor.lastSyncedAt.getTime() < COMPLETED_COOLDOWN_MS
   )
-    return getGarminHealthSyncState(owner, now())
+    return getGarminHealthSyncState(owner, now(), stream)
+  if (stream && !(await allowGarminImport(owner)))
+    throw new GarminHealthSyncUnavailableError('PAUSED')
   const token = randomUUID()
   const claimed = await prisma.syncCursor.updateMany({
     where: {
@@ -537,7 +570,7 @@ export async function runGarminHealthSync(
     data: { leaseToken: token, leaseExpiresAt: new Date(started.getTime() + LEASE_MS) },
   })
   if (claimed.count !== 1) {
-    const state = await getGarminHealthSyncState(owner, now())
+    const state = await getGarminHealthSyncState(owner, now(), stream)
     throw new GarminHealthSyncUnavailableError(state.status === 'PAUSED' ? 'PAUSED' : 'BUSY')
   }
   let run: { id: string } | null = null
@@ -551,7 +584,7 @@ export async function runGarminHealthSync(
       where: {
         userId,
         connectionId: connection.id,
-        jobType: 'GARMIN_HEALTH',
+        jobType: healthJob(stream),
         status: 'RUNNING',
         startedAt: { lt: new Date(started.getTime() - LEASE_MS) },
       },
@@ -568,7 +601,7 @@ export async function runGarminHealthSync(
           data: {
             userId,
             connectionId: connection.id,
-            jobType: 'GARMIN_HEALTH',
+            jobType: healthJob(stream),
             status: 'FAILED',
             startedAt: started,
             finishedAt: now(),
@@ -596,12 +629,12 @@ export async function runGarminHealthSync(
       if (saved.count !== 1) throw new GarminHealthImportError('UNAVAILABLE')
     }
     const previousRun = await prisma.syncRun.findFirst({
-      where: { userId, connectionId: connection.id, jobType: 'GARMIN_HEALTH' },
+      where: { userId, connectionId: connection.id, jobType: healthJob(stream) },
       orderBy: { startedAt: 'desc' },
       select: { startedAt: true, status: true },
     })
     run = await prisma.syncRun.create({
-      data: { userId, connectionId: connection.id, jobType: 'GARMIN_HEALTH', status: 'RUNNING' },
+      data: { userId, connectionId: connection.id, jobType: healthJob(stream), status: 'RUNNING' },
     })
     let sleepFailure: GarminHealthImportErrorCode | null = null
     const sleepIssues = new Map<string, GarminHealthImportErrorCode>()
@@ -643,7 +676,15 @@ export async function runGarminHealthSync(
           skipFetchedSince: previousRun?.status === 'FAILED' ? previousRun.startedAt : undefined,
           summaryTimezoneBasis: zones.summaryBasis,
           sleepTimezoneBasis: zones.sleepBasis,
-          sources: retrySleep ? 'SLEEP_ONLY' : sleepCircuitOpen ? 'SUMMARY_ONLY' : 'BOTH',
+          sources:
+            stream === 'daily_summary'
+              ? 'SUMMARY_ONLY'
+              : stream === 'sleep' || retrySleep
+                ? 'SLEEP_ONLY'
+                : sleepCircuitOpen
+                  ? 'SUMMARY_ONLY'
+                  : 'BOTH',
+          recheckFetchedSleep: stream === 'sleep',
           batchEndDate,
         },
       )
@@ -662,7 +703,14 @@ export async function runGarminHealthSync(
       } else if (result.status === 'SUCCEEDED') {
         sleepIssues.delete(date)
       }
-      checkpoint = advanceHealthCheckpoint(checkpoint, date, result.status, retrySleep)
+      checkpoint = advanceHealthCheckpoint(
+        checkpoint,
+        date,
+        stream === 'daily_summary' && result.status === 'SUMMARY_ONLY'
+          ? 'SUCCEEDED'
+          : result.status,
+        retrySleep,
+      )
       if (!retrySleep || result.status === 'SUCCEEDED') processed++
       const complete = checkpoint.nextDate === null && checkpoint.sleepRetryDates.length === 0
       const committed = await prisma.syncCursor.updateMany({
@@ -732,5 +780,5 @@ export async function runGarminHealthSync(
       data: { leaseToken: null, leaseExpiresAt: null },
     })
   }
-  return getGarminHealthSyncState(owner, now())
+  return getGarminHealthSyncState(owner, now(), stream)
 }

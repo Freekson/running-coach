@@ -24,6 +24,7 @@ export default async function SettingsPage() {
         registrationName={user.name ?? null}
         garminConnection={garminConnection}
         garminImports={garminImports}
+        garminImportPreferenceKey={`running-coach:garmin-import-expanded:v1:${user.id}`}
       />
     </AppShell>
   )

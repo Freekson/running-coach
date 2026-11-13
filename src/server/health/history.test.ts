@@ -233,6 +233,13 @@ describe('owner-scoped Garmin health history', () => {
         sourceTimezone: 'UTC',
         sleepSourceTimezone: 'Asia/Tokyo',
       })
+      .mockResolvedValueOnce({
+        sleepScore: 82,
+        sleepFetchedAt: fetchedAt,
+        localDate: new Date('2026-11-06'),
+        sourceTimezone: 'UTC',
+        sleepSourceTimezone: 'America/New_York',
+      })
       .mockResolvedValueOnce({ summaryFetchedAt: fetchedAt })
       .mockResolvedValueOnce({ sleepFetchedAt: fetchedAt })
     const snapshot = await getHealthSnapshot(other)
@@ -241,6 +248,11 @@ describe('owner-scoped Garmin health history', () => {
       value: 21_600_000,
       date: '2026-11-07',
       timezone: 'Asia/Tokyo',
+    })
+    expect(snapshot.sleepScore).toMatchObject({
+      value: 82,
+      date: '2026-11-06',
+      timezone: 'America/New_York',
     })
     expect(snapshot.restingHrChecked).toBe(true)
     expect(snapshot.sleepChecked).toBe(true)
@@ -251,5 +263,83 @@ describe('owner-scoped Garmin health history', () => {
     )
     expect(findFirst.mock.calls[0][0].where).toMatchObject({ summaryFetchedAt: { not: null } })
     expect(findFirst.mock.calls[1][0].where).toMatchObject({ sleepFetchedAt: { not: null } })
+    expect(findFirst.mock.calls[2][0].where).toMatchObject({
+      sleepScore: { not: null },
+      sleepFetchedAt: { not: null },
+    })
   })
+
+  it.each([
+    {
+      name: 'the latest duration has no score',
+      latestDuration: BigInt(25_000_000),
+      latestScore: null,
+      olderScore: 0,
+      expectedScore: 0,
+      expectedDate: '2026-11-12',
+    },
+    {
+      name: 'the latest score has no duration',
+      latestDuration: null,
+      latestScore: 90,
+      olderScore: 78,
+      expectedScore: 90,
+      expectedDate: '2026-11-13',
+    },
+  ])(
+    'selects Sleep Score independently when $name, keeping owner and account isolation',
+    async ({ latestDuration, latestScore, olderScore, expectedScore, expectedDate }) => {
+      const { findFirst } = fixture()
+      const row = (
+        userId: string,
+        date: string,
+        duration: bigint | null,
+        score: number | null,
+        account = '123456',
+        checked: Date | null = fetchedAt,
+      ) => ({
+        userId,
+        sourceProvider: 'GARMIN',
+        garminAccountId: account,
+        localDate: new Date(date),
+        sleepDurationMs: duration,
+        sleepScore: score,
+        sleepFetchedAt: checked,
+        sourceTimezone: 'UTC',
+        sleepSourceTimezone: 'Asia/Tokyo',
+      })
+      const rows = [
+        row(owner.userId, '2026-11-13', latestDuration, latestScore),
+        row(owner.userId, '2026-11-12', BigInt(24_000_000), olderScore),
+        row(other.userId, '2026-11-13', BigInt(27_000_000), 99),
+        row(owner.userId, '2026-11-14', BigInt(28_000_000), 100, 'different-account'),
+        row(owner.userId, '2026-11-14', BigInt(29_000_000), 98, '123456', null),
+      ]
+      findFirst.mockImplementation(async ({ where }) => {
+        const owned = rows
+          .filter(
+            (item) =>
+              item.userId === where.userId &&
+              item.garminAccountId === where.garminAccountId &&
+              item.sleepFetchedAt,
+          )
+          .sort((a, b) => b.localDate.getTime() - a.localDate.getTime())
+        if ('restingHrBpm' in where || 'summaryFetchedAt' in where) return null
+        if ('sleepDurationMs' in where)
+          return owned.find((item) => item.sleepDurationMs !== null) ?? null
+        if ('sleepScore' in where) return owned.find((item) => item.sleepScore !== null) ?? null
+        return owned[0] ?? null
+      })
+      expect((await getHealthSnapshot(owner)).sleepScore).toMatchObject({
+        value: expectedScore,
+        date: expectedDate,
+        timezone: 'Asia/Tokyo',
+        fetchedAt: fetchedAt.toISOString(),
+      })
+      expect((await getHealthSnapshot(other)).sleepScore?.value).toBe(99)
+      expect(
+        findFirst.mock.calls.every(([query]) => query.where.garminAccountId === '123456'),
+      ).toBe(true)
+    },
+  )
 })

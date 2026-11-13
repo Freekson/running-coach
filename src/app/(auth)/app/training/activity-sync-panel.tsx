@@ -222,7 +222,7 @@ export function ActivitySyncPanel({
             <RefreshCw
               size={18}
               strokeWidth={2}
-              className={pending ? styles.spinning : undefined}
+              className={pending || state.status === 'SYNCING' ? styles.spinning : undefined}
               aria-hidden="true"
               focusable="false"
             />

@@ -202,6 +202,12 @@ export const Completed: Story = {
     ],
   },
 }
+export const PersistedDetails: Story = {
+  args: {
+    ...Completed.args,
+    preferenceKey: 'running-coach:garmin-import-expanded:v1:storybook-athlete',
+  },
+}
 export const CompletedWithWarnings: Story = {
   args: {
     initial: [

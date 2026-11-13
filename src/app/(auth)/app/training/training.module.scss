@@ -207,9 +207,27 @@
   color: var(--color-text);
   text-decoration: none;
 }
+.activityName .activityLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  width: 100%;
+  border-radius: 10px;
+  > span:last-child {
+    min-width: 0;
+  }
+  .sportIcon {
+    margin-right: 0;
+    flex: none;
+  }
+}
 .activityName a:hover {
   color: var(--color-primary);
-  text-decoration: underline;
+  text-decoration: none;
+  strong {
+    text-decoration: underline;
+  }
 }
 .activityName .sportIcon {
   display: inline-grid;

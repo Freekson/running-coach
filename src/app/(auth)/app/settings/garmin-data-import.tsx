@@ -32,6 +32,8 @@ import { useClientReady } from '@/lib/use-client-ready'
 import { GARMIN_HISTORY_YEARS } from '@/lib/garmin-import-window'
 import { formatLocalDateTime } from '@/lib/local-time'
 import { nextGarminRateLimitRetryAt } from './garmin-import-retry'
+import { waitForRetry } from '@/lib/garmin-retry'
+import { useGarminImportPreferences } from './garmin-import-preferences'
 import styles from './garmin-data-import.module.scss'
 
 const names: Record<ImportStreamId, string> = {
@@ -138,28 +140,6 @@ function requiresAttention(code: string | null): boolean {
   return Boolean(code && (accountErrors.has(code) || /^(?:SLEEP|SUMMARY)_HTTP_40[13]$/.test(code)))
 }
 
-async function waitForRetry(retryAt: string, signal: AbortSignal): Promise<boolean> {
-  const deadline = Date.parse(retryAt)
-  if (!Number.isFinite(deadline)) return false
-  while (!signal.aborted && Date.now() < deadline) {
-    const remaining = Math.min(60_000, deadline - Date.now())
-    const elapsed = await new Promise<boolean>((resolve) => {
-      const onAbort = () => {
-        clearTimeout(timer)
-        resolve(false)
-      }
-      const timer = setTimeout(() => {
-        signal.removeEventListener('abort', onAbort)
-        resolve(true)
-      }, remaining)
-      signal.addEventListener('abort', onAbort, { once: true })
-      if (signal.aborted) onAbort()
-    })
-    if (!elapsed) return false
-  }
-  return !signal.aborted
-}
-
 function safeFailure(code: string | null): string | null {
   if (!code) return null
   if (code === 'ACCOUNT_VERIFICATION_REQUIRED')
@@ -239,7 +219,13 @@ function retryDeadline(
     : null
 }
 
-export function GarminDataImport({ initial }: { initial: GarminImportStreamState[] }) {
+export function GarminDataImport({
+  initial,
+  preferenceKey,
+}: {
+  initial: GarminImportStreamState[]
+  preferenceKey?: string
+}) {
   const toast = useToast()
   const clientReady = useClientReady()
   const [override, setOverride] = useState<{
@@ -257,9 +243,10 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
   const [providerRetryAt, setProviderRetryAt] = useState<string | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [howOpen, setHowOpen] = useState(false)
-  const [expanded, setExpanded] = useState<Partial<Record<ImportStreamId, boolean>>>(() =>
+  const [initialExpanded] = useState<Partial<Record<ImportStreamId, boolean>>>(() =>
     Object.fromEntries(initial.map((stream) => [stream.streamId, hasStreamDetails(stream)])),
   )
+  const { expanded, toggle } = useGarminImportPreferences(preferenceKey, initialExpanded)
   const activeRun = useRef<AbortController | null>(null)
   const mounted = useRef(true)
 
@@ -764,12 +751,7 @@ export function GarminDataImport({ initial }: { initial: GarminImportStreamState
                     aria-label={`${isExpanded ? 'Hide' : 'Show'} ${names[stream.streamId]} details`}
                     aria-expanded={isExpanded}
                     aria-controls={isExpanded ? detailsId : undefined}
-                    onClick={() =>
-                      setExpanded((current) => ({
-                        ...current,
-                        [stream.streamId]: !isExpanded,
-                      }))
-                    }
+                    onClick={() => toggle(stream.streamId, !isExpanded)}
                   >
                     <Badge
                       tone={

@@ -94,6 +94,9 @@ it('renders saved rows with local dates, duration semantics and unavailable HR',
   expect(row.querySelector('a')?.getAttribute('href')).toBe(
     '/app/training/row?back=%2Fapp%2Ftraining',
   )
+  expect(row.querySelector('a .lucide')).not.toBeNull()
+  expect(row.querySelector('a small')?.textContent).toBe('Running')
+  expect(row.querySelector('th')?.querySelectorAll('a')).toHaveLength(1)
   expect(host.querySelector<HTMLButtonElement>('[aria-label="Previous page"]')?.disabled).toBe(true)
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Next page"]')!.click())
   expect(push).toHaveBeenCalledWith('/app/training?page=2', { scroll: false })

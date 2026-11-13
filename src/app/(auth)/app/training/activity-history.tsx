@@ -309,19 +309,18 @@ export function ActivityHistory({
                         <time dateTime={row.startedAt}>{date}</time>
                       </td>
                       <th scope="row" className={styles.activityName}>
-                        <span className={styles.sportIcon}>
-                          <Icon size={20} strokeWidth={2} aria-hidden="true" focusable="false" />
-                        </span>
-                        <span>
-                          <Link
-                            href={`/app/training/${row.id}?${new URLSearchParams({ back: activityHistoryUrl(query) })}`}
-                          >
+                        <Link
+                          className={styles.activityLink}
+                          href={`/app/training/${row.id}?${new URLSearchParams({ back: activityHistoryUrl(query) })}`}
+                        >
+                          <span className={styles.sportIcon}>
+                            <Icon size={20} strokeWidth={2} aria-hidden="true" focusable="false" />
+                          </span>
+                          <span>
                             <strong>{row.title || `${sport} activity`}</strong>
-                          </Link>
-                          <small>
-                            {sport} · {activityProviderLabel(row.provider)}
-                          </small>
-                        </span>
+                            <small>{sport}</small>
+                          </span>
+                        </Link>
                       </th>
                       <td data-label="Distance">{metric.distance}</td>
                       <td data-label="Duration">

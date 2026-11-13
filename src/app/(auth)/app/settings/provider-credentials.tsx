@@ -101,23 +101,32 @@ async function saveError(response: Response): Promise<string> {
 export function ProviderCredentials({
   initial,
   garminImports = [],
+  garminImportPreferenceKey,
 }: {
   initial?: ProviderConnectionStatus
   garminImports?: GarminImportStreamState[]
+  garminImportPreferenceKey?: string
 }) {
   const connection = initial?.provider === 'GARMIN' ? initial : disconnected()
   const version = `${connection.status}:${connection.createdAt}:${connection.updatedAt}`
   return (
-    <ProviderCredentialsPanel key={version} initial={connection} garminImports={garminImports} />
+    <ProviderCredentialsPanel
+      key={`${garminImportPreferenceKey ?? ''}:${version}`}
+      initial={connection}
+      garminImports={garminImports}
+      garminImportPreferenceKey={garminImportPreferenceKey}
+    />
   )
 }
 
 function ProviderCredentialsPanel({
   initial,
   garminImports,
+  garminImportPreferenceKey,
 }: {
   initial: ProviderConnectionStatus
   garminImports: GarminImportStreamState[]
+  garminImportPreferenceKey?: string
 }) {
   const toast = useToast()
   const router = useRouter()
@@ -319,7 +328,9 @@ function ProviderCredentialsPanel({
         </div>
       </Card>
       {(connection.status === 'CONNECTED' || connection.status === 'KEY_SAVED') &&
-        garminImports.length > 0 && <GarminDataImport initial={garminImports} />}
+        garminImports.length > 0 && (
+          <GarminDataImport initial={garminImports} preferenceKey={garminImportPreferenceKey} />
+        )}
       <Card as="section" className={styles.card} aria-label="Delete imported Garmin data">
         <div className={styles.dangerZone}>
           <SectionHeading

@@ -10,6 +10,7 @@ import { addHealthDays, healthLocalDay } from '@/lib/health-history'
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
 import { activityReadScope } from './visibility'
+import { buildDashboardWeeks, dashboardWeekStart } from '@/lib/dashboard'
 
 function validTimezone(value: string | null | undefined): string {
   try {
@@ -181,4 +182,64 @@ export async function getActivityHistory(
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   )
+}
+
+/** Unresolved duplicate candidates are excluded rather than summed or silently merged. */
+async function dashboardActivityScope(owner: OwnerContext): Promise<Prisma.ActivityWhereInput> {
+  const userId = ownerId(owner)
+  return {
+    AND: [
+      await activityReadScope(owner),
+      {
+        duplicateCandidatesAsFirst: { none: { userId } },
+        duplicateCandidatesAsSecond: { none: { userId } },
+      },
+    ],
+  }
+}
+
+/** Only eight weeks of small persisted running summaries, with shared owner/account visibility. */
+export async function getDashboardActivityOverview(
+  owner: OwnerContext,
+  timezone: string,
+  now = new Date(),
+) {
+  ownerId(owner)
+  const zone = activityTimezoneSchema.parse(timezone)
+  const firstWeek = addHealthDays(dashboardWeekStart(healthLocalDay(now.toISOString(), zone)), -49)
+  const scope = await dashboardActivityScope(owner)
+  const prisma = await getPrismaClient()
+  const rows = await prisma.activity.findMany({
+    where: {
+      AND: [
+        scope,
+        {
+          sportType: 'RUNNING',
+          startedAt: { gte: activityDayBoundary(firstWeek, zone), lte: now },
+        },
+      ],
+    },
+    select,
+    orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+  })
+  return {
+    weeks: buildDashboardWeeks(rows.map(activityHistoryRow), now.toISOString(), zone),
+    timezone: zone,
+  }
+}
+
+export async function getDashboardRecentActivities(
+  owner: OwnerContext,
+  now = new Date(),
+): Promise<ActivityHistoryRow[]> {
+  ownerId(owner)
+  const scope = await dashboardActivityScope(owner)
+  const prisma = await getPrismaClient()
+  const rows = await prisma.activity.findMany({
+    where: { AND: [scope, { startedAt: { lte: now } }] },
+    select,
+    orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+    take: 3,
+  })
+  return rows.map(activityHistoryRow)
 }

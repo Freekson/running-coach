@@ -2,19 +2,6 @@
   gap: 24px;
 }
 
-.loadingPage {
-  display: grid;
-  grid-template-rows: auto minmax(240px, 1fr);
-  gap: 24px;
-  min-height: calc(100vh - 2 * var(--content-padding));
-  min-height: calc(100dvh - 2 * var(--content-padding));
-}
-
-.loadingIndicator {
-  display: grid;
-  place-items: center;
-}
-
 .header {
   display: flex;
   align-items: center;
@@ -29,10 +16,6 @@
 }
 
 @media (max-width: 600px) {
-  .loadingPage {
-    min-height: 60dvh;
-  }
-
   .header {
     flex-direction: column;
   }

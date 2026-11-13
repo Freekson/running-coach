@@ -260,7 +260,7 @@ export function HealthSyncPanel({
             <RefreshCw
               size={16}
               strokeWidth={2}
-              className={pending ? styles.spinning : undefined}
+              className={pending || state.status === 'SYNCING' ? styles.spinning : undefined}
               aria-hidden="true"
             />{' '}
             Sync now

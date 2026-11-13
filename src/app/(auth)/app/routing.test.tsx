@@ -55,6 +55,8 @@ vi.mock('@/server/provider/vault', () => ({
   })),
 }))
 vi.mock('@/server/activity/history', () => ({
+  getDashboardActivityOverview: vi.fn(async () => ({ weeks: [], timezone: 'UTC' })),
+  getDashboardRecentActivities: vi.fn(async () => []),
   getActivityHistory: vi.fn(async () => ({
     items: [],
     total: 0,
@@ -120,12 +122,20 @@ vi.mock('../sign-out-button', () => ({ SignOutButton: () => null }))
 import AppLayout from './layout'
 import AppPage from './page'
 import DashboardPage from './dashboard/page'
+import DashboardLoading from './dashboard/loading'
+import { DashboardSkeleton } from './dashboard/dashboard-skeleton'
 import TrainingPage from './training/page'
 import { ActivityHistory } from './training/activity-history'
-import { getActivityHistory } from '@/server/activity/history'
+import {
+  getActivityHistory,
+  getDashboardActivityOverview,
+  getDashboardRecentActivities,
+} from '@/server/activity/history'
+import { DashboardContent } from './dashboard/dashboard-content'
 import SettingsPage from './settings/page'
 import HealthPage from './health/page'
 import HealthLoading from './health/loading'
+import { HealthSkeleton } from './health/health-skeleton'
 import AdminPage from './admin/page'
 import { AppShell } from './app-shell'
 import { AccountUnavailable } from './account-unavailable'
@@ -136,7 +146,11 @@ import {
   getMeasurementSystem,
 } from '@/server/athlete/profile'
 import { getProviderConnectionStatus } from '@/server/provider/vault'
-import { getHealthTrendRows } from '@/server/health/history'
+import {
+  getHealthTrendRows,
+  getHealthPreferredTimezone,
+  getHealthSnapshot,
+} from '@/server/health/history'
 import { HealthSyncPanel } from '@/components/health/HealthSyncPanel'
 import { HealthHistoryPanel } from '@/components/health/HealthHistoryPanel'
 import { WeightHistorySection } from './health/weight-history-section'
@@ -221,6 +235,9 @@ describe('authenticated /app routes', () => {
     expect(settings.props.children.props.initial.profile.measurementSystem).toBe('METRIC')
     expect(getAthleteProfile).toHaveBeenCalledWith({ userId: 'user-a' })
     expect(getProviderConnectionStatus).toHaveBeenCalledWith({ userId: 'user-a' }, 'GARMIN')
+    expect(settings.props.children.props.garminImportPreferenceKey).toBe(
+      'running-coach:garmin-import-expanded:v1:user-a',
+    )
     expect(getProviderConnectionStatus).toHaveBeenCalledTimes(1)
     const health = await HealthPage()
     expect(health.type).toBe(AppShell)
@@ -275,13 +292,18 @@ describe('authenticated /app routes', () => {
     expect(getActivityHistory).not.toHaveBeenCalled()
   })
 
-  it('keeps the protected app shell and health heading during health loading', async () => {
+  it('keeps the protected app shell during loading and uses the Dashboard skeleton without reading metrics', async () => {
     getCurrentUser.mockResolvedValue({ id: 'user-a', role: 'USER', email: 'a@example.test' })
     const loading = await HealthLoading()
     expect(loading.type).toBe(AppShell)
-    const [header, indicator] = loading.props.children.props.children
-    expect(header.props.children.props.children[0].props.children).toBe('Health & Recovery')
-    expect(indicator.props.children.props.label).toBe('Loading health data…')
+    expect(loading.props.children.type).toBe(HealthSkeleton)
+    expect(getHealthTrendRows).not.toHaveBeenCalled()
+    expect(getAthleteSettings).not.toHaveBeenCalled()
+    const dashboardLoading = await DashboardLoading()
+    expect(dashboardLoading.type).toBe(AppShell)
+    expect(dashboardLoading.props.children.type).toBe(DashboardSkeleton)
+    expect(getDashboardActivityOverview).not.toHaveBeenCalled()
+    expect(getDashboardRecentActivities).not.toHaveBeenCalled()
   })
 
   it('restores a valid chart period and ignores an invalid cookie', async () => {
@@ -323,6 +345,46 @@ describe('authenticated /app routes', () => {
     getCurrentUser.mockResolvedValueOnce({ id: 'user-a', role: 'USER' }).mockResolvedValueOnce(null)
     expect((await DashboardPage()).type).toBe(AppShell)
     await expect(DashboardPage()).rejects.toThrow('Redirect to /sign-in?next=%2Fapp%2Fdashboard')
+  })
+
+  it('loads Dashboard reads for the session owner using the configured timezone before the browser fallback', async () => {
+    getCurrentUser.mockResolvedValueOnce({
+      id: 'admin-a',
+      role: 'ADMIN',
+      displayName: 'Test Runner',
+    })
+    vi.mocked(getHealthPreferredTimezone).mockResolvedValueOnce('Asia/Tokyo')
+    chartCookie.mockReturnValueOnce('America/New_York')
+    const page = await DashboardPage()
+    const content = page.props.children
+    expect(content.type).toBe(DashboardContent)
+    expect(content.props).toMatchObject({ timezone: 'Asia/Tokyo', name: 'Test Runner' })
+    expect(getDashboardActivityOverview).toHaveBeenLastCalledWith(
+      { userId: 'admin-a' },
+      'Asia/Tokyo',
+      expect.any(Date),
+    )
+    expect(getDashboardRecentActivities).toHaveBeenLastCalledWith(
+      { userId: 'admin-a' },
+      expect.any(Date),
+    )
+    expect(getHealthSnapshot).toHaveBeenLastCalledWith({ userId: 'admin-a' })
+  })
+
+  it('keeps Dashboard health and recent activities when training aggregates fail', async () => {
+    vi.mocked(getDashboardActivityOverview).mockRejectedValueOnce(new Error('unavailable'))
+    const page = await DashboardPage()
+    expect(page.props.children.props).toMatchObject({
+      overview: null,
+      recent: [],
+      health: expect.objectContaining({ restingHr: null }),
+    })
+  })
+
+  it('uses a valid saved browser timezone when the Dashboard profile timezone is invalid', async () => {
+    vi.mocked(getHealthPreferredTimezone).mockResolvedValueOnce('invalid')
+    chartCookie.mockReturnValueOnce('America/New_York')
+    expect((await DashboardPage()).props.children.props.timezone).toBe('America/New_York')
   })
 
   it('uses the current role and identity for each navigated page', async () => {

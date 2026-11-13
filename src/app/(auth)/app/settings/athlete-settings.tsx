@@ -55,11 +55,13 @@ export function AthleteSettingsRoute({
   registrationName,
   garminConnection,
   garminImports,
+  garminImportPreferenceKey,
 }: {
   initial: Settings
   registrationName: string | null
   garminConnection: ProviderConnectionStatus
   garminImports: GarminImportStreamState[]
+  garminImportPreferenceKey?: string
 }) {
   const router = useRouter()
   return (
@@ -68,6 +70,7 @@ export function AthleteSettingsRoute({
       registrationName={registrationName}
       garminConnection={garminConnection}
       garminImports={garminImports}
+      garminImportPreferenceKey={garminImportPreferenceKey}
       onProfileSaved={() => router.refresh()}
     />
   )
@@ -78,12 +81,14 @@ export function AthleteSettings({
   registrationName,
   garminConnection,
   garminImports,
+  garminImportPreferenceKey,
   onProfileSaved,
 }: {
   initial: Settings
   registrationName?: string | null
   garminConnection?: ProviderConnectionStatus
   garminImports?: GarminImportStreamState[]
+  garminImportPreferenceKey?: string
   onProfileSaved?: () => void
 }) {
   const { system, setSystem } = useMeasurementSystem()
@@ -453,7 +458,11 @@ export function AthleteSettings({
         </dl>
       </Card>
 
-      <ProviderCredentials initial={garminConnection} garminImports={garminImports} />
+      <ProviderCredentials
+        initial={garminConnection}
+        garminImports={garminImports}
+        garminImportPreferenceKey={garminImportPreferenceKey}
+      />
 
       <Dialog
         open={unsavedOpen}

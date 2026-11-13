@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
   run: vi.fn(),
   block: vi.fn(),
-  allowed: vi.fn(() => true),
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: () => true }))
@@ -17,7 +16,6 @@ vi.mock('./data-import', () => ({
   runGarminDataImport: mocks.run,
 }))
 vi.mock('./import-rate-limit', () => ({ getGarminImportBlock: mocks.block }))
-vi.mock('./sync-policy', () => ({ isGarminImportAllowed: mocks.allowed }))
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { getTrainingSyncState, runTrainingSync } from './training-sync'
 
@@ -55,6 +53,8 @@ const recent: GarminImportStreamState = {
   lastSyncAt: '2026-11-13T05:00:00Z',
 }
 beforeEach(() => {
+  vi.stubEnv('NODE_ENV', 'production')
+  vi.stubEnv('VERCEL_ENV', 'production')
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-11-13T06:00:00Z'))
   vi.clearAllMocks()
@@ -65,13 +65,15 @@ beforeEach(() => {
   )
   mocks.getState.mockResolvedValue([history])
   mocks.block.mockResolvedValue(null)
-  mocks.allowed.mockReturnValue(true)
   mocks.run.mockImplementation(async () => {
     mocks.getState.mockResolvedValue([{ ...history, recentSync: recent }])
     return [{ ...history, recentSync: recent }]
   })
 })
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
+})
 it('uses the completed Settings history to sync recent summaries rather than the old INITIAL backfill', async () => {
   expect((await getTrainingSyncState(owner)).status).toBe('IDLE')
   const state = await runTrainingSync(owner, 'Asia/Tokyo')
@@ -91,6 +93,31 @@ it('uses the completed Settings history to sync recent summaries rather than the
 it('does not expose another user connection or start a provider request for an admin', async () => {
   expect((await getTrainingSyncState(other)).status).toBe('NOT_CONNECTED')
   expect((await runTrainingSync(other, 'UTC')).status).toBe('NOT_CONNECTED')
+  expect(mocks.getState).not.toHaveBeenCalled()
+  expect(mocks.run).not.toHaveBeenCalled()
+})
+
+it('keeps a disconnected owner from starting hosted sync', async () => {
+  mocks.connection.mockResolvedValue({
+    status: 'DISCONNECTED',
+    externalAccountId: '123',
+    credential: null,
+  })
+  expect((await runTrainingSync(owner, 'UTC')).status).toBe('NOT_CONNECTED')
+  expect(mocks.getState).not.toHaveBeenCalled()
+  expect(mocks.run).not.toHaveBeenCalled()
+})
+
+it('requires a replacement key for an invalid hosted connection', async () => {
+  mocks.connection.mockResolvedValue({
+    status: 'ERROR',
+    externalAccountId: '123',
+    credential: { connectionId: 'c' },
+  })
+  expect(await runTrainingSync(owner, 'UTC')).toMatchObject({
+    status: 'ACTION_REQUIRED',
+    errorCode: 'INVALID_KEY',
+  })
   expect(mocks.getState).not.toHaveBeenCalled()
   expect(mocks.run).not.toHaveBeenCalled()
 })

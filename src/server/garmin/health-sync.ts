@@ -19,7 +19,6 @@ import {
   type GarminHealthSession,
 } from './health-import'
 import { getGarminProviderPauseUntil } from './import-rate-limit'
-import { isGarminImportAllowed } from './sync-policy'
 import { claimGarminProviderLease, releaseGarminProviderLease } from './provider-lease'
 
 const LEASE_MS = 100_000
@@ -63,7 +62,7 @@ const checkpointSchema = z
 type Checkpoint = z.infer<typeof checkpointSchema>
 
 export class GarminHealthSyncUnavailableError extends Error {
-  constructor(readonly code: 'NOT_CONNECTED' | 'APPROVAL_REQUIRED' | 'BUSY' | 'PAUSED') {
+  constructor(readonly code: 'NOT_CONNECTED' | 'BUSY' | 'PAUSED') {
     super('Garmin health sync unavailable')
   }
 }
@@ -86,7 +85,6 @@ const knownSyncErrorCodes = new Set([
   'INVALID_CHECKPOINT',
   'INVALID_DATE',
   'INTERRUPTED',
-  'APPROVAL_REQUIRED',
   'BUSY',
   'PAUSED',
   'UNAVAILABLE',
@@ -334,21 +332,17 @@ export async function getGarminHealthSyncState(
       sleepRetryDates: [],
       sleepFailedDates: [],
     }
-  const importAllowed = isGarminImportAllowed()
   if (!connection.externalAccountId)
     return {
-      status: importAllowed ? 'ACTION_REQUIRED' : 'UNAVAILABLE',
+      status: 'ACTION_REQUIRED',
       lastAttemptAt: null,
       lastSuccessAt: null,
       nextAttemptAt: null,
       window: null,
       nextDate: null,
       processed: 0,
-      errorCode: !importAllowed
-        ? null
-        : connection.status === 'CONNECTED'
-          ? 'ACCOUNT_VERIFICATION_REQUIRED'
-          : 'INVALID_KEY',
+      errorCode:
+        connection.status === 'CONNECTED' ? 'ACCOUNT_VERIFICATION_REQUIRED' : 'INVALID_KEY',
       sleepRetryDates: [],
       sleepFailedDates: [],
     }
@@ -396,13 +390,12 @@ export async function getGarminHealthSyncState(
         sleepFailedDates.push(checkpoint.nextDate)
     }
   }
-  const status: GarminSyncState['status'] = !importAllowed
-    ? 'UNAVAILABLE'
-    : connection.status === 'ERROR' ||
-        connection.status === 'EXPIRED' ||
-        currentRun?.errorCode === 'NOT_CONNECTED' ||
-        currentRun?.errorCode === 'ACCOUNT_MISMATCH' ||
-        currentRun?.errorCode === 'ACCOUNT_UNVERIFIABLE'
+  const status: GarminSyncState['status'] =
+    connection.status === 'ERROR' ||
+    connection.status === 'EXPIRED' ||
+    currentRun?.errorCode === 'NOT_CONNECTED' ||
+    currentRun?.errorCode === 'ACCOUNT_MISMATCH' ||
+    currentRun?.errorCode === 'ACCOUNT_UNVERIFIABLE'
       ? 'ACTION_REQUIRED'
       : providerPauseUntil && providerPauseUntil > observedAt
         ? 'PAUSED'
@@ -451,7 +444,6 @@ export async function runGarminHealthSync(
   dependencies: Dependencies = {},
 ): Promise<GarminSyncState> {
   const userId = ownerId(owner)
-  if (!isGarminImportAllowed()) throw new GarminHealthSyncUnavailableError('APPROVAL_REQUIRED')
   const now = dependencies.now ?? (() => new Date())
   const started = now()
   const prisma = await getPrismaClient()

@@ -29,7 +29,6 @@ import {
   getGarminProviderPauseUntil,
 } from './import-rate-limit'
 import { claimGarminProviderLease, releaseGarminProviderLease } from './provider-lease'
-import { isGarminImportAllowed } from './sync-policy'
 import { createGarminStreamCoordinator, processGarminStreamWork } from './stream-coordinator'
 
 import { GarminDataImportError } from './data-import-error'
@@ -454,7 +453,6 @@ async function runGarminHealthImport(
   options: HealthRunOptions,
   dependencies: Dependencies = {},
 ): Promise<GarminImportStreamState[]> {
-  if (!isGarminImportAllowed()) throw new GarminDataImportError('APPROVAL_REQUIRED')
   const userId = ownerId(owner)
   const prisma = await getPrismaClient()
   const connection = await prisma.integrationConnection.findUnique({

@@ -15,7 +15,6 @@ import { localDay } from './health-sync'
 import { allowGarminImport, getGarminImportBlock } from './import-rate-limit'
 import { claimGarminProviderLease, releaseGarminProviderLease } from './provider-lease'
 import { processGarminStreamWork } from './stream-coordinator'
-import { isGarminImportAllowed } from './sync-policy'
 
 export const ACTIVITY_HISTORY_CURSOR = 'GARMIN_IMPORT_ACTIVITIES'
 export const ACTIVITY_RECENT_CURSOR = 'GARMIN_IMPORT_ACTIVITIES_RECENT'
@@ -247,7 +246,6 @@ export async function runActivityHistory(
   options: { action: 'import' | 'resume' | 'retry' | 'reimport' | 'sync'; browserTimezone: string },
   dependencies: ActivityHistoryDependencies = {},
 ): Promise<void> {
-  if (!isGarminImportAllowed()) throw new GarminDataImportError('APPROVAL_REQUIRED')
   const userId = ownerId(owner)
   const prisma = await getPrismaClient()
   const connection = await prisma.integrationConnection.findUnique({

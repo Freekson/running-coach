@@ -2,7 +2,6 @@ export class GarminDataImportError extends Error {
   constructor(
     readonly code:
       | 'NOT_CONNECTED'
-      | 'APPROVAL_REQUIRED'
       | 'BUSY'
       | 'RATE_LIMITED'
       | 'INVALID_TIMEZONE'

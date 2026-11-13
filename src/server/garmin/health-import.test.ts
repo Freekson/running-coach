@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const {
   readProviderApiKeySnapshot,
@@ -44,13 +44,13 @@ vi.mock('./import-rate-limit', async (importOriginal) => ({
   pauseGarminProviderUntil,
   reserveGarminHealthAttempt,
 }))
-vi.mock('./sync-policy', () => ({ isGarminImportAllowed: () => true }))
 vi.mock('./account-identity', () => ({
   GarminAccountIdentityError: class GarminAccountIdentityError extends Error {},
   verifyGarminBearerAccount: vi.fn(async () => '123456'),
 }))
 
 import { getOwnerContext } from '@/server/authorization/ownership'
+import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 import { importGarminHealthDate } from './health-import'
 import { verifyGarminBearerAccount } from './account-identity'
 
@@ -62,10 +62,34 @@ const owner = getOwnerContext({
 const now = new Date('2026-11-08T12:00:00.000Z')
 
 beforeEach(() => {
+  vi.stubEnv('NODE_ENV', 'production')
+  vi.stubEnv('VERCEL_ENV', 'production')
   vi.clearAllMocks()
   vi.mocked(verifyGarminBearerAccount).mockResolvedValue('123456')
   requestJson.mockReset()
   getHealthSourceCoverage.mockResolvedValue(null)
+})
+afterEach(() => vi.unstubAllEnvs())
+
+it('rejects disconnected credentials before contacting Garmin in production', async () => {
+  readProviderApiKeySnapshot.mockRejectedValueOnce(new CredentialUnavailableError())
+  await expect(importGarminHealthDate(owner, '2026-11-07', 'UTC', { now })).rejects.toMatchObject({
+    code: 'NOT_CONNECTED',
+  })
+  expect(requestJson).not.toHaveBeenCalled()
+  expect(saveGarminHealthObservation).not.toHaveBeenCalled()
+})
+
+it.each([
+  [401, 'NOT_CONNECTED'],
+  [503, 'UNAVAILABLE'],
+] as const)('handles token HTTP %i safely in production', async (status, code) => {
+  requestJson.mockResolvedValueOnce({ status, value: null })
+  await expect(importGarminHealthDate(owner, '2026-11-07', 'UTC', { now })).rejects.toMatchObject({
+    code,
+  })
+  expect(requestJson).toHaveBeenCalledOnce()
+  expect(saveGarminHealthObservation).not.toHaveBeenCalled()
 })
 
 it('rejects a changed Garmin account before persisting either health source', async () => {

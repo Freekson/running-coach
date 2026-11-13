@@ -6,7 +6,6 @@ import { getPrismaClient } from '@/server/db/client'
 import { getGarminImportState, runGarminDataImport } from './data-import'
 import { GarminDataImportError } from './data-import-error'
 import { getGarminImportBlock } from './import-rate-limit'
-import { isGarminImportAllowed } from './sync-policy'
 
 const empty: GarminSyncState = {
   status: 'IDLE',
@@ -92,7 +91,6 @@ async function readTrainingSync(owner: OwnerContext, now: Date): Promise<Trainin
   })
   if (!connection?.credential)
     return { state: { ...empty, status: 'NOT_CONNECTED' }, history: null }
-  if (!isGarminImportAllowed()) return { state: { ...empty, status: 'UNAVAILABLE' }, history: null }
   if (!connection.externalAccountId || connection.status !== 'CONNECTED')
     return {
       state: {
@@ -164,12 +162,7 @@ export async function runTrainingSync(
   const { state, history } = await readTrainingSync(owner, clock())
   if (state.status === 'PAUSED') return state
   if (state.status === 'SYNCING') throw new GarminDataImportError('BUSY')
-  if (
-    state.status === 'ACTION_REQUIRED' ||
-    state.status === 'NOT_CONNECTED' ||
-    state.status === 'UNAVAILABLE'
-  )
-    return state
+  if (state.status === 'ACTION_REQUIRED' || state.status === 'NOT_CONNECTED') return state
   const run = dependencies.runImport ?? runGarminDataImport
   const checkedAt = Date.parse(history?.recentSync?.lastSyncAt ?? '')
   // Resume a recently checked window before spending another request on the same summaries.

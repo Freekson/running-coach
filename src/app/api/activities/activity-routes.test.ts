@@ -150,25 +150,37 @@ describe('activity routes', () => {
     )
   })
 
-  it('keeps the older manual import route gated on hosted deployments', async () => {
-    vi.stubEnv('VERCEL_ENV', 'production')
-    vi.stubEnv('GARMIN_SHARED_SYNC_APPROVED', undefined)
-    const response = await importActivities(
-      new Request('https://coach.example.test/api/activities/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: '2026-11-08' }),
-      }),
-    )
-    expect(response.status).toBe(403)
-    expect(allowGarminImport).not.toHaveBeenCalled()
-    expect(importGarminActivitiesForDate).not.toHaveBeenCalled()
-  })
+  it.each(['preview', 'production'])(
+    'allows authenticated %s import with the shared quota and lease',
+    async (environment) => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('VERCEL_ENV', environment)
+      const response = await importActivities(
+        new Request('https://coach.example.test/api/activities/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: '2026-11-08' }),
+        }),
+      )
+      expect(response.status).toBe(200)
+      expect(allowGarminImport).toHaveBeenCalledWith({
+        userId: '00000000-0000-4000-8000-00000000000a',
+      })
+      expect(withGarminProviderLease).toHaveBeenCalledWith(
+        { userId: '00000000-0000-4000-8000-00000000000a' },
+        expect.any(Function),
+      )
+      expect(importGarminActivitiesForDate).toHaveBeenCalledWith(
+        { userId: '00000000-0000-4000-8000-00000000000a' },
+        '2026-11-08',
+        { start: undefined },
+      )
+    },
+  )
 
-  it('fails closed in production when the Vercel environment marker is missing', async () => {
+  it('does not require a Vercel environment marker for authenticated production import', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('VERCEL_ENV', undefined)
-    vi.stubEnv('GARMIN_SHARED_SYNC_APPROVED', undefined)
     const response = await importActivities(
       new Request('https://coach.example.test/api/activities/import', {
         method: 'POST',
@@ -176,8 +188,10 @@ describe('activity routes', () => {
         body: JSON.stringify({ date: '2026-11-08' }),
       }),
     )
-    expect(response.status).toBe(403)
-    expect(importGarminActivitiesForDate).not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    expect(allowGarminImport).toHaveBeenCalledOnce()
+    expect(withGarminProviderLease).toHaveBeenCalledOnce()
+    expect(importGarminActivitiesForDate).toHaveBeenCalledOnce()
   })
 
   it('rejects oversized import bodies before consuming the owner rate limit', async () => {

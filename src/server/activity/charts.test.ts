@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
 const mocks = vi.hoisted(() => ({
   db: {
@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   quota: vi.fn(),
   block: vi.fn(),
   assertCurrent: vi.fn(),
-  policy: vi.fn(),
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: () => true }))
@@ -27,7 +26,6 @@ vi.mock('@/server/garmin/provider-lease', () => ({
   withGarminProviderLease: mocks.lease,
   GarminProviderLeaseUnavailableError: class extends Error {},
 }))
-vi.mock('@/server/garmin/sync-policy', () => ({ isGarminImportAllowed: mocks.policy }))
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 import { GarminImportError } from '@/server/garmin/activity-import'
@@ -65,6 +63,8 @@ const session = {
 }
 const openSession = vi.fn()
 beforeEach(() => {
+  vi.stubEnv('NODE_ENV', 'production')
+  vi.stubEnv('VERCEL_ENV', 'production')
   vi.clearAllMocks()
   mocks.db.integrationConnection.findUnique.mockResolvedValue({
     externalAccountId: '79',
@@ -77,12 +77,12 @@ beforeEach(() => {
   )
   mocks.lease.mockImplementation((_owner: unknown, work: () => unknown) => work())
   mocks.quota.mockResolvedValue(true)
-  mocks.policy.mockReturnValue(true)
   openSession.mockResolvedValue(session)
   downloadFit.mockResolvedValue({ status: 200, bytes: recordsFit() })
   session.assertStatus.mockResolvedValue(undefined)
   mocks.assertCurrent.mockResolvedValue(undefined)
 })
+afterEach(() => vi.unstubAllEnvs())
 // Only the injected dependency signatures are narrowed here; provider work is never performed.
 function dependencies() {
   return { openSession: openSession, downloadFit }

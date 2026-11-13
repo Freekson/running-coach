@@ -12,7 +12,6 @@ import {
   getGarminProviderPauseUntil,
   pauseGarminProviderUntil,
 } from './import-rate-limit'
-import { isGarminImportAllowed } from './sync-policy'
 import { claimGarminProviderLease, releaseGarminProviderLease } from './provider-lease'
 
 const DAY_MS = 86_400_000
@@ -43,9 +42,7 @@ const checkpointSchema = z.strictObject({
 type Checkpoint = z.infer<typeof checkpointSchema>
 
 export class GarminSyncUnavailableError extends Error {
-  constructor(
-    readonly code: 'NOT_CONNECTED' | 'APPROVAL_REQUIRED' | 'BUSY' | 'PAUSED' | 'INVALID_EXTENSION',
-  ) {
+  constructor(readonly code: 'NOT_CONNECTED' | 'BUSY' | 'PAUSED' | 'INVALID_EXTENSION') {
     super('Garmin sync unavailable')
   }
 }
@@ -151,21 +148,17 @@ export async function getGarminSyncState(
       processed: 0,
       errorCode: null,
     }
-  const importAllowed = isGarminImportAllowed()
   if (!connection.externalAccountId)
     return {
-      status: importAllowed ? 'ACTION_REQUIRED' : 'UNAVAILABLE',
+      status: 'ACTION_REQUIRED',
       lastAttemptAt: null,
       lastSuccessAt: null,
       nextAttemptAt: null,
       window: null,
       nextDate: null,
       processed: 0,
-      errorCode: !importAllowed
-        ? null
-        : connection.status === 'CONNECTED'
-          ? 'ACCOUNT_VERIFICATION_REQUIRED'
-          : 'INVALID_KEY',
+      errorCode:
+        connection.status === 'CONNECTED' ? 'ACCOUNT_VERIFICATION_REQUIRED' : 'INVALID_KEY',
     }
   const [cursor, run, providerPauseUntil] = await Promise.all([
     prisma.syncCursor.findUnique({
@@ -183,9 +176,8 @@ export async function getGarminSyncState(
   const retryAt = [providerPauseUntil, cursor?.nextAttemptAt]
     .filter((value): value is Date => Boolean(value && value > observedAt))
     .sort((a, b) => b.getTime() - a.getTime())[0]
-  const status: GarminSyncState['status'] = !importAllowed
-    ? 'UNAVAILABLE'
-    : connection.status !== 'CONNECTED'
+  const status: GarminSyncState['status'] =
+    connection.status !== 'CONNECTED'
       ? 'ACTION_REQUIRED'
       : providerPauseUntil && providerPauseUntil > observedAt
         ? 'PAUSED'
@@ -236,7 +228,6 @@ export async function runGarminSync(
   dependencies: Dependencies = {},
 ): Promise<GarminSyncState> {
   const userId = ownerId(owner)
-  if (!isGarminImportAllowed()) throw new GarminSyncUnavailableError('APPROVAL_REQUIRED')
   const now = dependencies.now ?? (() => new Date())
   const maxPages = boundedSetting(process.env.GARMIN_SYNC_MAX_PAGES, 4, 1, 4)
   const runBudgetMs = boundedSetting(process.env.GARMIN_SYNC_RUN_BUDGET_MS, 20_000, 5_000, 20_000)

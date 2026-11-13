@@ -22,7 +22,12 @@ import {
   GarminHealthImportError,
   type GarminHealthSession,
 } from './health-import'
-import { healthZoneForDay, localDay } from './health-sync'
+import {
+  GarminHealthSyncUnavailableError,
+  healthZoneForDay,
+  localDay,
+  runGarminHealthSync,
+} from './health-sync'
 import {
   allowGarminImport,
   getGarminImportBlock,
@@ -769,8 +774,17 @@ const streamCoordinator = createGarminStreamCoordinator<
   [
     ...healthStreamIds.map((streamId) => ({
       streamId,
-      execute: (owner: OwnerContext, options: RunOptions, dependencies: Dependencies) => {
-        if (options.action === 'sync') throw new GarminDataImportError('NOT_READY')
+      execute: async (owner: OwnerContext, options: RunOptions, dependencies: Dependencies) => {
+        if (options.action === 'sync') {
+          try {
+            await runGarminHealthSync(owner, options.browserTimezone, dependencies, streamId)
+          } catch (error) {
+            if (error instanceof GarminHealthSyncUnavailableError)
+              throw new GarminDataImportError(error.code === 'PAUSED' ? 'RATE_LIMITED' : error.code)
+            throw error
+          }
+          return getGarminImportState(owner, dependencies.now?.())
+        }
         return runGarminHealthImport(owner, { ...options, streamId }, dependencies)
       },
     })),

@@ -1,6 +1,15 @@
 'use client'
 
-import { HeartPulse } from 'lucide-react'
+import {
+  ArrowRight,
+  BedDouble,
+  Heart,
+  HeartPulse,
+  Info,
+  MoonStar,
+  type LucideIcon,
+} from 'lucide-react'
+import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { SectionHeading } from '@/components/ui/SectionHeading'
 import type { HealthReading, HealthSnapshotData } from '@/lib/health-snapshot'
@@ -27,6 +36,8 @@ function Measurement({
   asOfInstant,
   checked,
   failedDate,
+  compact = false,
+  icon: Icon,
 }: {
   label: string
   reading: HealthReading | null
@@ -35,6 +46,8 @@ function Measurement({
   asOfInstant: string
   checked: boolean
   failedDate?: string | null
+  compact?: boolean
+  icon?: LucideIcon
 }) {
   const stale = reading
     ? Date.parse(`${localDay(asOfInstant, reading.timezone)}T12:00:00Z`) -
@@ -43,7 +56,10 @@ function Measurement({
     : false
   return (
     <div className={styles.measurement}>
-      <dt>{label}</dt>
+      <dt>
+        {Icon && <Icon size={20} strokeWidth={2} aria-hidden="true" focusable="false" />}
+        {label}
+      </dt>
       <dd>
         {reading
           ? `${format(reading.value)}${unit ? ` ${unit}` : ''}`
@@ -53,16 +69,19 @@ function Measurement({
               ? 'No data'
               : 'Not checked yet'}
       </dd>
-      <p>
-        {reading
-          ? `${reading.date} · Garmin${stale ? ' · Older reading' : ''}`
-          : failedDate
-            ? `Garmin could not check ${failedDate}; retry the saved sync`
-            : checked
-              ? 'No verified measurement available'
-              : 'Sync health data to check'}
-      </p>
-      {reading && <p>Date timezone: {reading.timezone} (inferred)</p>}
+      {!compact && (
+        <p>
+          {reading
+            ? `${reading.date} · Garmin${stale ? ' · Older reading' : ''}`
+            : failedDate
+              ? `Garmin could not check ${failedDate}; retry the saved sync`
+              : checked
+                ? 'No verified measurement available'
+                : 'Sync health data to check'}
+        </p>
+      )}
+      {compact && stale && <p>Older reading</p>}
+      {!compact && reading && <p>Date timezone: {reading.timezone} (inferred)</p>}
     </div>
   )
 }
@@ -72,31 +91,39 @@ export function HealthSnapshot({
   data,
   asOfInstant,
   failedSleepDate,
+  variant = 'default',
 }: {
   data: HealthSnapshotData
   asOfInstant: string
   failedSleepDate?: string | null
+  variant?: 'default' | 'compact'
 }) {
   const clientReady = useClientReady()
   return (
-    <Card as="section" className={styles.card} aria-labelledby="health-snapshot-heading">
+    <Card
+      as="section"
+      className={`${styles.card} ${variant === 'compact' ? styles.compact : ''}`}
+      aria-labelledby="health-snapshot-heading"
+    >
       <SectionHeading
-        icon={HeartPulse}
+        icon={variant === 'compact' ? Heart : HeartPulse}
         id="health-snapshot-heading"
-        title="Latest health measurements"
-        subtitle="Garmin daily health data"
+        title={variant === 'compact' ? 'Health snapshot' : 'Latest health measurements'}
+        subtitle={variant === 'compact' ? 'Latest available' : 'Garmin daily health data'}
       />
       <dl className={styles.grid}>
         <Measurement
-          label="Resting heart rate"
+          label={variant === 'compact' ? 'Resting HR' : 'Resting heart rate'}
           reading={data.restingHr}
           unit="bpm"
           format={(value) => String(value)}
           asOfInstant={asOfInstant}
           checked={data.restingHrChecked}
+          compact={variant === 'compact'}
+          icon={variant === 'compact' ? HeartPulse : undefined}
         />
         <Measurement
-          label="Sleep duration"
+          label={variant === 'compact' ? 'Sleep' : 'Sleep duration'}
           reading={data.sleep}
           unit=""
           format={(value) => {
@@ -106,13 +133,41 @@ export function HealthSnapshot({
           asOfInstant={asOfInstant}
           checked={data.sleepChecked}
           failedDate={failedSleepDate}
+          compact={variant === 'compact'}
+          icon={variant === 'compact' ? BedDouble : undefined}
         />
+        {variant === 'compact' && (
+          <Measurement
+            label="Sleep Score"
+            reading={data.sleepScore ?? null}
+            unit="/100"
+            format={String}
+            asOfInstant={asOfInstant}
+            checked={data.sleepChecked}
+            compact
+            icon={MoonStar}
+          />
+        )}
       </dl>
-      <p className={styles.note}>
-        {data.lastUpdatedAt
-          ? `Last Garmin health check: ${clientReady ? (formatLocalDateTime(data.lastUpdatedAt) ?? 'Time unavailable') : 'Loading local time…'}`
-          : 'No Garmin health check yet.'}
-      </p>
+      {variant !== 'compact' && (
+        <p className={styles.note}>
+          {data.lastUpdatedAt
+            ? `Last Garmin health check: ${clientReady ? (formatLocalDateTime(data.lastUpdatedAt) ?? 'Time unavailable') : 'Loading local time…'}`
+            : 'No Garmin health check yet.'}
+        </p>
+      )}
+      {variant === 'compact' && (
+        <footer className={styles.footer}>
+          <p>
+            <Info size={20} strokeWidth={2} aria-hidden="true" focusable="false" />
+            Latest health metrics from Garmin. View full trends in Health.
+          </p>
+          <Link href="/app/health">
+            Open Health{' '}
+            <ArrowRight size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+          </Link>
+        </footer>
+      )}
     </Card>
   )
 }

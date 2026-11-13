@@ -10,9 +10,11 @@ vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: () => true
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
 import { readProviderApiKeySnapshot, saveProviderApiKey } from '@/server/provider/vault'
-import { importGarminHealthDate } from './health-import'
+import { GarminHealthImportError, importGarminHealthDate } from './health-import'
 import { getGarminHealthSyncState, healthZoneForDay, runGarminHealthSync } from './health-sync'
 import { runGarminSync } from './sync'
+import { historicalWindow } from './data-import'
+import { getGarminIncrementalSyncState } from './incremental-sync'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
 if (requested) config()
@@ -31,6 +33,81 @@ describe.skipIf(!enabled)('Garmin health sync on isolated PostgreSQL', () => {
   let other: ReturnType<typeof getOwnerContext>
   const prefix = `run25-health-sync-${randomUUID()}`
   const now = new Date('2026-11-08T15:30:00.000Z')
+  it('keeps incremental health checkpoints, failures and coverage independent without changing initial history', async () => {
+    const user = await prisma.user.create({ data: { authSubject: `${prefix}-independent-health` } })
+    const testOwner = getOwnerContext({ id: user.id, role: 'USER', email: null })
+    await saveProviderApiKey(testOwner, 'GARMIN', 'synthetic-independent-health-key', {
+      verifiedGarminAccountId: testGarminAccountId(testOwner),
+    })
+    const connection = await prisma.integrationConnection.findUniqueOrThrow({
+      where: { userId_provider: { userId: user.id, provider: 'GARMIN' } },
+    })
+    const checkpoint = { ...historicalWindow('2026-11-09', 'UTC'), nextDate: null }
+    for (const stream of ['DAILY_SUMMARY', 'SLEEP'])
+      await prisma.syncCursor.create({
+        data: {
+          userId: user.id,
+          connectionId: connection.id,
+          dataType: `GARMIN_IMPORT_${stream}`,
+          cursorOrCheckpoint: checkpoint,
+        },
+      })
+    const importDay = vi.fn<typeof importGarminHealthDate>(
+      async (_owner, date, timezone, options) => {
+        if (options?.sources === 'SLEEP_ONLY') throw new GarminHealthImportError('SLEEP_TIMEOUT')
+        return { status: 'SUMMARY_ONLY', date, sourceTimezone: timezone }
+      },
+    )
+    const dependencies = {
+      now: () => now,
+      importDay,
+      zoneForDay: async () => ({ summary: 'UTC', sleep: 'UTC' }),
+    }
+    expect(
+      (await runGarminHealthSync(testOwner, 'UTC', dependencies, 'daily_summary')).status,
+    ).toBe('SUCCESS')
+    const dailyCursor = await prisma.syncCursor.findUniqueOrThrow({
+      where: {
+        connectionId_dataType: {
+          connectionId: connection.id,
+          dataType: 'GARMIN_HEALTH_RECENT_DAILY_SUMMARY',
+        },
+      },
+    })
+    expect(dailyCursor.cursorOrCheckpoint).toMatchObject({ nextDate: null, sleepRetryDates: [] })
+    expect((await runGarminHealthSync(testOwner, 'UTC', dependencies, 'sleep')).status).toBe(
+      'PAUSED',
+    )
+    expect(
+      importDay.mock.calls.every(
+        (call) => call[3]?.sources === 'SUMMARY_ONLY' || call[3]?.sources === 'SLEEP_ONLY',
+      ),
+    ).toBe(true)
+    expect(await prisma.syncCursor.findUniqueOrThrow({ where: { id: dailyCursor.id } })).toEqual(
+      dailyCursor,
+    )
+    const sleepCursor = await prisma.syncCursor.findUniqueOrThrow({
+      where: {
+        connectionId_dataType: {
+          connectionId: connection.id,
+          dataType: 'GARMIN_HEALTH_RECENT_SLEEP',
+        },
+      },
+    })
+    expect(sleepCursor.consecutiveFailures).toBe(1)
+    expect(sleepCursor.nextAttemptAt).not.toBeNull()
+    const initial = await prisma.syncCursor.findMany({
+      where: {
+        userId: user.id,
+        dataType: { in: ['GARMIN_IMPORT_DAILY_SUMMARY', 'GARMIN_IMPORT_SLEEP'] },
+      },
+    })
+    for (const cursor of initial) expect(cursor.cursorOrCheckpoint).toEqual(checkpoint)
+    expect(
+      (await getGarminIncrementalSyncState(testOwner, now)).streams.map((stream) => stream.status),
+    ).toEqual(['skipped', 'completed', 'failed'])
+    expect((await getGarminIncrementalSyncState(other, now)).connection).toBe('disconnected')
+  })
   const successfulDay = async (
     owner: typeof other,
     date: string,

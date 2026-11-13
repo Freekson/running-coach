@@ -20,6 +20,34 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const NoData: Story = {}
+export const DashboardPreview: Story = {
+  args: {
+    variant: 'compact',
+    data: {
+      restingHr: {
+        value: 52,
+        date: '2026-11-07',
+        timezone: 'UTC',
+        fetchedAt: '2026-11-08T08:00:00.000Z',
+      },
+      sleep: {
+        value: 25_200_000,
+        date: '2026-11-08',
+        timezone: 'UTC',
+        fetchedAt: '2026-11-08T08:00:00.000Z',
+      },
+      sleepScore: {
+        value: 83,
+        date: '2026-11-08',
+        timezone: 'UTC',
+        fetchedAt: '2026-11-08T08:00:00.000Z',
+      },
+      restingHrChecked: true,
+      sleepChecked: true,
+      lastUpdatedAt: '2026-11-08T08:00:00.000Z',
+    },
+  },
+}
 
 export const DatedMeasurements: Story = {
   args: {

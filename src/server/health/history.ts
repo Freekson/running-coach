@@ -169,7 +169,7 @@ export async function getHealthSnapshot(owner: OwnerContext): Promise<HealthSnap
       lastUpdatedAt: null,
     }
   const prisma = await getPrismaClient()
-  const [hr, sleep, lastSummary, lastSleep] = await Promise.all([
+  const [hr, sleep, sleepScore, lastSummary, lastSleep] = await Promise.all([
     prisma.dailyHealthMetric.findFirst({
       where: {
         userId,
@@ -186,6 +186,16 @@ export async function getHealthSnapshot(owner: OwnerContext): Promise<HealthSnap
         sourceProvider: 'GARMIN',
         garminAccountId,
         sleepDurationMs: { not: null },
+        sleepFetchedAt: { not: null },
+      },
+      orderBy: { localDate: 'desc' },
+    }),
+    prisma.dailyHealthMetric.findFirst({
+      where: {
+        userId,
+        sourceProvider: 'GARMIN',
+        garminAccountId,
+        sleepScore: { not: null },
         sleepFetchedAt: { not: null },
       },
       orderBy: { localDate: 'desc' },
@@ -222,6 +232,15 @@ export async function getHealthSnapshot(owner: OwnerContext): Promise<HealthSnap
             date: sleep.localDate.toISOString().slice(0, 10),
             timezone: sleep.sleepSourceTimezone ?? sleep.sourceTimezone,
             fetchedAt: sleep.sleepFetchedAt.toISOString(),
+          },
+    sleepScore:
+      sleepScore?.sleepScore == null || !sleepScore.sleepFetchedAt
+        ? null
+        : {
+            value: sleepScore.sleepScore,
+            date: sleepScore.localDate.toISOString().slice(0, 10),
+            timezone: sleepScore.sleepSourceTimezone ?? sleepScore.sourceTimezone,
+            fetchedAt: sleepScore.sleepFetchedAt.toISOString(),
           },
     restingHrChecked: Boolean(lastSummary?.summaryFetchedAt),
     sleepChecked: Boolean(lastSleep?.sleepFetchedAt),

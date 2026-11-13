@@ -11,6 +11,35 @@ const empty: HealthSnapshotData = {
   lastUpdatedAt: null,
 }
 
+it('renders the compact dashboard preview with verified sleep score and an Open Health link', () => {
+  const markup = renderToStaticMarkup(
+    <HealthSnapshot
+      variant="compact"
+      data={{
+        ...empty,
+        sleepChecked: true,
+        sleepScore: {
+          value: 83,
+          date: '2026-11-07',
+          timezone: 'UTC',
+          fetchedAt: '2026-11-08T08:00:00Z',
+        },
+      }}
+      asOfInstant="2026-11-08T12:00:00Z"
+    />,
+  )
+  expect(markup).toContain('Health snapshot')
+  expect(markup).toContain('Resting HR')
+  expect(markup).toContain('83 /100')
+  expect(markup).not.toContain('2026-11-07')
+  expect(markup).not.toContain('Date timezone')
+  expect(markup).not.toContain('Last Garmin health check')
+  expect(markup).toContain('lucide-heart-pulse')
+  expect(markup).toContain('lucide-bed-double')
+  expect(markup).toContain('lucide-moon-star')
+  expect(markup).toContain('href="/app/health"')
+})
+
 function render(data: HealthSnapshotData, asOfInstant = '2026-11-08T12:00:00.000Z') {
   return renderToStaticMarkup(<HealthSnapshot data={data} asOfInstant={asOfInstant} />)
 }

@@ -6,7 +6,11 @@ vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: () => true }))
 import { getPrismaClient } from '@/server/db/client'
 import { getOwnerContext } from '@/server/authorization/ownership'
-import { getActivityHistory } from './history'
+import {
+  getActivityHistory,
+  getDashboardActivityOverview,
+  getDashboardRecentActivities,
+} from './history'
 import { getActivityDetail } from './detail'
 import { disconnectProvider, saveProviderApiKey } from '@/server/provider/vault'
 
@@ -107,6 +111,36 @@ describe.skipIf(!enabled)('activity history on isolated PostgreSQL', () => {
     expect(oldest.items.map((row) => row.id)).toEqual(
       [...first.items, ...second.items, ...third.items].map((row) => row.id).reverse(),
     )
+  })
+
+  it('scopes Dashboard summaries to their owner and excludes both unresolved duplicate candidates', async () => {
+    const now = new Date('2026-11-13T06:00:00Z')
+    const candidates = await prisma.activity.findMany({
+      where: { userId: owner.userId, sportType: 'RUNNING' },
+      take: 2,
+      orderBy: { id: 'asc' },
+    })
+    const first = candidates[0]
+    const second = candidates[1]
+    const before = await getDashboardActivityOverview(owner, 'Asia/Tokyo', now)
+    expect(before.weeks[7].sessions).toBe(16)
+    await prisma.activityDuplicateCandidate.create({
+      data: { userId: owner.userId, firstActivityId: first.id, secondActivityId: second.id },
+    })
+    try {
+      const after = await getDashboardActivityOverview(owner, 'Asia/Tokyo', now)
+      expect(after.weeks[7].sessions).toBe(14)
+      const otherOverview = await getDashboardActivityOverview(other, 'Asia/Tokyo', now)
+      expect(otherOverview.weeks.every((week) => week.sessions === 0)).toBe(true)
+      const recent = await getDashboardRecentActivities(owner, now)
+      expect(recent).toHaveLength(3)
+      expect(recent.every((row) => ![first.id, second.id].includes(row.id))).toBe(true)
+      expect(recent.every((row) => row.title !== 'Other athlete secret')).toBe(true)
+    } finally {
+      await prisma.activityDuplicateCandidate.deleteMany({
+        where: { userId: owner.userId, firstActivityId: first.id, secondActivityId: second.id },
+      })
+    }
   })
   it('composes literal title, sport, provider, local dates, distance and HR filters', async () => {
     const result = await getActivityHistory(owner, {

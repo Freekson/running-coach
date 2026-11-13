@@ -5,19 +5,28 @@ const {
   getCurrentUser,
   getGarminSyncState,
   runGarminSync,
+  runLegacySync,
   isVerifiedCurrentUser,
   allowGarminImport,
   verifySavedGarminAccount,
+  getGarminImportBlock,
 } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   getGarminSyncState: vi.fn<
-    (owner: OwnerContext) => Promise<{ status: string; errorCode?: string | null }>
+    (
+      owner: OwnerContext,
+    ) => Promise<{ status: string; errorCode?: string | null; nextAttemptAt?: string | null }>
   >(async () => ({ status: 'IDLE' })),
   runGarminSync: vi.fn<(owner: OwnerContext) => Promise<{ status: string }>>(async () => ({
     status: 'PARTIAL',
   })),
+  runLegacySync: vi.fn(async () => ({ status: 'PARTIAL' })),
   isVerifiedCurrentUser: vi.fn(() => true),
   allowGarminImport: vi.fn(async () => true),
+  getGarminImportBlock: vi.fn(
+    async (): Promise<{ code: 'APP_RATE_LIMITED' | 'PROVIDER_PAUSED'; retryAt: Date } | null> =>
+      null,
+  ),
   verifySavedGarminAccount: vi.fn<(owner: OwnerContext) => Promise<void>>(async () => {}),
 }))
 vi.mock('server-only', () => ({}))
@@ -27,12 +36,15 @@ vi.mock('@/server/auth/current-user', () => ({
   AccountUnavailableError: class extends Error {},
 }))
 vi.mock('@/server/garmin/sync', () => ({
-  getGarminSyncState,
-  runGarminSync,
+  runGarminSync: runLegacySync,
   GarminSyncUnavailableError: class extends Error {},
 }))
+vi.mock('@/server/garmin/training-sync', () => ({
+  getTrainingSyncState: getGarminSyncState,
+  runTrainingSync: runGarminSync,
+}))
 vi.mock('@/server/db/client', () => ({ getPrismaClient: vi.fn() }))
-vi.mock('@/server/garmin/import-rate-limit', () => ({ allowGarminImport }))
+vi.mock('@/server/garmin/import-rate-limit', () => ({ allowGarminImport, getGarminImportBlock }))
 vi.mock('@/server/garmin/account-identity', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/garmin/account-identity')>()),
   verifySavedGarminAccount,
@@ -85,16 +97,66 @@ describe('Garmin sync route authorization', () => {
     )
   })
 
+  it('uses recent Training sync with the browser timezone and leaves quota reservation to its streams', async () => {
+    const response = await POST(post(undefined, JSON.stringify({ browserTimezone: 'Asia/Tokyo' })))
+    expect(response.status).toBe(200)
+    expect(runGarminSync).toHaveBeenCalledWith(expect.anything(), 'Asia/Tokyo')
+    expect(allowGarminImport).not.toHaveBeenCalled()
+    expect(runLegacySync).not.toHaveBeenCalled()
+  })
+
+  it('retains explicit legacy extension requests without using them for ordinary Sync now', async () => {
+    expect((await POST(post(undefined, JSON.stringify({ extendDays: 7 })))).status).toBe(200)
+    expect(runLegacySync).toHaveBeenCalledWith(expect.anything(), { extendDays: 7 })
+    expect(runGarminSync).not.toHaveBeenCalled()
+  })
+
   it('does not verify a saved key while the shared request limit is active', async () => {
+    getGarminSyncState.mockResolvedValueOnce({
+      status: 'ACTION_REQUIRED',
+      errorCode: 'ACCOUNT_VERIFICATION_REQUIRED',
+    })
     allowGarminImport.mockResolvedValueOnce(false)
     expect((await POST(post())).status).toBe(429)
     expect(verifySavedGarminAccount).not.toHaveBeenCalled()
     expect(runGarminSync).not.toHaveBeenCalled()
   })
 
+  it('returns an active sync backoff without consuming another shared attempt', async () => {
+    const state = {
+      status: 'PAUSED',
+      errorCode: 'INVALID_RESPONSE',
+      nextAttemptAt: new Date(Date.now() + 60_000).toISOString(),
+    }
+    getGarminSyncState.mockResolvedValueOnce(state)
+    const response = await POST(post())
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(state)
+    expect(allowGarminImport).not.toHaveBeenCalled()
+    expect(runGarminSync).not.toHaveBeenCalled()
+  })
+
+  it('reports the app request limit and exact retry time with Retry-After', async () => {
+    const retryAt = new Date(Date.now() + 60_000)
+    allowGarminImport.mockResolvedValueOnce(false)
+    getGarminSyncState.mockResolvedValueOnce({
+      status: 'ACTION_REQUIRED',
+      errorCode: 'ACCOUNT_VERIFICATION_REQUIRED',
+    })
+    getGarminImportBlock.mockResolvedValueOnce({ code: 'APP_RATE_LIMITED', retryAt })
+    const response = await POST(post())
+    expect(response.status).toBe(429)
+    expect(await response.json()).toEqual({
+      code: 'APP_RATE_LIMITED',
+      retryAt: retryAt.toISOString(),
+    })
+    expect(Number(response.headers.get('Retry-After'))).toBeGreaterThan(0)
+    expect(runGarminSync).not.toHaveBeenCalled()
+  })
+
   it('rejects oversized or invalid extension requests', async () => {
     expect((await POST(post(undefined, JSON.stringify({ extendDays: 29 })))).status).toBe(400)
-    expect((await POST(post(undefined, 'x'.repeat(129)))).status).toBe(413)
+    expect((await POST(post(undefined, 'x'.repeat(257)))).status).toBe(413)
     expect(runGarminSync).not.toHaveBeenCalled()
   })
 })

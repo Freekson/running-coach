@@ -22,6 +22,7 @@
   --color-sleep-light: #88bdb0;
   --color-sleep-rem: #a29ccc;
   --color-sleep-awake: #c4a073;
+  --shadow-overlay: 0 4px 12px rgb(0 0 0 / 18%);
   --icon-gap: 8px;
   --control-height: 40px;
   --control-height-compact: 36px;

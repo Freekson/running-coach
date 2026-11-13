@@ -60,7 +60,7 @@
   border-radius: 12px;
   background: var(--color-surface-raised);
   color: var(--color-text);
-  box-shadow: 0 16px 32px color-mix(in srgb, var(--color-bg) 70%, transparent);
+  box-shadow: var(--shadow-overlay);
 }
 .options::-webkit-scrollbar {
   display: none;

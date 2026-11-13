@@ -13,7 +13,24 @@ import { useClientReady } from '@/lib/use-client-ready'
 import styles from './activity-sync-panel.module.scss'
 
 const endpoint = '/api/integrations/garmin/sync'
-const syncErrorSchema = z.object({ code: z.string() })
+const syncErrorSchema = z.object({
+  code: z.string(),
+  retryAt: z.iso.datetime().nullable().optional(),
+})
+
+function pauseReason(code: string | null): string {
+  if (code === 'RATE_LIMITED' || code === 'PROVIDER_PAUSED')
+    return 'Garmin asked us to pause activity requests.'
+  if (code === 'APP_RATE_LIMITED') return 'Too many Garmin sync requests in one minute.'
+  if (code === 'TIMEOUT') return 'The activity request timed out.'
+  if (code === 'NETWORK_ERROR') return 'Garmin could not be reached.'
+  if (code === 'INVALID_RESPONSE' || code === 'INVALID_CHECKPOINT')
+    return 'Activity sync could not validate the saved or received data.'
+  return 'Activity sync is waiting before retrying.'
+}
+function retryMessage(code: string | null, retryAt: string | null, ready: boolean) {
+  return `${pauseReason(code)}${retryAt && Number.isFinite(Date.parse(retryAt)) ? ` Retry after ${ready ? (formatLocalDateTime(retryAt) ?? 'the retry time') : 'the retry time'}.` : ' Try again later.'}`
+}
 
 function syncFailureMessage(status: number, code: string | null): string {
   const accountIssue = garminAccountIssueMessage(code)
@@ -48,7 +65,20 @@ export function ActivitySyncPanel({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const [refreshTick, setRefreshTick] = useState(0)
-  const [observedAt] = useState(() => Date.now())
+  const [observedAt, setObservedAt] = useState(() => Date.now())
+  const retryAt = state.nextAttemptAt ? Date.parse(state.nextAttemptAt) : NaN
+  const paused = state.status === 'PAUSED' && (!Number.isFinite(retryAt) || retryAt > observedAt)
+  useEffect(() => {
+    if (state.status !== 'PAUSED' || !Number.isFinite(retryAt) || retryAt <= observedAt) return
+    const timer = window.setTimeout(
+      () => {
+        setObservedAt(Date.now())
+        if (Date.now() >= retryAt) setError('')
+      },
+      Math.min(60_000, Math.max(1, retryAt - Date.now() + 50)),
+    )
+    return () => window.clearTimeout(timer)
+  }, [state.status, retryAt, observedAt])
 
   useEffect(() => {
     if (state.status !== 'SYNCING' && state.status !== 'PAUSED') return
@@ -83,48 +113,71 @@ export function ActivitySyncPanel({
   }, [state.status, state.nextAttemptAt, initial, refreshTick, refresh])
 
   async function sync() {
-    if (pending) return
+    if (pending || paused || state.status === 'SYNCING') return
     setPending(true)
     setError('')
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        cache: 'no-store',
-        body: '{}',
-      })
-      if (!response.ok) {
-        let code: string | null = null
-        try {
-          const parsed = syncErrorSchema.safeParse(await response.json())
-          if (parsed.success) code = parsed.data.code
-        } catch {
-          // Failed responses may have no JSON body.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          cache: 'no-store',
+          body: JSON.stringify({
+            browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          }),
+        })
+        if (!response.ok) {
+          let code: string | null = null
+          let retryAt: string | null = null
+          try {
+            const parsed = syncErrorSchema.safeParse(await response.json())
+            if (parsed.success) {
+              code = parsed.data.code
+              retryAt = parsed.data.retryAt ?? null
+            }
+          } catch {
+            // Failed responses may have no JSON body.
+          }
+          const message =
+            response.status === 429
+              ? retryMessage(code, retryAt, clientReady)
+              : syncFailureMessage(response.status, code)
+          if (response.status === 429 && retryAt)
+            setOverride({
+              initial,
+              value: { ...state, status: 'PAUSED', nextAttemptAt: retryAt, errorCode: code },
+            })
+          setError(message)
+          toast(response.status === 429 ? 'warning' : 'error', message, 'garmin-activity-sync')
+          return
         }
-        const message = syncFailureMessage(response.status, code)
-        setError(message)
-        toast('error', message, 'garmin-activity-sync')
-        return
+        const parsed = garminSyncStateSchema.safeParse(await response.json())
+        if (!parsed.success) throw new Error('Invalid sync response')
+        const next = parsed.data
+        setOverride({ initial, value: next })
+        refresh()
+        if (next.status === 'PARTIAL' && next.nextDate !== null && attempt === 0) continue
+        if (next.status === 'SUCCESS')
+          toast('success', 'Garmin activities are up to date.', 'garmin-activity-sync')
+        else if (next.status === 'PARTIAL')
+          toast('info', 'Activity sync progress was saved.', 'garmin-activity-sync')
+        else if (next.status === 'PAUSED')
+          toast(
+            'warning',
+            retryMessage(next.errorCode, next.nextAttemptAt, clientReady),
+            'garmin-activity-sync',
+          )
+        else if (next.status === 'ACTION_REQUIRED')
+          toast(
+            'error',
+            garminAccountIssueMessage(next.errorCode) ??
+              'Check your Garmin connection in Settings.',
+            'garmin-activity-sync',
+          )
+        else toast('error', 'Activity sync stopped before finishing.', 'garmin-activity-sync')
+        break
       }
-      const parsed = garminSyncStateSchema.safeParse(await response.json())
-      if (!parsed.success) throw new Error('Invalid sync response')
-      const next = parsed.data
-      setOverride({ initial, value: next })
-      refresh()
-      if (next.status === 'SUCCESS')
-        toast('success', 'Garmin activities are up to date.', 'garmin-activity-sync')
-      else if (next.status === 'PARTIAL')
-        toast('info', 'Activity sync progress was saved.', 'garmin-activity-sync')
-      else if (next.status === 'PAUSED')
-        toast('warning', 'Garmin activity sync is paused.', 'garmin-activity-sync')
-      else if (next.status === 'ACTION_REQUIRED')
-        toast(
-          'error',
-          garminAccountIssueMessage(next.errorCode) ?? 'Check your Garmin connection in Settings.',
-          'garmin-activity-sync',
-        )
-      else toast('error', 'Activity sync stopped before finishing.', 'garmin-activity-sync')
     } catch {
       const message = 'Activity sync could not finish. Try again later.'
       setError(message)
@@ -164,7 +217,7 @@ export function ActivitySyncPanel({
           <Button
             variant="secondary"
             onClick={() => void sync()}
-            disabled={pending || state.status === 'SYNCING' || state.status === 'PAUSED'}
+            disabled={pending || state.status === 'SYNCING' || paused}
           >
             <RefreshCw
               size={18}
@@ -182,8 +235,12 @@ export function ActivitySyncPanel({
       {!pending && state.status === 'SYNCING' && (
         <p role="status">An activity sync is already running.</p>
       )}
-      {!pending && state.status === 'PAUSED' && (
-        <p role="status">Garmin asked us to pause. Sync will be available after the retry time.</p>
+      {!pending && !error && state.status === 'PAUSED' && (
+        <p role="status">
+          {paused
+            ? retryMessage(state.errorCode, state.nextAttemptAt, clientReady)
+            : 'You can retry activity sync now.'}
+        </p>
       )}
       {!pending && !error && (state.status === 'ERROR' || state.status === 'PARTIAL_FAILURE') && (
         <p role="status">
@@ -192,8 +249,10 @@ export function ActivitySyncPanel({
       )}
       {state.status === 'ACTION_REQUIRED' && !verify && (
         <p role="status">
-          {garminAccountIssueMessage(state.errorCode) ??
-            'Check your Garmin connection in Settings. Saved activities remain available.'}
+          {state.errorCode === 'INITIAL_IMPORT_REQUIRED'
+            ? 'Complete the Activities import in Settings before syncing new workouts.'
+            : (garminAccountIssueMessage(state.errorCode) ??
+              'Check your Garmin connection in Settings. Saved activities remain available.')}
         </p>
       )}
       {error && <p role="alert">{error}</p>}

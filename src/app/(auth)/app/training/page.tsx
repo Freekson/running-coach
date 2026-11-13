@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/States'
 import { getMeasurementSystem } from '@/server/athlete/profile'
 import { getOwnerContext } from '@/server/authorization/ownership'
-import { getGarminSyncState } from '@/server/garmin/sync'
+import { getTrainingSyncState } from '@/server/garmin/training-sync'
 import { getActivityHistory } from '@/server/activity/history'
 import {
   activityHistoryQuerySchema,
@@ -43,7 +43,7 @@ export default async function TrainingPage({
   const timezone = (await cookies()).get(activityTimezoneCookie)?.value
   const [measurement, sync, history] = await Promise.allSettled([
     getMeasurementSystem(owner),
-    getGarminSyncState(owner),
+    getTrainingSyncState(owner),
     parsed.success ? getActivityHistory(owner, query, { timezone }) : Promise.resolve(null),
   ])
   const data = history.status === 'fulfilled' ? history.value : null

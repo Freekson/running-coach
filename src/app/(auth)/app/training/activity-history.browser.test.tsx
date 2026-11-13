@@ -57,6 +57,7 @@ afterEach(() => {
   act(() => root.unmount())
   host.remove()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 async function render(page = data, query: ActivityHistoryQuery = defaults) {
   await act(async () =>
@@ -68,12 +69,19 @@ async function render(page = data, query: ActivityHistoryQuery = defaults) {
   )
 }
 async function select(id: string, label: string) {
-  act(() => host.querySelector<HTMLButtonElement>(`#${id}`)!.click())
-  act(() =>
+  await act(async () => host.querySelector<HTMLButtonElement>(`#${id}`)!.click())
+  await act(async () =>
     [...host.querySelectorAll<HTMLButtonElement>('[role="option"]')]
       .find((option) => option.textContent === label)!
       .click(),
   )
+}
+function typeSearch(value: string) {
+  const input = host.querySelector<HTMLInputElement>('#activity-search')!
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
 }
 it('renders saved rows with local dates, duration semantics and unavailable HR', async () => {
   await render()
@@ -83,7 +91,9 @@ it('renders saved rows with local dates, duration semantics and unavailable HR',
   expect(row.textContent).toContain('Timer time')
   expect(row.textContent).toContain('6:00 /km')
   expect(row.textContent).toContain('—')
-  expect(row.querySelector('a')).toBeNull()
+  expect(row.querySelector('a')?.getAttribute('href')).toBe(
+    '/app/training/row?back=%2Fapp%2Ftraining',
+  )
   expect(host.querySelector<HTMLButtonElement>('[aria-label="Previous page"]')?.disabled).toBe(true)
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Next page"]')!.click())
   expect(push).toHaveBeenCalledWith('/app/training?page=2', { scroll: false })
@@ -93,27 +103,26 @@ it('applies composed filters through URL navigation with no provider fetch', asy
   vi.stubGlobal('fetch', fetchMock)
   await render()
   await select('activity-sport', 'Running')
+  expect(push).toHaveBeenCalledOnce()
   await select('activity-range', 'Last 7 days')
   await select('activity-provider', 'File')
-  await act(async () =>
-    host
-      .querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
-  )
-  const query = new URL(push.mock.calls[0][0], 'https://example.test').searchParams
+  const query = new URL(push.mock.lastCall![0], 'https://example.test').searchParams
   expect(Object.fromEntries(query)).toMatchObject({
     sport: 'RUNNING',
     range: '7',
     provider: 'FILE',
   })
   expect(fetchMock).not.toHaveBeenCalled()
+  expect(host.textContent).not.toContain('Apply filters')
 })
 it('resets pagination on sorting and page-size changes and restores query state on back navigation', async () => {
   await render({ ...data, page: 2 }, { ...defaults, q: 'Trail', page: 2 })
   await select('activity-sort', 'Oldest first')
   expect(push).toHaveBeenLastCalledWith('/app/training?q=Trail&sort=oldest', { scroll: false })
   await select('activity-page-size', '25 / page')
-  expect(push).toHaveBeenLastCalledWith('/app/training?q=Trail&pageSize=25', { scroll: false })
+  expect(push).toHaveBeenLastCalledWith('/app/training?q=Trail&sort=oldest&pageSize=25', {
+    scroll: false,
+  })
   await render(data, defaults)
   expect(host.querySelector<HTMLInputElement>('#activity-search')!.value).toBe('')
   expect(host.querySelector('#activity-sort')!.textContent).toContain('Newest first')
@@ -133,7 +142,7 @@ it('distinguishes not imported, an empty completed import and no matches', async
   expect(host.textContent).not.toContain('With heart rate')
 })
 
-it('clears an unsubmitted filter draft as well as its URL', async () => {
+it('clears selected filters as well as their URL', async () => {
   await render()
   await select('activity-sport', 'Walking')
   expect(host.querySelector('#activity-sport')!.textContent).toContain('Walking')
@@ -233,11 +242,6 @@ it('uses distance presets instead of a numeric input and preserves the Ultra sel
   )
   act(() => [...host.querySelectorAll<HTMLButtonElement>('[role="option"]')].at(-1)!.click())
   expect(host.querySelector('input[type="number"]')).toBeNull()
-  await act(async () =>
-    host
-      .querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
-  )
   expect(push).toHaveBeenCalledWith('/app/training?sport=RUNNING&minDistance=ultra', {
     scroll: false,
   })
@@ -258,11 +262,6 @@ it('updates distance options with the sport and clears an incompatible distance'
     ),
   )
   await select('activity-min-distance', '100 km+')
-  await act(async () =>
-    host
-      .querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
-  )
   expect(push).toHaveBeenCalledWith('/app/training?sport=CYCLING&minDistance=100', {
     scroll: false,
   })
@@ -305,14 +304,11 @@ it.each([
         </Suspense>,
       ),
     )
-    await act(async () => {
-      if (target === 'last-page')
-        host.querySelector<HTMLButtonElement>('[aria-label="Next page"]')!.click()
-      else
-        host
-          .querySelector('form')!
-          .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    })
+    if (target === 'last-page') {
+      await act(async () =>
+        host.querySelector<HTMLButtonElement>('[aria-label="Next page"]')!.click(),
+      )
+    } else await select('activity-range', 'Last 7 days')
     expect(host.querySelectorAll('[data-skeleton-row]')).toHaveLength(expected)
     expect(host.querySelector('[aria-busy="true"]')).not.toBeNull()
     expect(host.querySelectorAll('tbody tr:not([data-skeleton-row])')).toHaveLength(0)
@@ -320,3 +316,51 @@ it.each([
     expect(host.querySelectorAll('[data-skeleton-row]')).toHaveLength(0)
   },
 )
+
+it('debounces search until typing stops, resets the timer on each edit and returns to page one', async () => {
+  vi.useFakeTimers()
+  await render({ ...data, page: 2 }, { ...defaults, page: 2 })
+  typeSearch('R')
+  await act(async () => vi.advanceTimersByTimeAsync(200))
+  typeSearch('Run')
+  await act(async () => vi.advanceTimersByTimeAsync(699))
+  expect(push).not.toHaveBeenCalled()
+  await act(async () => vi.advanceTimersByTimeAsync(1))
+  expect(push).toHaveBeenCalledExactlyOnceWith('/app/training?q=Run', { scroll: false })
+})
+
+it('commits selectors immediately with pending search and cancels delayed navigation on reset', async () => {
+  vi.useFakeTimers()
+  await render()
+  typeSearch('Trail')
+  await select('activity-sport', 'Running')
+  expect(push).toHaveBeenCalledExactlyOnceWith('/app/training?q=Trail&sport=RUNNING', {
+    scroll: false,
+  })
+  await act(async () => vi.advanceTimersByTimeAsync(1000))
+  expect(push).toHaveBeenCalledOnce()
+  typeSearch('Outdated')
+  act(() =>
+    [...host.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === 'Reset filters')!
+      .click(),
+  )
+  await act(async () => vi.advanceTimersByTimeAsync(1000))
+  expect(push).toHaveBeenCalledTimes(2)
+  expect(push).toHaveBeenLastCalledWith('/app/training', { scroll: false })
+  expect(host.querySelector<HTMLInputElement>('#activity-search')!.value).toBe('')
+})
+
+it('cancels a pending search on query restoration and unmount', async () => {
+  vi.useFakeTimers()
+  await render()
+  typeSearch('Discarded')
+  await render(data, { ...defaults, q: 'Saved' })
+  await act(async () => vi.advanceTimersByTimeAsync(1000))
+  expect(push).not.toHaveBeenCalled()
+  expect(host.querySelector<HTMLInputElement>('#activity-search')!.value).toBe('Saved')
+  typeSearch('Leaving')
+  await act(async () => root.render(null))
+  await act(async () => vi.advanceTimersByTimeAsync(1000))
+  expect(push).not.toHaveBeenCalled()
+})

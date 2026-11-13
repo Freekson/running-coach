@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, useState, useTransition, type FormEvent } from 'react'
+import { useEffect, useRef, useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { Activity, Bike, ChevronLeft, ChevronRight, Footprints, Search, Waves } from 'lucide-react'
+import Link from 'next/link'
+import { Activity, Bike, ChevronLeft, ChevronRight, Footprints, Waves } from 'lucide-react'
 import { Button, ButtonLink } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { FormField } from '@/components/ui/FormField'
@@ -49,6 +50,15 @@ export function ActivityHistory({
   const router = useRouter()
   const { system } = useMeasurementSystem()
   const [draft, setDraft] = useState(query)
+  const latestDraft = useRef(query)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastNavigation = useRef(activityHistoryUrl(query))
+  useEffect(
+    () => () => {
+      if (searchTimer.current !== null) clearTimeout(searchTimer.current)
+    },
+    [],
+  )
   const [error, setError] = useState('')
   const [pending, startTransition] = useTransition()
   const [loadingRows, setLoadingRows] = useState<number>(query.pageSize)
@@ -64,16 +74,26 @@ export function ActivityHistory({
     query.minDistance !== '',
   ].filter(Boolean).length
   function navigate(next: ActivityHistoryQuery, rows: number = next.pageSize) {
+    cancelSearch()
+    const url = activityHistoryUrl(next)
+    latestDraft.current = next
+    setDraft(next)
+    if (url === lastNavigation.current) return
+    lastNavigation.current = url
     setLoadingRows(rows)
     setReservedHeight(table.current?.getBoundingClientRect().height ?? 0)
-    startTransition(() => router.push(activityHistoryUrl(next), { scroll: false }))
+    startTransition(() => router.push(url, { scroll: false }))
   }
-  function apply(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function cancelSearch() {
+    if (searchTimer.current !== null) clearTimeout(searchTimer.current)
+    searchTimer.current = null
+  }
+  function commitFilters(next: ActivityHistoryQuery) {
+    cancelSearch()
     const result = activityHistoryQuerySchema.safeParse({
-      ...draft,
+      ...next,
       page: 1,
-      ...(draft.range !== 'custom' ? { from: '', to: '' } : {}),
+      ...(next.range !== 'custom' ? { from: '', to: '' } : {}),
     })
     if (!result.success) {
       setError('Check the date range and minimum distance, then try again.')
@@ -81,6 +101,21 @@ export function ActivityHistory({
     }
     setError('')
     navigate(result.data)
+  }
+  function changeFilters(next: ActivityHistoryQuery, debounce = false) {
+    setDraft(next)
+    latestDraft.current = next
+    cancelSearch()
+    if (debounce) searchTimer.current = setTimeout(() => commitFilters(latestDraft.current), 700)
+    else commitFilters(next)
+  }
+  function apply(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    commitFilters(latestDraft.current)
+  }
+  function changePage(page: number, rows: number) {
+    if (searchTimer.current !== null) commitFilters(latestDraft.current)
+    else navigate({ ...query, page }, rows)
   }
   const selectedSport =
     query.sport && !data.sports.includes(query.sport) ? [query.sport, ...data.sports] : data.sports
@@ -112,7 +147,9 @@ export function ActivityHistory({
               placeholder="Search by name…"
               maxLength={120}
               value={draft.q}
-              onChange={(event) => setDraft({ ...draft, q: event.target.value })}
+              onChange={(event) =>
+                changeFilters({ ...latestDraft.current, q: event.target.value }, true)
+              }
             />
             <Select
               id="activity-sport"
@@ -133,7 +170,7 @@ export function ActivityHistory({
                   sport,
                   minDistance,
                 })
-                if (result.success) setDraft(result.data)
+                if (result.success) changeFilters(result.data)
               }}
             />
             <Select
@@ -141,7 +178,7 @@ export function ActivityHistory({
               label="Date range"
               value={draft.range}
               options={dateRanges}
-              onChange={(range) => setDraft({ ...draft, range })}
+              onChange={(range) => changeFilters({ ...latestDraft.current, range })}
             />
             <Select
               id="activity-min-distance"
@@ -150,7 +187,7 @@ export function ActivityHistory({
               options={activityDistanceOptionsFor(draft.sport)}
               onChange={(minDistance) => {
                 const result = activityHistoryQuerySchema.safeParse({ ...draft, minDistance })
-                if (result.success) setDraft(result.data)
+                if (result.success) changeFilters(result.data)
               }}
             />
             {data.providers.length > 1 && (
@@ -167,7 +204,7 @@ export function ActivityHistory({
                 ]}
                 onChange={(provider) => {
                   const parsed = activityHistoryQuerySchema.safeParse({ ...draft, provider })
-                  if (parsed.success) setDraft(parsed.data)
+                  if (parsed.success) changeFilters(parsed.data)
                 }}
               />
             )}
@@ -179,7 +216,7 @@ export function ActivityHistory({
                   value={draft.from}
                   min={data.dateBounds.min}
                   max={draft.to && draft.to < data.dateBounds.max ? draft.to : data.dateBounds.max}
-                  onChange={(from) => setDraft({ ...draft, from })}
+                  onChange={(from) => changeFilters({ ...latestDraft.current, from })}
                   optional
                 />
                 <DateField
@@ -192,23 +229,18 @@ export function ActivityHistory({
                       : data.dateBounds.min
                   }
                   max={data.dateBounds.max}
-                  onChange={(to) => setDraft({ ...draft, to })}
+                  onChange={(to) => changeFilters({ ...latestDraft.current, to })}
                   optional
                 />
               </div>
             )}
             <div className={styles.filterActions}>
-              <Button type="submit">
-                <Search size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
-                Apply filters
-              </Button>
               <Button
                 variant="secondary"
                 disabled={pending}
                 onClick={() => {
-                  setDraft(defaultActivityHistoryQuery)
                   setError('')
-                  navigate(defaultActivityHistoryQuery)
+                  changeFilters(defaultActivityHistoryQuery)
                 }}
               >
                 Reset filters
@@ -234,10 +266,10 @@ export function ActivityHistory({
         <Select
           id="activity-sort"
           label="Sort by"
-          value={query.sort}
+          value={draft.sort}
           options={sorts}
           disabled={pending}
-          onChange={(sort) => navigate({ ...query, sort, page: 1 })}
+          onChange={(sort) => changeFilters({ ...latestDraft.current, sort })}
         />
       </div>
       {busy && (
@@ -281,7 +313,11 @@ export function ActivityHistory({
                           <Icon size={20} strokeWidth={2} aria-hidden="true" focusable="false" />
                         </span>
                         <span>
-                          <strong>{row.title || `${sport} activity`}</strong>
+                          <Link
+                            href={`/app/training/${row.id}?${new URLSearchParams({ back: activityHistoryUrl(query) })}`}
+                          >
+                            <strong>{row.title || `${sport} activity`}</strong>
+                          </Link>
                           <small>
                             {sport} · {activityProviderLabel(row.provider)}
                           </small>
@@ -336,8 +372,8 @@ export function ActivityHistory({
           <Button
             variant="secondary"
             onClick={() =>
-              navigate(
-                { ...query, page: data.page - 1 },
+              changePage(
+                data.page - 1,
                 Math.min(
                   query.pageSize,
                   Math.max(0, data.total - (data.page - 2) * query.pageSize),
@@ -355,8 +391,8 @@ export function ActivityHistory({
           <Button
             variant="secondary"
             onClick={() =>
-              navigate(
-                { ...query, page: data.page + 1 },
+              changePage(
+                data.page + 1,
                 Math.min(query.pageSize, Math.max(0, data.total - data.page * query.pageSize)),
               )
             }
@@ -369,7 +405,7 @@ export function ActivityHistory({
         <Select
           id="activity-page-size"
           label="Per page"
-          value={String(query.pageSize)}
+          value={String(draft.pageSize)}
           options={[
             { value: '10', label: '10 / page' },
             { value: '25', label: '25 / page' },
@@ -378,11 +414,11 @@ export function ActivityHistory({
           disabled={pending}
           onChange={(value) => {
             const result = activityHistoryQuerySchema.safeParse({
-              ...query,
+              ...latestDraft.current,
               page: 1,
               pageSize: value,
             })
-            if (result.success) navigate(result.data)
+            if (result.success) changeFilters(result.data)
           }}
         />
       </footer>

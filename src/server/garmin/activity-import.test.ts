@@ -144,6 +144,26 @@ function fetcher(
 }
 
 describe('bounded Garmin activity import', () => {
+  it('imports details whose activityUUID is a nested Garmin object', async () => {
+    vi.clearAllMocks()
+    const uuid = '00000000-0000-4000-8000-000000000321'
+    const result = await importGarminActivityPage(
+      owner,
+      { startDate: '2026-11-08', endDate: '2026-11-08', start: 0 },
+      {
+        fetcher: fetcher({ detail: { ...detail, activityUUID: { uuid } } }),
+        pause: async () => {},
+      },
+    )
+    expect(result.imported).toHaveLength(1)
+    expect(importCanonicalActivity).toHaveBeenCalledWith(
+      owner,
+      expect.objectContaining({
+        source: expect.objectContaining({ externalActivityUuid: uuid, userId: owner.userId }),
+      }),
+      expect.anything(),
+    )
+  })
   it('paginates a multi-year summary history across the 1000-record boundary', async () => {
     vi.clearAllMocks()
     const rows = Array.from({ length: 1025 }, (_, index) => ({

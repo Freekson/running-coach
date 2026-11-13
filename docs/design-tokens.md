@@ -23,6 +23,8 @@ The app uses a dark theme from first paint. `src/app/globals.css` is the source 
 
 Use the role that matches the element, rather than copying a hex value. Add a new semantic token to the root palette when a genuinely new role is needed.
 
+Floating surfaces use `--shadow-overlay`: a short, low-opacity shadow shared by select menus, date popovers, tooltips, dialogs and toasts. Keep their existing border for separation instead of adding a wide, opaque halo.
+
 ## Icons
 
 Use `lucide-react` as the default icon library. Use 20px icons for toast status, 18px for actions, and 16px where space is tight, all with `strokeWidth={2}`. Icon and label spacing uses `--icon-gap` (8px); icons inherit text color or use the semantic success, warning, error, or primary token. Avoid hard-coded icon colors and glyph substitutes for UI actions.

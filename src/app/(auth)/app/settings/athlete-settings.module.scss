@@ -426,7 +426,7 @@
   border-radius: 8px;
   background: var(--color-surface-raised);
   color: var(--color-text);
-  box-shadow: 0 8px 22px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-overlay);
   font-size: var(--type-size-caption);
   font-weight: var(--type-weight-regular);
   line-height: var(--type-leading-compact);

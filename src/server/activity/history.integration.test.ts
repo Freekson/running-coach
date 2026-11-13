@@ -7,6 +7,7 @@ vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser: () => true
 import { getPrismaClient } from '@/server/db/client'
 import { getOwnerContext } from '@/server/authorization/ownership'
 import { getActivityHistory } from './history'
+import { getActivityDetail } from './detail'
 import { disconnectProvider, saveProviderApiKey } from '@/server/provider/vault'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
@@ -160,6 +161,38 @@ describe.skipIf(!enabled)('activity history on isolated PostgreSQL', () => {
         )
       ).dateBounds.min,
     ).toBe('2010-01-01')
+  })
+
+  it('serves private saved detail and laps after disconnect, with no administrative data bypass', async () => {
+    const saved = await prisma.activity.findFirstOrThrow({
+      where: { userId: owner.userId, sourceProvider: 'GARMIN', garminAccountId: '444444' },
+    })
+    await prisma.activityLap.createMany({
+      data: [2, 0].map((lapIndex) => ({
+        userId: owner.userId,
+        activityId: saved.id,
+        lapIndex,
+        sourceRecordType: 'FIT_LAP',
+        distanceMeters: 1000,
+        timerMs: BigInt(300_000),
+        avgPowerWatts: 200,
+      })),
+    })
+    const detail = await getActivityDetail(owner, saved.id)
+    expect(detail).toMatchObject({ id: saved.id, fitAvailability: 'NOT_CONNECTED' })
+    expect(await getActivityDetail(other, saved.id)).toBeNull()
+    const legacy = await prisma.activity.findFirstOrThrow({
+      where: { userId: owner.userId, activityTitle: 'Unverified account' },
+    })
+    expect(await getActivityDetail(owner, legacy.id)).toBeNull()
+    expect(detail).not.toHaveProperty('garminAccountId')
+    expect(detail).not.toHaveProperty('rawObjectRef')
+    expect(detail?.laps.map((lap) => lap.index)).toEqual([0, 2])
+    expect(detail?.laps[0]).toMatchObject({
+      distanceMeters: 1000,
+      timerMs: 300_000,
+      avgPowerWatts: 200,
+    })
   })
 
   it('excludes a marathon from Ultra and applies browser-local dates independently of the profile', async () => {

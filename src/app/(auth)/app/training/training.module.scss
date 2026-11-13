@@ -203,6 +203,14 @@
 .activityName > span:last-child {
   width: calc(100% - 52px);
 }
+.activityName a {
+  color: var(--color-text);
+  text-decoration: none;
+}
+.activityName a:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
 .activityName .sportIcon {
   display: inline-grid;
   place-items: center;

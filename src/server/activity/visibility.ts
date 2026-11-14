@@ -4,9 +4,12 @@ import { getPrismaClient } from '@/server/db/client'
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
 
 /** Saved records remain visible after disconnect; unverified or replaced accounts do not. */
-export async function activityReadScope(owner: OwnerContext): Promise<Prisma.ActivityWhereInput> {
+export async function activityReadScope(
+  owner: OwnerContext,
+  client?: Pick<Prisma.TransactionClient, 'integrationConnection'>,
+): Promise<Prisma.ActivityWhereInput> {
   const userId = ownerId(owner)
-  const prisma = await getPrismaClient()
+  const prisma = client ?? (await getPrismaClient())
   const garmin = await prisma.integrationConnection.findUnique({
     where: { userId_provider: { userId, provider: 'GARMIN' } },
     select: { externalAccountId: true },

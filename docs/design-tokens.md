@@ -15,6 +15,7 @@ The app uses a dark theme from first paint. `src/app/globals.css` is the source 
 | `--color-primary-foreground`                                         | Text and icons on a primary fill                                              |
 | `--color-focus`                                                      | Keyboard focus outline                                                        |
 | `--color-success`, `--color-warning`, `--color-error`                | Status text and badges, accompanied by words or icons; error red is `#ff6b6b` |
+| `--color-info`                                                       | Informational status text and badges, including active goals (`#8ab4f8`)      |
 | `--color-admin`, `--color-admin-surface`                             | Administrator role badge text and surface                                     |
 | `--color-sleep-deep`                                                 | Deep sleep (`#568E9A`)                                                        |
 | `--color-sleep-light`                                                | Light sleep (`#88BDB0`)                                                       |

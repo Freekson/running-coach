@@ -1,7 +1,7 @@
 # Goals and plan drafts (RUN-32)
 
-Goals are managed at `/app/goals`, with authenticated create and edit dialogs at
-`/app/goals/new` and `/app/goals/[id]/edit`. The desktop and mobile Training submenu
+Goals are managed at `/app/goals`, with local create and edit dialogs. Direct links
+at `/app/goals/new` and `/app/goals/[id]/edit` remain authenticated. The desktop and mobile Training submenu
 contains Goals and History. Plans, Workouts, and Races do not yet have implemented
 routes; add them in the order Goals → Plans → Workouts → History → Races as those
 features ship. All routes reuse the existing app shell and session checks.
@@ -16,14 +16,42 @@ target times use optional integer seconds. Calendar dates use `YYYY-MM-DD` and S
 - Performance and completion require a distance; performance time is optional.
 - Volume requires distance and a week/month/year measurement window.
 - Consistency requires a run count and measurement window, rather than distance.
-- Surface, optional target date, and optional elevation are explicit fields.
+- Surface and optional target date are explicit fields. New goals have no elevation
+  input. Existing elevation targets are preserved and can be edited on active goals.
 - Independent goals can be active or archived. Archive/restore preserves the goal.
 - Delete is permanent and requires confirmation. A referenced goal must be archived
   instead of deleted, preserving draft references.
 
 Server actions in the Goals feature authenticate each mutation, derive an issued
-owner context from the verified session, validate input, and invalidate the Goals
-route tree. List/read/edit/archive/restore/delete always scope by that owner;
+owner context from the verified session, validate input, and return the saved goal
+with recalculated progress. The client inserts/replaces/removes only that record;
+actions do not invalidate the route or trigger a list reload. Opening/cancelling
+dialogs never navigates, refreshes the router or calls a mutation. Closing a direct
+dialog link replaces the URL using native history, without a server request.
+RSC lists use an owner-bound PostgreSQL snapshot and a database-clock observation
+time, loaded with the goals and activities in one repeatable-read transaction.
+Mutation actions return the changed record (or a deletion marker) plus the committed
+transaction's ID and read snapshot. Those receipts are generated inside the same
+serializable transaction as the write; a receipt failure rolls the write back.
+Serialization conflicts retry at most five times with bounded backoff.
+
+The client retains confirmed local changes separately until a list's snapshot
+actually sees their commits. This includes deletion markers, so delayed lists
+cannot resurrect a deleted goal. If a list already sees a mutation, a late action
+response cannot replace its newer progress. Older lists and older mutation replies
+are ignored; later remote edits/deletions are accepted once their snapshots include
+the confirmed write. Records merge by ID without duplicate cards or remounting the
+screen. Owner changes clear local changes and reject late receipts from the previous owner.
+
+The visibility rule follows PostgreSQL's
+[transaction ID and snapshot functions](https://www.postgresql.org/docs/current/functions-info.html#FUNCTIONS-PG-SNAPSHOT):
+the 64-bit ID must be below the snapshot's upper bound and absent from its active
+transaction list. These strings avoid JavaScript number precision loss and do not
+depend on browser clocks, response arrival order or Vercel instance clocks. The
+database observation time orders reads with identical visibility (for calendar
+progress changes). Existing flat CRUD service return values remain compatible;
+only the authenticated page/action read model carries the synchronization metadata.
+List/read/edit/archive/restore/delete always scope by that owner;
 ADMIN receives no access to another athlete's goals. Failure messages do not expose
 database details. No provider or AI publication occurs here.
 
@@ -56,8 +84,76 @@ remain unset because the current profile has no duration/start defaults.
 
 RUN-37 owns the user-facing constraints step and draft lifecycle in the Create plan
 wizard. It can consume these schemas and services without copying their rules.
-Goals has no schedule editor, plan generator, progress calculations, or Create plan
+Goals has no schedule editor, plan generator, or Create plan
 button leading to an unimplemented route.
+
+## Progress tracking (RUN-45)
+
+The Goals page loads owner-scoped progress from recorded running activities. The
+Active tab includes overdue goals with a separate warning badge. Achieved and
+Archived have their own tabs. Archive takes precedence over calculated achievement;
+achievement takes precedence over overdue. Delete, archive/restore and edit remain
+in the card footer. Tabs support Arrow keys, Home and End.
+
+Active badges are blue, Achieved green, Overdue amber and Archived gray, using shared
+semantic tokens. Achieved/completed and archived goals have disabled Edit actions.
+Direct edit routes and server mutations enforce the same rule. Save, archive and delete
+return the changed goal and progress inside a serializable transaction; failed
+progress reads roll back the write. Active goals become editable again after
+restore, provided their current activities do not establish achievement.
+
+Each card shows its actual metric, measurement dates and calculation timezone.
+There is no expandable calculation section. A target date also shows calendar days left,
+"Due today", or days overdue, using the saved profile timezone (UTC fallback).
+Calculations are read-only: they never change goals, activities or plan drafts.
+
+- Performance uses the fastest **elapsed** time for a complete recorded run covering
+  the entire target distance and no more than 1% extra. Shorter runs never qualify.
+  It does not estimate splits or scale pace
+  from longer runs. Without a target time, it shows the best result and remains
+  active. Missing elapsed time is not replaced with moving or timer time.
+- Completion requires a single run covering at least the target distance. An
+  optional elevation target must be met by that same run.
+- Volume sums recorded distances. If an elevation target exists, both aggregate
+  targets must be met; the progress bar uses the lower completion ratio.
+- Consistency counts recorded running sessions, including sessions without a
+  recorded distance. The percentage is capped at 100%; actual totals remain visible.
+- Volume and consistency use the current calendar week (Monday start), month or
+  year in the athlete timezone. They reset each period while the deadline remains
+  in the future, or indefinitely when no deadline is set. Once a deadline passes,
+  the final calendar period ending on that date is used. Performance and completion
+  consider all recorded history through today or the earlier deadline.
+- Deadlines include the entire local day. Future activities, non-running sports,
+  unresolved duplicate candidates, and replaced/unverified Garmin accounts are
+  excluded using the existing owner/account visibility boundary.
+- Explicit canonical surfaces are validated and persisted on import. Unambiguous
+  recorded Garmin subtypes (`trail_running`, `track_running`, `street_running`,
+  `treadmill_running`) establish a surface for both new imports and legacy rows.
+  Generic running and unknown surfaces do not qualify for surface-specific goals;
+  affected cards show the number of excluded runs. No road/trail assumption is made
+  from an activity title, pace or generic running sport type.
+  Enriching or correcting the surface alone preserves verified FIT laps, their IDs
+  and metrics, and the FIT freshness/state. Changes to verified activity identity
+  such as distance still invalidate stale laps through the existing import rules.
+- Periodic-only lists restrict the activity query to the earliest required calendar
+  start and latest deadline. Performance/completion can require full history.
+  Activity local dates are prepared once with a reused formatter across all goals.
+  Percentages use integer stored units before division to avoid floating-point
+  undercounts such as 29 km / 100 km incorrectly displaying 28%.
+
+Achievement is derived from current goal settings and eligible activity data, not
+a persisted milestone. Editing a goal, resolving duplicates, switching accounts or
+crossing a calendar boundary can change it. Approved-plan/workout models are not
+available yet (RUN-33); plan coverage is explicitly unavailable. Drafts and planned
+sessions never count as completed runs. No schema migration is needed for RUN-45.
+
+`src/server/goals/progress.test.ts` covers calculations, time boundaries, missing
+metrics, owner/account query scopes and forged contexts. The existing Goals DB
+suite also covers real activity aggregation for two owners (including ADMIN),
+date/sport/account filtering and duplicate exclusion. UI tests cover all four
+metrics, status tabs and keyboard navigation, countdowns and footer controls.
+Storybook includes all types/statuses, due today, missing progress, empty states,
+mobile and mutation failures using synthetic data.
 
 ## Migration and verification
 

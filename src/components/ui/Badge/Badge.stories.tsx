@@ -11,6 +11,7 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Neutral: Story = {}
+export const Info: Story = { args: { tone: 'info', children: 'Active' } }
 export const Success: Story = { args: { tone: 'success', children: 'Ready' } }
 export const Warning: Story = { args: { tone: 'warning', children: 'Awaiting review' } }
 export const Error: Story = { args: { tone: 'error', children: 'Sync failed' } }

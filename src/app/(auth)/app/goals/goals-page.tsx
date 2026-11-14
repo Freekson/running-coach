@@ -1,11 +1,11 @@
 import 'server-only'
 
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { z } from 'zod'
 import { Card } from '@/components/ui/Card'
 import { ButtonLink } from '@/components/ui/Button'
 import { getOwnerContext, OwnedResourceNotFoundError } from '@/server/authorization/ownership'
-import { listGoals, getGoal } from '@/server/goals/goals'
+import { getEditableGoal, GoalReadOnlyError, getGoalsSnapshot } from '@/server/goals/goals'
 import { getAppUser } from '../access'
 import { AccountUnavailable } from '../account-unavailable'
 import { GoalsController } from './goals-controller'
@@ -19,11 +19,12 @@ export async function renderGoalsPage(editor?: 'create' | { id: string }) {
   let goals, initialEditor
   try {
     ;[goals, initialEditor] = await Promise.all([
-      listGoals(owner),
-      typeof editor === 'object' ? getGoal(owner, editor.id) : Promise.resolve(editor),
+      getGoalsSnapshot(owner),
+      typeof editor === 'object' ? getEditableGoal(owner, editor.id) : Promise.resolve(editor),
     ])
   } catch (error) {
     if (error instanceof OwnedResourceNotFoundError) notFound()
+    if (error instanceof GoalReadOnlyError) redirect('/app/goals')
     return (
       <main className={styles.screen}>
         <h1>Goals</h1>
@@ -39,7 +40,7 @@ export async function renderGoalsPage(editor?: 'create' | { id: string }) {
   }
   return (
     <main>
-      <GoalsController goals={goals} editor={initialEditor} />
+      <GoalsController snapshot={goals} editor={initialEditor} />
     </main>
   )
 }

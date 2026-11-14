@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from 'react'
 
 export type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
-  tone?: 'neutral' | 'success' | 'warning' | 'error'
+  tone?: 'neutral' | 'info' | 'success' | 'warning' | 'error'
 }
 
 export function Badge({ tone = 'neutral', className, ...props }: BadgeProps) {

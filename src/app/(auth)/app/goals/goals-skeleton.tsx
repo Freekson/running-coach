@@ -19,6 +19,7 @@ export function GoalsSkeleton() {
         <div className={`${page.tabs} ${styles.tabs}`}>
           <span className={styles.line} />
           <span className={styles.shortLine} />
+          <span className={styles.shortLine} />
         </div>
         <div className={page.toolbar}>
           <span className={styles.shortLine} />

@@ -12,6 +12,7 @@ import {
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
 import { getPrismaClient } from '@/server/db/client'
 import { activityReadScope } from './visibility'
+import { recordedActivitySurface } from './surface'
 
 export class InvalidActivityImportError extends Error {
   constructor() {
@@ -78,6 +79,7 @@ function activityFields(
     sourceRecordType: activity.source.recordType,
     sportType: activity.sportType,
     sourceSportType: activity.sourceSportType,
+    surfaceType: recordedActivitySurface({ ...activity, sourceProvider: activity.source.provider }),
     startedAt: new Date(activity.startedAt),
     sourceTimezone: activity.sourceTimezone,
     distanceMeters: activity.distanceMeters,
@@ -104,6 +106,7 @@ function sameDecimal(stored: Prisma.Decimal | null, incoming: number | null, sca
     : incoming !== null && stored.equals(new Prisma.Decimal(incoming).toDecimalPlaces(scale))
 }
 
+// Surface metadata can be enriched without invalidating the verified FIT data.
 function sameActivitySummary(existing: Activity, fields: ReturnType<typeof activityFields>) {
   return (
     existing.externalActivityUuid === fields.externalActivityUuid &&
@@ -295,6 +298,7 @@ export async function importCanonicalActivity(
           )
             return { id: existing.id, lapImportStatus: lapStatus(existing.lapImportStatus) }
           const comparison = activityFields(activity, 'UNAVAILABLE', sourceObservedAt)
+          comparison.surfaceType ??= existing ? recordedActivitySurface(existing) : null
           comparison.calories ??= existing?.calories ?? null
           comparison.activityTitle ??= existing?.activityTitle ?? null
           // Merge sparse summaries before comparing them with the saved FIT identity.

@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { z } from 'zod'
+import { recordedActivitySurface } from '@/server/activity/surface'
 import {
   canonicalActivitySchema,
   canonicalLapSchema,
@@ -336,6 +337,11 @@ export const garminActivitySource = {
       },
       sportType: garminSport(input.activityTypeDTO.typeKey),
       sourceSportType: input.activityTypeDTO.typeKey,
+      surfaceType: recordedActivitySurface({
+        sportType: garminSport(input.activityTypeDTO.typeKey),
+        sourceProvider: 'GARMIN',
+        sourceSportType: input.activityTypeDTO.typeKey,
+      }),
       startedAt,
       sourceTimezone: timezone,
       gpsAssetRef: null,

@@ -14,6 +14,7 @@
   --color-primary-foreground: #101417;
   --color-focus: #75c8ad;
   --color-success: #80cdb0;
+  --color-info: #8ab4f8;
   --color-warning: #f5cb82;
   --color-error: #ff6b6b;
   --color-admin: #d4b0f9;
@@ -239,6 +240,11 @@ input[type='number']::-webkit-outer-spin-button {
   font-size: var(--type-size-caption);
   font-weight: var(--type-weight-semibold);
   line-height: var(--type-leading-compact);
+}
+
+.badge--info {
+  color: var(--color-info);
+  background: color-mix(in srgb, var(--color-info) 12%, var(--color-surface-raised));
 }
 
 .badge--success {

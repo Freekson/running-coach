@@ -27,6 +27,7 @@ describe('app navigation', () => {
     const markup = renderToStaticMarkup(<AppNavigation role="USER" />)
     expect([...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual([
       '/app/dashboard',
+      '/app/goals',
       '/app/training',
       '/app/health',
       '/app/settings',
@@ -43,12 +44,25 @@ describe('app navigation', () => {
     expect(markup.match(/href="\/app\/admin"/g)).toHaveLength(1)
     expect([...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual([
       '/app/dashboard',
+      '/app/goals',
       '/app/training',
       '/app/health',
       '/app/settings',
       '/app/admin',
     ])
   })
+
+  it.each(['/app/goals', '/app/goals/new', '/app/goals/9dd75c80-6ea2-4ce7-b715-a79b2d4d8836/edit'])(
+    'highlights Goals and expands Training for %s',
+    (path) => {
+      usePathname.mockReturnValue(path)
+      const markup = renderToStaticMarkup(<AppNavigation role="USER" />)
+      expect(markup).toMatch(/href="\/app\/goals"[^>]*aria-current="page"/)
+      expect(markup).toContain('aria-expanded="true"')
+      expect(markup).not.toMatch(/href="\/app\/training"[^>]*aria-current="page"/)
+      expect(markup).not.toContain('/app/training/goals')
+    },
+  )
 
   it('shows an email fallback and sign-out when the user has no name', () => {
     const markup = renderToStaticMarkup(

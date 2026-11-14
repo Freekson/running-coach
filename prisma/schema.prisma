@@ -82,6 +82,8 @@ model User {
   garminImportRateLimit       GarminImportRateLimit?
   dailyHealthMetrics          DailyHealthMetric[]
   syncRuns                    SyncRun[]
+  goals                       Goal[]
+  planDrafts                  PlanDraft[]
 
   @@index([status])
   @@map("users")
@@ -210,6 +212,52 @@ model AthleteProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("athlete_profiles")
+}
+
+model Goal {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  name              String    @db.VarChar(160)
+  type              String    @db.VarChar(24)
+  distanceMeters    Decimal?  @map("distance_meters") @db.Decimal(12, 3)
+  targetTimeSeconds Int?      @map("target_time_seconds")
+  targetCount       Int?      @map("target_count")
+  measurementWindow String?   @map("measurement_window") @db.VarChar(16)
+  targetDate        DateTime? @map("target_date") @db.Date
+  surface           String    @db.VarChar(16)
+  elevationGainM    Int?      @map("elevation_gain_m")
+  archived          Boolean   @default(false)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planDrafts PlanDraft[]
+
+  @@unique([userId, id])
+  @@index([userId, archived, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("goals")
+}
+
+// Scheduling values are copied from the profile, then owned independently by this draft.
+// RUN-33 owns approved plans/revisions; RUN-37 consumes this draft boundary.
+model PlanDraft {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  goalId            String    @map("goal_id") @db.Uuid
+  sessionsPerWeek   Int       @map("sessions_per_week") @db.SmallInt
+  availableWeekdays Int[]     @map("available_weekdays")
+  maxSessionMinutes Int?      @map("max_session_minutes")
+  startDate         DateTime? @map("start_date") @db.Date
+  timezone          String    @db.VarChar(100)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal Goal @relation(fields: [userId, goalId], references: [userId, id], onDelete: NoAction)
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([userId, goalId])
+  @@map("plan_drafts")
 }
 
 model BodyMeasurement {

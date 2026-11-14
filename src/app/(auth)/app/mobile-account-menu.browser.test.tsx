@@ -159,6 +159,51 @@ it('keeps the unsaved changes guard on the bottom navigation', async () => {
   expect(push).toHaveBeenCalledWith('/app/training')
 })
 
+it('opens Training and closes its submenu with Escape, restoring keyboard focus', async () => {
+  await renderAccount()
+  const training = host.querySelector<HTMLButtonElement>(
+    'button[aria-controls="training-navigation"]',
+  )!
+  const submenu = host.querySelector<HTMLDivElement>('#training-navigation')!
+  expect(submenu.getAttribute('aria-hidden')).toBe('true')
+  expect(submenu.hasAttribute('inert')).toBe(true)
+  act(() => training.click())
+  expect(submenu.getAttribute('aria-hidden')).toBe('false')
+  expect(submenu.hasAttribute('inert')).toBe(false)
+  const goals = submenu.querySelector<HTMLAnchorElement>('a[href="/app/goals"]')!
+  goals.focus()
+  act(() => goals.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  expect(submenu.getAttribute('aria-hidden')).toBe('true')
+  expect(submenu.hasAttribute('inert')).toBe(true)
+  expect(document.activeElement).toBe(training)
+})
+
+it('keeps submenu accessibility synchronized when toggled rapidly during animation', async () => {
+  await renderAccount()
+  const training = host.querySelector<HTMLButtonElement>(
+    'button[aria-controls="training-navigation"]',
+  )!
+  const submenu = host.querySelector<HTMLDivElement>('#training-navigation')!
+  act(() => training.click())
+  act(() => training.click())
+  act(() => training.click())
+  expect(training.getAttribute('aria-expanded')).toBe('true')
+  expect(submenu.getAttribute('aria-hidden')).toBe('false')
+  expect(submenu.hasAttribute('inert')).toBe(false)
+})
+
+it('guards Goals navigation when profile edits are unsaved', async () => {
+  await renderAccount('USER', true)
+  act(() =>
+    host.querySelector<HTMLButtonElement>('button[aria-controls="training-navigation"]')!.click(),
+  )
+  act(() => host.querySelector<HTMLAnchorElement>('nav a[href="/app/goals"]')!.click())
+  expect(navigatePrevented).toHaveBeenCalledOnce()
+  expect(push).not.toHaveBeenCalled()
+  act(() => proceed?.())
+  expect(push).toHaveBeenCalledWith('/app/goals')
+})
+
 it('waits for unsaved changes confirmation before signing out from the account', async () => {
   await renderAccount('USER', true)
   act(() => trigger().click())

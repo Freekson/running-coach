@@ -2,6 +2,7 @@ import 'server-only'
 
 import { z } from 'zod'
 import type { OwnerContext } from '@/server/authorization/ownership'
+import { activitySurfaceSchema } from './surface'
 
 export const activityProviderSchema = z.enum(['GARMIN', 'INTERVALS', 'MANUAL', 'FILE'])
 export const sourceRecordTypeSchema = z.enum(['API_ACTIVITY', 'FIT_FILE', 'MANUAL_ENTRY'])
@@ -43,6 +44,7 @@ export const canonicalActivitySchema = z.object({
   source: activitySourceIdentitySchema,
   sportType: canonicalSportSchema,
   sourceSportType: z.string().trim().min(1).nullable(),
+  surfaceType: activitySurfaceSchema.nullable().optional(),
   startedAt: z.iso.datetime({ offset: true }),
   sourceTimezone: z.string().nullable(),
   gpsAssetRef: z.string().trim().min(1).nullable(),

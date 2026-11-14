@@ -208,7 +208,7 @@ export function GoalForm({
             onChange={(value) => update('surface', value)}
             disabled={pending}
           />
-          {fields.type !== 'CONSISTENCY' && (
+          {initial?.elevationGainM && fields.type !== 'CONSISTENCY' && (
             <FormField
               id={`${id}-elevation`}
               label="Elevation gain (m)"

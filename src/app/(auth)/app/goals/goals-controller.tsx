@@ -1,11 +1,16 @@
 'use client'
 
-import { startTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import type { GoalRecord } from '@/lib/goals'
-import { GoalForm } from './goal-form'
+import type { GoalSnapshot } from '@/lib/goal-snapshot'
 import { goalInput, goalView, type GoalFields } from './goal-view'
 import { GoalsScreen } from './goals-screen'
+import {
+  acceptGoalMutation,
+  acceptGoalSnapshot,
+  createGoalState,
+  goalStateRecords,
+} from './goal-state'
 import {
   archiveGoalAction,
   deleteGoalAction,
@@ -14,47 +19,43 @@ import {
 } from './actions'
 
 export function GoalsController({
-  goals,
+  snapshot,
   editor,
 }: {
-  goals: GoalRecord[]
+  snapshot: GoalSnapshot
   editor?: GoalRecord | 'create'
 }) {
-  const router = useRouter()
-  function mutate(action: () => Promise<GoalActionResult>): Promise<void> {
-    return new Promise((resolve, reject) => {
-      startTransition(async () => {
-        try {
-          const result = await action()
-          if (!result.success) throw new Error(result.error)
-          router.refresh()
-          resolve()
-        } catch (error) {
-          reject(error)
-        }
-      })
-    })
+  const [state, setState] = useState(() => createGoalState(snapshot))
+  if (state.received !== snapshot) {
+    setState(acceptGoalSnapshot(state, snapshot))
   }
-  const save = (fields: GoalFields, id?: string) =>
-    mutate(() => saveGoalAction(goalInput(fields), id))
+  async function mutate<T>(action: () => Promise<GoalActionResult<T>>) {
+    const result = await action()
+    if (!result.success) throw new Error(result.error)
+    return result
+  }
+  async function save(fields: GoalFields, id?: string) {
+    const result = await mutate(() => saveGoalAction(goalInput(fields), id))
+    setState((previous) => acceptGoalMutation(previous, result.value.id, result))
+  }
   return (
-    <>
-      <GoalsScreen
-        goals={goals.map(goalView)}
-        onSave={save}
-        onArchive={(id, archived) => mutate(() => archiveGoalAction(id, archived))}
-        onDelete={(id) => mutate(() => deleteGoalAction(id))}
-        onCreate={() => router.push('/app/goals/new')}
-        onEdit={(id) => router.push(`/app/goals/${id}/edit`)}
-      />
-      {editor && (
-        <GoalForm
-          key={editor === 'create' ? 'create' : editor.id}
-          initial={editor === 'create' ? undefined : goalView(editor)}
-          onClose={() => router.push('/app/goals')}
-          onSave={(fields) => save(fields, editor === 'create' ? undefined : editor.id)}
-        />
-      )}
-    </>
+    <GoalsScreen
+      key={state.base.ownerId}
+      goals={goalStateRecords(state).map(goalView)}
+      onSave={save}
+      onArchive={async (id, archived) => {
+        const result = await mutate(() => archiveGoalAction(id, archived))
+        setState((previous) => acceptGoalMutation(previous, id, result))
+      }}
+      onDelete={async (id) => {
+        const result = await mutate(() => deleteGoalAction(id))
+        setState((previous) => acceptGoalMutation(previous, id, result))
+      }}
+      initialEditor={editor === 'create' ? 'create' : editor ? goalView(editor) : undefined}
+      onEditorClose={() => {
+        if (window.location.pathname !== '/app/goals')
+          window.history.replaceState(null, '', '/app/goals')
+      }}
+    />
   )
 }

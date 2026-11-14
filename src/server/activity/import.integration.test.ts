@@ -593,6 +593,54 @@ describe.skipIf(!enabled)('activity import on isolated PostgreSQL', () => {
     expect((await getActivity(ownerA, verified.id))?.id).toBe(verified.id)
   })
 
+  it('enriches legacy surfaces while preserving FIT lap rows, metrics and download freshness', async () => {
+    const observedAt = new Date('2026-11-12T02:00:00Z')
+    const activity = canonicalActivitySchema.parse({
+      ...makeActivity(ownerA.userId, 'GARMIN', 'legacy-surface-laps'),
+      sourceSportType: 'trail_running',
+      laps: [
+        {
+          lapIndex: 0,
+          sourceRecordType: 'FIT_LAP',
+          startedAt: '2026-11-08T06:30:00Z',
+          distanceMeters: 5000,
+          elapsedMs: 1800000,
+          movingMs: null,
+          avgHrBpm: 145,
+          avgSpeedMps: null,
+          cadenceStepsPerMinute: null,
+        },
+      ],
+    })
+    const saved = await importCanonicalActivity(ownerA, activity, {
+      fitCheckedAt: observedAt,
+      sourceObservedAt: observedAt,
+    })
+    const where = { userId: ownerA.userId, id: saved.id }
+    await prisma.activity.update({ where, data: { surfaceType: null } })
+    const before = await prisma.activity.findUniqueOrThrow({ where })
+    const lapsWhere = { userId: ownerA.userId, activityId: saved.id }
+    const laps = await prisma.activityLap.findMany({ where: lapsWhere })
+    const summary = { ...activity, laps: null }
+    expect(await canSkipFitDownload(ownerA, summary, { refresh: true, observedAt })).toBe(true)
+    await importCanonicalActivity(ownerA, summary, {
+      summaryOnly: true,
+      sourceObservedAt: new Date(observedAt.getTime() + 1000),
+    })
+    const after = await prisma.activity.findUniqueOrThrow({ where })
+    expect(after).toMatchObject({
+      surfaceType: 'TRAIL',
+      lapImportStatus: 'RETAINED',
+      fitImportState: before.fitImportState,
+      fitImportAttempts: before.fitImportAttempts,
+      fitCheckedAt: before.fitCheckedAt,
+      fitNextAttemptAt: before.fitNextAttemptAt,
+    })
+    expect(await prisma.activityLap.findMany({ where: lapsWhere })).toEqual(laps)
+    expect(laps).toHaveLength(1)
+    expect(laps[0].avgHrBpm).toBe(145)
+  })
+
   it('retains unchanged sparse FIT data but invalidates changed summary laps and forces a new FIT download', async () => {
     const observedAt = new Date('2026-11-12T02:00:00Z')
     const activity = canonicalActivitySchema.parse({

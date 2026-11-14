@@ -2,10 +2,28 @@ import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { GoalsScreen } from './goals-screen'
 import type { GoalView } from './goal-view'
+import type { GoalProgress } from '@/lib/goal-progress'
+
+const progress: GoalProgress = {
+  status: 'ACTIVE',
+  timezone: 'Europe/Kyiv',
+  from: null,
+  through: '2026-11-14',
+  daysRemaining: 121,
+  distanceMeters: 0,
+  elevationGainM: 0,
+  runCount: 0,
+  surfaceUnknownRunCount: 0,
+  bestTimeSeconds: null,
+  percent: null,
+  achieved: false,
+  planCoverage: 'UNAVAILABLE',
+}
 
 const examples: GoalView[] = [
   {
     id: 'track',
+    progress: { ...progress, bestTimeSeconds: 635 },
     measurementWindow: 'WEEK',
     name: '3000 m personal best',
     type: 'PERFORMANCE',
@@ -19,6 +37,7 @@ const examples: GoalView[] = [
   },
   {
     id: 'marathon',
+    progress: { ...progress, daysRemaining: 218 },
     measurementWindow: 'WEEK',
     name: 'Finish my first marathon',
     type: 'COMPLETION',
@@ -32,6 +51,13 @@ const examples: GoalView[] = [
   },
   {
     id: 'volume',
+    progress: {
+      ...progress,
+      from: '2026-11-01',
+      daysRemaining: 78,
+      distanceMeters: 68400,
+      percent: 68,
+    },
     measurementWindow: 'MONTH',
     name: 'Run 100 km in one month',
     type: 'VOLUME',
@@ -45,6 +71,7 @@ const examples: GoalView[] = [
   },
   {
     id: 'archived',
+    progress: { ...progress, status: 'ARCHIVED', daysRemaining: -34 },
     measurementWindow: 'WEEK',
     name: 'Finish a trail ultra',
     type: 'COMPLETION',
@@ -55,6 +82,48 @@ const examples: GoalView[] = [
     elevationGainM: '2400',
     sessionsPerWeek: '',
     archived: true,
+  },
+  {
+    id: 'consistency',
+    measurementWindow: 'WEEK',
+    name: 'Run 4 times per week',
+    type: 'CONSISTENCY',
+    distanceKm: '',
+    targetTime: '',
+    targetDate: '',
+    surface: 'ANY',
+    elevationGainM: '',
+    sessionsPerWeek: '4',
+    archived: false,
+    progress: { ...progress, from: '2026-11-09', runCount: 3, percent: 75, daysRemaining: null },
+  },
+  {
+    id: 'overdue',
+    measurementWindow: 'WEEK',
+    name: 'Finish a 17.3 km trail run',
+    type: 'COMPLETION',
+    distanceKm: '17.3',
+    targetTime: '',
+    targetDate: '2026-11-10',
+    surface: 'TRAIL',
+    elevationGainM: '',
+    sessionsPerWeek: '',
+    archived: false,
+    progress: { ...progress, status: 'OVERDUE', daysRemaining: -4, through: '2026-11-10' },
+  },
+  {
+    id: 'achieved',
+    measurementWindow: 'WEEK',
+    name: 'Finish a 12.7 km run',
+    type: 'COMPLETION',
+    distanceKm: '12.7',
+    targetTime: '',
+    targetDate: '',
+    surface: 'ANY',
+    elevationGainM: '',
+    sessionsPerWeek: '',
+    archived: false,
+    progress: { ...progress, status: 'ACHIEVED', daysRemaining: null, achieved: true },
   },
 ]
 
@@ -78,13 +147,34 @@ function GoalsPreview({
           if (saveState === 'pending') await new Promise<void>(() => {})
           setGoals((previous) =>
             id
-              ? previous.map((goal) => (goal.id === id ? { ...goal, ...fields } : goal))
+              ? previous.map((goal) =>
+                  goal.id === id ? { ...goal, ...fields, progress: undefined } : goal,
+                )
               : [...previous, { ...fields, id: crypto.randomUUID(), archived: false }],
           )
         }}
         onArchive={async (id, archived) => {
           setGoals((previous) =>
-            previous.map((goal) => (goal.id === id ? { ...goal, archived } : goal)),
+            previous.map((goal) =>
+              goal.id === id
+                ? {
+                    ...goal,
+                    archived,
+                    progress: goal.progress
+                      ? {
+                          ...goal.progress,
+                          status: archived
+                            ? 'ARCHIVED'
+                            : goal.progress.achieved
+                              ? 'ACHIEVED'
+                              : (goal.progress.daysRemaining ?? 0) < 0
+                                ? 'OVERDUE'
+                                : 'ACTIVE',
+                        }
+                      : undefined,
+                  }
+                : goal,
+            ),
           )
         }}
         onDelete={async (id) => setGoals((previous) => previous.filter((goal) => goal.id !== id))}
@@ -101,7 +191,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'RUN-32 design preview with synthetic goals. Changes remain in Storybook memory; no persistence or plan constraints UI is connected.',
+          'RUN-45 progress preview with synthetic goals in all four types and statuses. Use the tabs to inspect achieved and archived goals. Changes remain in Storybook memory; edited and new goals show progress unavailable until recalculated by the real server.',
       },
     },
   },
@@ -112,22 +202,21 @@ type Story = StoryObj<typeof meta>
 export const ActiveGoals: Story = {}
 export const CreateGoal: Story = { args: { initialDialog: 'create' } }
 export const Empty: Story = { args: { initialGoals: [] } }
-export const AllGoalTypes: Story = {
+export const AllGoalTypes: Story = {}
+export const UnknownSurface: Story = {
+  args: {
+    initialGoals: [{ ...examples[0], progress: { ...progress, surfaceUnknownRunCount: 6 } }],
+  },
+}
+export const DueToday: Story = {
   args: {
     initialGoals: [
-      ...examples,
-      {
-        ...examples[0],
-        id: 'consistency',
-        name: 'Build a regular running habit',
-        type: 'CONSISTENCY',
-        distanceKm: '',
-        targetTime: '',
-        surface: 'ANY',
-        sessionsPerWeek: '4',
-      },
+      { ...examples[0], targetDate: '2026-11-14', progress: { ...progress, daysRemaining: 0 } },
     ],
   },
+}
+export const ProgressUnavailable: Story = {
+  args: { initialGoals: [{ ...examples[0], progress: undefined }] },
 }
 export const SaveError: Story = { args: { initialDialog: 'create', saveState: 'error' } }
 export const Saving: Story = { args: { initialDialog: 'create', saveState: 'pending' } }

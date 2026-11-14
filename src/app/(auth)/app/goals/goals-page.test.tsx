@@ -8,12 +8,19 @@ const { getAppUser, listGoals, getGoal, getOwnerContext } = vi.hoisted(() => ({
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('../access', () => ({ getAppUser }))
-vi.mock('@/server/goals/goals', () => ({ listGoals, getGoal }))
+vi.mock('@/server/goals/goals', async (original) => ({
+  ...(await original<typeof import('@/server/goals/goals')>()),
+  getEditableGoal: getGoal,
+  getGoalsSnapshot: listGoals,
+}))
 vi.mock('@/server/authorization/ownership', async (original) => ({
   ...(await original<typeof import('@/server/authorization/ownership')>()),
   getOwnerContext,
 }))
 vi.mock('next/navigation', () => ({
+  redirect: () => {
+    throw new Error('redirect-to-goals')
+  },
   notFound: () => {
     throw new Error('not-found')
   },
@@ -21,12 +28,13 @@ vi.mock('next/navigation', () => ({
 import { OwnedResourceNotFoundError } from '@/server/authorization/ownership'
 import { renderGoalsPage } from './goals-page'
 import { AccountUnavailable } from '../account-unavailable'
+import { GoalReadOnlyError } from '@/server/goals/goals'
 
 beforeEach(() => {
   vi.clearAllMocks()
   getAppUser.mockResolvedValue({ id: 'a' })
   getOwnerContext.mockReturnValue({ userId: 'a' })
-  listGoals.mockResolvedValue([])
+  listGoals.mockResolvedValue({ ownerId: 'a', snapshot: '100:100:', observedAt: '1', goals: [] })
   getGoal.mockResolvedValue(undefined)
 })
 
@@ -58,4 +66,11 @@ it('rejects malformed IDs before querying and shows a safe read error', async ()
   const result = await renderGoalsPage()
   expect(JSON.stringify(result)).toContain('Goals unavailable')
   expect(JSON.stringify(result)).not.toContain('private SQL text')
+})
+
+it('does not expose a direct edit dialog for a read-only goal', async () => {
+  getGoal.mockRejectedValueOnce(new GoalReadOnlyError())
+  await expect(renderGoalsPage({ id: '9dd75c80-6ea2-4ce7-b715-a79b2d4d8836' })).rejects.toThrow(
+    'redirect-to-goals',
+  )
 })

@@ -176,6 +176,46 @@ it('merges sparse unchanged summaries and retains FIT laps and their check times
   expect(createLaps).not.toHaveBeenCalled()
 })
 
+it.each([null, 'ROAD'] as const)(
+  'retains FIT data when only surface metadata changes from %s',
+  async (surfaceType) => {
+    const observedAt = new Date('2026-11-12T02:00:00Z')
+    findExisting.mockResolvedValue(
+      storedActivity({
+        surfaceType,
+        sourceSportType: 'trail_running',
+        fitCheckedAt: observedAt,
+        fitImportState: 'COMPLETE',
+      }),
+    )
+    const summary = { ...input, sourceSportType: 'trail_running', surfaceType: 'TRAIL', laps: null }
+    expect(
+      await canSkipFitDownload(ownerA, summary, {
+        observedAt,
+        refresh: true,
+        garminAccountId: 'synthetic-account',
+      }),
+    ).toBe(true)
+    expect(
+      (
+        await importCanonicalActivity(ownerA, summary, {
+          summaryOnly: true,
+          garminAccountId: 'synthetic-account',
+          sourceObservedAt: observedAt,
+        })
+      ).lapImportStatus,
+    ).toBe('RETAINED')
+    expect(upsert.mock.calls[0][0].update).toMatchObject({
+      surfaceType: 'TRAIL',
+      lapImportStatus: 'RETAINED',
+      fitCheckedAt: undefined,
+    })
+    expect(upsert.mock.calls[0][0].update).not.toHaveProperty('fitImportState')
+    expect(deleteLaps).not.toHaveBeenCalled()
+    expect(createLaps).not.toHaveBeenCalled()
+  },
+)
+
 it('invalidates old FIT laps and freshness when a summary changes their verified identity', async () => {
   const observedAt = new Date('2026-11-12T02:00:00Z')
   findExisting.mockResolvedValue(storedActivity({ fitCheckedAt: observedAt }))

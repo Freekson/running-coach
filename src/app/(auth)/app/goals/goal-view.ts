@@ -1,4 +1,5 @@
 import { goalInputSchema, type GoalInput, type GoalRecord } from '@/lib/goals'
+import type { GoalProgress } from '@/lib/goal-progress'
 
 export type GoalType = GoalInput['type']
 export type GoalSurface = GoalInput['surface']
@@ -19,13 +20,15 @@ export type GoalFields = {
 export type GoalView = GoalFields & {
   id: string
   archived: boolean
+  progress?: GoalProgress
 }
 
-export function goalView(goal: GoalRecord): GoalView {
+export function goalView(goal: GoalRecord & { progress?: GoalProgress }): GoalView {
   const seconds = goal.targetTimeSeconds
   return {
     id: goal.id,
     archived: goal.archived,
+    progress: goal.progress,
     name: goal.name,
     type: goal.type,
     distanceKm: goal.distanceMeters === null ? '' : String(goal.distanceMeters / 1000),

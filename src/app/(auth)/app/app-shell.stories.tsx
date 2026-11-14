@@ -66,6 +66,16 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Desktop: Story = {}
+export const TrainingExpanded: Story = {
+  args: { children: <h1>Goals</h1> },
+  decorators: [
+    (Story) => (
+      <PathnameContext.Provider value="/app/goals">
+        <Story />
+      </PathnameContext.Provider>
+    ),
+  ],
+}
 export const Mobile: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } },
 }

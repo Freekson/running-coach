@@ -1,0 +1,107 @@
+.content {
+  min-width: 0;
+  animation: pulse 1.4s ease-in-out infinite alternate;
+}
+.line,
+.shortLine,
+.title,
+.subtitle,
+.action,
+.icon,
+.badge,
+.value {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+}
+.line {
+  width: 140px;
+  height: 20px;
+}
+.shortLine {
+  width: 80px;
+  height: 16px;
+}
+.title {
+  width: 110px;
+  height: var(--type-size-page);
+}
+.subtitle {
+  width: 280px;
+  height: 24px;
+}
+.action {
+  width: 160px;
+  height: var(--control-height);
+  border-radius: 10px;
+}
+.pageHeading {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.tabs {
+  padding-bottom: 16px;
+}
+.filter {
+  display: grid;
+  gap: 8px;
+
+  .action {
+    width: 100%;
+  }
+}
+.card {
+  min-height: 280px;
+}
+.icon {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 12px;
+}
+.cardHeading {
+  display: grid;
+  flex: 1 1 120px;
+  gap: 8px;
+  min-width: 0;
+}
+.badge {
+  width: 60px;
+  height: 26px;
+  border-radius: 999px;
+}
+.value {
+  width: 150px;
+  height: var(--type-size-page);
+}
+.cardActions {
+  gap: 16px;
+  min-height: calc(var(--control-height-compact) + 12px);
+
+  > :first-child {
+    width: var(--control-height-compact);
+    margin-right: auto;
+  }
+  > :nth-child(2) {
+    width: 60px;
+  }
+  > :last-child {
+    width: 36px;
+  }
+}
+@keyframes pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .content {
+    animation: none;
+  }
+}

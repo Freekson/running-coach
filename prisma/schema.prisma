@@ -84,6 +84,7 @@ model User {
   syncRuns                    SyncRun[]
   goals                       Goal[]
   planDrafts                  PlanDraft[]
+  trainingPlans               TrainingPlan[]
   workoutPublications         WorkoutPublication[]
 
   @@index([status])
@@ -231,8 +232,9 @@ model Goal {
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  planDrafts PlanDraft[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planDrafts    PlanDraft[]
+  trainingPlans TrainingPlan[]
 
   @@unique([userId, id])
   @@index([userId, archived, createdAt(sort: Desc), id(sort: Desc)])
@@ -240,25 +242,114 @@ model Goal {
 }
 
 // Scheduling values are copied from the profile, then owned independently by this draft.
-// RUN-33 owns approved plans/revisions; RUN-37 consumes this draft boundary.
+// Generated content never implies approval or publication.
 model PlanDraft {
-  id                String    @id @default(uuid()) @db.Uuid
-  userId            String    @map("user_id") @db.Uuid
-  goalId            String    @map("goal_id") @db.Uuid
-  sessionsPerWeek   Int       @map("sessions_per_week") @db.SmallInt
-  availableWeekdays Int[]     @map("available_weekdays")
-  maxSessionMinutes Int?      @map("max_session_minutes")
-  startDate         DateTime? @map("start_date") @db.Date
-  timezone          String    @db.VarChar(100)
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                     String    @id @default(uuid()) @db.Uuid
+  userId                 String    @map("user_id") @db.Uuid
+  goalId                 String    @map("goal_id") @db.Uuid
+  sessionsPerWeek        Int       @map("sessions_per_week") @db.SmallInt
+  availableWeekdays      Int[]     @map("available_weekdays")
+  maxSessionMinutes      Int?      @map("max_session_minutes")
+  startDate              DateTime? @map("start_date") @db.Date
+  timezone               String    @db.VarChar(100)
+  state                  String    @default("DRAFT") @db.VarChar(16)
+  version                Int       @default(0)
+  content                Json?
+  validatedGoalUpdatedAt DateTime? @map("validated_goal_updated_at") @db.Timestamptz(6)
+  planId                 String?   @map("plan_id") @db.Uuid
+  baseRevisionId         String?   @map("base_revision_id") @db.Uuid
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  goal Goal @relation(fields: [userId, goalId], references: [userId, id], onDelete: NoAction)
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal             Goal          @relation(fields: [userId, goalId], references: [userId, id], onDelete: NoAction)
+  plan             TrainingPlan? @relation(fields: [userId, goalId, planId], references: [userId, goalId, id], onDelete: NoAction)
+  baseRevision     PlanRevision? @relation("DraftBase", fields: [userId, planId, baseRevisionId], references: [userId, planId, id], onDelete: NoAction)
+  approvedRevision PlanRevision? @relation("RevisionSource")
 
+  @@unique([userId, planId, id])
   @@index([userId, updatedAt(sort: Desc)])
   @@index([userId, goalId])
   @@map("plan_drafts")
+}
+
+model TrainingPlan {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  goalId            String   @map("goal_id") @db.Uuid
+  currentRevisionId String?  @map("current_revision_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal            Goal             @relation(fields: [userId, goalId], references: [userId, id], onDelete: NoAction)
+  currentRevision PlanRevision?    @relation("CurrentRevision", fields: [userId, id, currentRevisionId], references: [userId, planId, id], onDelete: NoAction)
+  revisions       PlanRevision[]   @relation("PlanRevisions")
+  drafts          PlanDraft[]
+  workouts        PlannedWorkout[]
+
+  @@unique([userId, goalId, id])
+  @@unique([userId, id])
+  @@index([userId, updatedAt(sort: Desc)])
+  @@map("training_plans")
+}
+
+// Full revision membership is stored, including retained history, never inferred from pointers.
+model PlanRevision {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  goalId           String   @map("goal_id") @db.Uuid
+  planId           String   @map("plan_id") @db.Uuid
+  sourceDraftId    String   @unique @map("source_draft_id") @db.Uuid
+  parentRevisionId String?  @map("parent_revision_id") @db.Uuid
+  revisionNumber   Int      @map("revision_number")
+  snapshot         Json
+  approvedAt       DateTime @default(now()) @map("approved_at") @db.Timestamptz(6)
+
+  plan          TrainingPlan          @relation("PlanRevisions", fields: [userId, goalId, planId], references: [userId, goalId, id], onDelete: Cascade)
+  sourceDraft   PlanDraft             @relation("RevisionSource", fields: [userId, planId, sourceDraftId], references: [userId, planId, id], onDelete: NoAction)
+  parent        PlanRevision?         @relation("RevisionParent", fields: [userId, planId, parentRevisionId], references: [userId, planId, id], onDelete: NoAction)
+  children      PlanRevision[]        @relation("RevisionParent")
+  currentFor    TrainingPlan[]        @relation("CurrentRevision")
+  refreshDrafts PlanDraft[]           @relation("DraftBase")
+  workouts      PlanRevisionWorkout[]
+
+  @@unique([userId, planId, id])
+  @@unique([userId, planId, sourceDraftId])
+  @@unique([planId, revisionNumber])
+  @@map("plan_revisions")
+}
+
+model PlannedWorkout {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  planId      String    @map("plan_id") @db.Uuid
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  lockedAt    DateTime? @map("locked_at") @db.Timestamptz(6)
+
+  plan      TrainingPlan          @relation(fields: [userId, planId], references: [userId, id], onDelete: Cascade)
+  revisions PlanRevisionWorkout[]
+
+  @@unique([userId, planId, id])
+  @@map("planned_workouts")
+}
+
+model PlanRevisionWorkout {
+  userId        String   @map("user_id") @db.Uuid
+  planId        String   @map("plan_id") @db.Uuid
+  revisionId    String   @map("revision_id") @db.Uuid
+  workoutId     String   @map("workout_id") @db.Uuid
+  scheduledDate DateTime @map("scheduled_date") @db.Date
+  timezone      String   @db.VarChar(100)
+  definition    Json
+  cancelled     Boolean  @default(false)
+
+  revision PlanRevision   @relation(fields: [userId, planId, revisionId], references: [userId, planId, id], onDelete: Cascade)
+  workout  PlannedWorkout @relation(fields: [userId, planId, workoutId], references: [userId, planId, id], onDelete: NoAction)
+
+  @@id([revisionId, workoutId])
+  @@index([userId, planId, workoutId])
+  @@map("plan_revision_workouts")
 }
 
 // Publication intent only: never a second approved-plan/workout store.

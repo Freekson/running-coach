@@ -8,6 +8,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     public.athlete_profiles,
     public.goals,
     public.plan_drafts,
+    public.training_plans,
+    public.planned_workouts,
     public.workout_publications,
     public.workout_publication_attempts,
     public.body_measurements,
@@ -27,6 +29,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     public.auth_invitations,
     public.auth_rate_limits
 TO running_coach_runtime;
+
+-- Approved snapshots are append-only; account deletion cascades still work.
+GRANT SELECT, INSERT ON TABLE public.plan_revisions, public.plan_revision_workouts
+TO running_coach_runtime;
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.plan_revisions, public.plan_revision_workouts
+FROM running_coach_runtime;
 
 REVOKE ALL ON TABLE public.database_identity FROM running_coach_runtime;
 GRANT SELECT ON TABLE public.database_identity TO running_coach_runtime;

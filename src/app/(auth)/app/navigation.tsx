@@ -10,6 +10,7 @@ import {
   Heart,
   History,
   LayoutDashboard,
+  ListOrdered,
   Settings,
   Shield,
   Target,
@@ -29,7 +30,9 @@ function TrainingNavigation({ pathname }: { pathname: string }) {
     pathname === '/app/training' ||
     pathname.startsWith('/app/training/') ||
     pathname === '/app/goals' ||
-    pathname.startsWith('/app/goals/')
+    pathname.startsWith('/app/goals/') ||
+    pathname === '/app/workouts' ||
+    pathname.startsWith('/app/workouts/')
   const [expanded, setExpanded] = useState(active)
   const trigger = useRef<HTMLButtonElement>(null)
   const router = useRouter()
@@ -75,6 +78,7 @@ function TrainingNavigation({ pathname }: { pathname: string }) {
           <div className={styles.trainingSubmenuLinks}>
             {[
               { label: 'Goals', href: '/app/goals', icon: Target },
+              { label: 'Workouts', href: '/app/workouts', icon: ListOrdered },
               { label: 'History', href: '/app/training', icon: History },
             ].map(({ label, href, icon: Icon }) => (
               <Link

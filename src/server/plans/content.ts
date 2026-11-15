@@ -1,45 +1,14 @@
 import 'server-only'
 
-import { z } from 'zod'
-import { localDateSchema } from '@/lib/goals'
 import { planConstraintsSchema, type PlanConstraints } from '@/lib/plan-constraints'
 import { workoutDefinitionSchema } from '@/schemas/workout-definition.v1'
-
-// PostgreSQL UUID identity is case-insensitive; normalize before comparing IDs.
-export const planUuidSchema = z.uuid().toLowerCase()
-
-export const scheduledPlanWorkoutSchema = z.strictObject({
-  workoutId: planUuidSchema,
-  scheduledDate: localDateSchema,
-  definition: workoutDefinitionSchema,
-  cancelled: z.boolean().default(false),
-})
-
-// Internal persistence contract. RUN-34 owns the public AI exchange envelope.
-export const planContentSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  macroPlan: z.strictObject({
-    startDate: localDateSchema,
-    endDate: localDateSchema,
-    strategy: z.string().trim().min(1).max(10000),
-    phases: z
-      .array(
-        z.strictObject({
-          startDate: localDateSchema,
-          endDate: localDateSchema,
-          label: z.string().trim().min(1).max(160),
-          notes: z.string().max(4000),
-        }),
-      )
-      .min(1)
-      .max(200),
-  }),
-  detailWindow: z.strictObject({ startDate: localDateSchema, endDate: localDateSchema }),
-  workouts: z.array(scheduledPlanWorkoutSchema).max(200),
-})
-
-export type PlanContent = z.infer<typeof planContentSchema>
-export type ScheduledPlanWorkout = z.infer<typeof scheduledPlanWorkoutSchema>
+import type { PlanContent, ScheduledPlanWorkout } from '@/schemas/plan-content.v1'
+export {
+  planContentSchema,
+  planUuidSchema,
+  scheduledPlanWorkoutSchema,
+} from '@/schemas/plan-content.v1'
+export type { PlanContent, ScheduledPlanWorkout } from '@/schemas/plan-content.v1'
 
 export class PlanValidationError extends Error {}
 

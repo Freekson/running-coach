@@ -1,0 +1,38 @@
+{
+  "kind": "response",
+  "requestFixture": "no-garmin-account",
+  "value": {
+    "schemaVersion": 1,
+    "requestId": "00000000-0000-4000-8000-000000000100",
+    "draftVersion": 0,
+    "mode": "initial",
+    "macroPlan": {
+      "startDate": "2026-11-16",
+      "endDate": "2027-01-31",
+      "strategy": "Conservative progression based on recent recorded load and uncertainty",
+      "phases": [
+        {
+          "startDate": "2026-11-16",
+          "endDate": "2027-01-31",
+          "label": "Gradual base",
+          "notes": "Review load with the athlete; older PBs do not establish current form"
+        }
+      ]
+    },
+    "detailWindow": { "startDate": "2026-11-16", "endDate": "2026-12-13" },
+    "workouts": [
+      {
+        "workoutId": "00000000-0000-4000-8000-000000000200",
+        "scheduledDate": "2026-11-17",
+        "definition": {
+          "schemaVersion": 1,
+          "name": "Synthetic easy run",
+          "sport": "RUNNING",
+          "steps": []
+        }
+      }
+    ],
+    "warnings": ["Recorded history may be incomplete. Explicit review is required."]
+  },
+  "expectedPath": "workouts.0.definition.steps"
+}

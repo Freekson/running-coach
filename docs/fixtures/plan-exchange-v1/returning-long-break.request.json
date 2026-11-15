@@ -1,0 +1,876 @@
+{
+  "schemaVersion": 1,
+  "requestId": "00000000-0000-4000-8000-000000000100",
+  "generatedAt": "2026-11-15T03:00:00.000Z",
+  "athleteLocalDate": "2026-11-15",
+  "timezone": "Asia/Tokyo",
+  "goal": {
+    "name": "Synthetic arbitrary distance",
+    "type": "COMPLETION",
+    "distanceMeters": 12345,
+    "targetTimeSeconds": null,
+    "targetCount": null,
+    "measurementWindow": null,
+    "targetDate": "2027-01-31",
+    "surface": "ANY",
+    "elevationGainM": null
+  },
+  "draft": {
+    "draftId": "00000000-0000-4000-8000-000000000101",
+    "version": 0,
+    "constraints": {
+      "sessionsPerWeek": 3,
+      "availableWeekdays": [0, 1, 2, 3, 4, 5, 6],
+      "maxSessionMinutes": 60,
+      "startDate": "2026-11-16",
+      "timezone": "Asia/Tokyo"
+    }
+  },
+  "allowedDetailWindow": { "startDate": "2026-11-16", "endDate": "2026-12-13" },
+  "lockedDates": [],
+  "trainingContext": {
+    "activityHistoryCoverage": {
+      "status": "partial",
+      "provider": "GARMIN",
+      "timezone": "Asia/Tokyo",
+      "window": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+      "lastManualSyncAt": "2026-11-15T02:00:00Z",
+      "completeWindows": [],
+      "failedWindows": [{ "startDate": "2026-10-01", "endDate": "2026-10-14" }],
+      "unfetchedWindows": [{ "startDate": "2026-08-23", "endDate": "2026-09-30" }],
+      "label": "recorded history only"
+    },
+    "lastRecordedRunAt": "2025-01-01T00:00:00.000Z",
+    "daysSinceLastRecordedRun": {
+      "value": 683,
+      "unit": "days",
+      "provenance": {
+        "source": "DERIVED",
+        "observedAt": "2026-11-15T03:00:00.000Z",
+        "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+        "quality": "derived"
+      }
+    },
+    "recentTrainingSummary": {
+      "sport": "RUNNING",
+      "timezone": "Asia/Tokyo",
+      "weeks": [
+        {
+          "window": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+          "coverage": "unavailable",
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": null,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          }
+        }
+      ],
+      "rollingTotals": [
+        {
+          "weeks": 4,
+          "window": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "weeks": 8,
+          "window": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          }
+        },
+        {
+          "weeks": 12,
+          "window": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "completedSessions": {
+            "value": null,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          },
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+              "quality": "unavailable"
+            }
+          }
+        }
+      ],
+      "recentToOlderDistanceRatio": {
+        "value": null,
+        "unit": "ratio",
+        "provenance": {
+          "source": "DERIVED",
+          "observedAt": "2026-11-15T03:00:00.000Z",
+          "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+          "quality": "unavailable"
+        }
+      }
+    },
+    "recentRunSamples": [],
+    "selection": {
+      "policy": "v1: exclude unresolved duplicates; reserve longest and fastest evidenced run; then newest; timestamp/id tie-break",
+      "window": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+      "eligibleRuns": 0,
+      "excludedDuplicateCandidates": 0,
+      "truncatedRuns": 0,
+      "truncatedLaps": 0
+    },
+    "schemaVersion": 1,
+    "lifecycle": { "firstPlanForAthlete": true, "firstWorkoutInPlan": true },
+    "athleteReport": {
+      "experience": "returning_runner",
+      "firstWorkoutEver": false,
+      "provenance": {
+        "source": "ATHLETE",
+        "observedAt": "2026-11-15T03:00:00.000Z",
+        "period": { "startDate": "2026-11-15", "endDate": "2026-11-15" },
+        "quality": "reported"
+      },
+      "previousExperience": {
+        "value": "Previously trained regularly; long break",
+        "provenance": {
+          "source": "ATHLETE",
+          "observedAt": "2026-11-15T03:00:00.000Z",
+          "period": { "startDate": "2026-11-15", "endDate": "2026-11-15" },
+          "quality": "reported"
+        }
+      },
+      "raceOrTestResults": [
+        {
+          "kind": "historical_pb",
+          "date": "2024-05-01",
+          "distanceMeters": 10000,
+          "elapsedSeconds": 2400,
+          "provenance": {
+            "source": "ATHLETE",
+            "observedAt": "2026-11-15T03:00:00.000Z",
+            "period": { "startDate": "2024-05-01", "endDate": "2024-05-01" },
+            "quality": "reported"
+          }
+        }
+      ]
+    }
+  },
+  "consent": {
+    "recordedActivityMetrics": true,
+    "activityHeartRate": true,
+    "recordedLaps": true,
+    "athleteReport": true,
+    "limitationsOrFatigue": false,
+    "recovery": false
+  },
+  "mode": "initial"
+}

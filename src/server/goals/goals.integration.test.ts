@@ -356,11 +356,16 @@ describe.skipIf(!enabled)('RUN-32 PostgreSQL ownership and draft boundaries', ()
       sessionsPerWeek: 4,
       availableWeekdays: [0, 1, 3, 5],
     })
-    await updatePlanDraftConstraints(ownerA, draftB.id, {
-      ...custom,
-      sessionsPerWeek: 1,
-      availableWeekdays: [6],
-    })
+    await updatePlanDraftConstraints(
+      ownerA,
+      draftB.id,
+      {
+        ...custom,
+        sessionsPerWeek: 1,
+        availableWeekdays: [6],
+      },
+      draftB.version,
+    )
     expect((await getPlanDraft(ownerA, draftA.id)).constraints.sessionsPerWeek).toBe(4)
     expect(
       (await prisma.athleteProfile.findUniqueOrThrow({ where: { userId: a.id } }))
@@ -376,9 +381,9 @@ describe.skipIf(!enabled)('RUN-32 PostgreSQL ownership and draft boundaries', ()
       OwnedResourceNotFoundError,
     )
     await expect(getPlanDraft(ownerB, draftA.id)).rejects.toBeInstanceOf(OwnedResourceNotFoundError)
-    await expect(updatePlanDraftConstraints(ownerB, draftA.id, custom)).rejects.toBeInstanceOf(
-      OwnedResourceNotFoundError,
-    )
+    await expect(
+      updatePlanDraftConstraints(ownerB, draftA.id, custom, draftA.version),
+    ).rejects.toBeInstanceOf(OwnedResourceNotFoundError)
     await expect(deleteGoal(ownerA, aGoal.id)).rejects.toBeInstanceOf(GoalInUseError)
     // Bypass services to prove the composite owner FK, not only query filtering.
     await expect(

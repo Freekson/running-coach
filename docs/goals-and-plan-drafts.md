@@ -68,7 +68,11 @@ length is optional, in minutes. Start date is optional; timezone is an IANA name
 - `createPlanDraft(owner, { goalId, constraints? })` checks the selected goal's
   owner. When constraints are omitted, it copies current profile defaults.
 - `getPlanDraft(owner, id)` reads that owner's draft and validated constraints.
-- `updatePlanDraftConstraints(owner, id, constraints)` edits only that draft.
+- `updatePlanDraftConstraints(owner, id, constraints, expectedVersion)` edits only
+  that draft, rejects stale versions, and clears generated content/validation.
+  Approved drafts are read only. RUN-33's [plan revision services](plan-revisions.md)
+  extend this same draft store with explicit generation, validation, approval,
+  immutable snapshots and refresh drafts.
 
 Each `plan_drafts` row stores its own schedule fields and references a goal through
 `(user_id, goal_id) → goals(user_id, id)`. Different drafts may use the same goal

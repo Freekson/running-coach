@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { z } from 'zod'
+import { Prisma, type PlanDraft } from '@prisma/client'
 import { planConstraintsSchema, planConstraintDefaults } from '@/lib/plan-constraints'
 import { getPrismaClient } from '@/server/db/client'
 import {
@@ -10,9 +11,11 @@ import {
   OwnedResourceNotFoundError,
   type OwnerContext,
 } from '@/server/authorization/ownership'
+import { constraintsFromDraft, planUuidSchema } from './content'
+import { planTransaction, requireDraft, requireDraftVersion } from './transaction'
 
 export const createPlanDraftSchema = z.strictObject({
-  goalId: z.uuid(),
+  goalId: planUuidSchema,
   constraints: planConstraintsSchema.optional(),
 })
 
@@ -35,9 +38,8 @@ export async function createPlanDraft(owner: OwnerContext, input: unknown) {
   const userId = ownerId(owner)
   const parsed = createPlanDraftSchema.parse(input)
   const constraints = parsed.constraints ?? (await getPlanConstraintDefaults(owner))
-  const prisma = await getPrismaClient()
   // The composite FK also enforces goal ownership if the goal changes concurrently.
-  return prisma.$transaction(async (tx) => {
+  return planTransaction(async (tx) => {
     if (
       !(await tx.goal.findFirst({
         where: ownedIdWhere(owner, parsed.goalId),
@@ -57,34 +59,50 @@ export async function createPlanDraft(owner: OwnerContext, input: unknown) {
 }
 
 export async function getPlanDraft(owner: OwnerContext, id: string) {
-  const where = ownedIdWhere(owner, z.uuid().parse(id))
+  const where = ownedIdWhere(owner, planUuidSchema.parse(id))
   const prisma = await getPrismaClient()
   const draft = await prisma.planDraft.findFirst({ where })
   if (!draft) throw new OwnedResourceNotFoundError()
+  return serializeDraft(draft)
+}
+
+function serializeDraft(draft: PlanDraft) {
   return {
     id: draft.id,
     goalId: draft.goalId,
-    constraints: planConstraintsSchema.parse({
-      sessionsPerWeek: draft.sessionsPerWeek,
-      availableWeekdays: draft.availableWeekdays,
-      maxSessionMinutes: draft.maxSessionMinutes,
-      startDate: draft.startDate?.toISOString().slice(0, 10) ?? null,
-      timezone: draft.timezone,
-    }),
+    state: draft.state,
+    version: draft.version,
+    planId: draft.planId,
+    baseRevisionId: draft.baseRevisionId,
+    content: draft.content,
+    constraints: constraintsFromDraft(draft),
   }
 }
 
-export async function updatePlanDraftConstraints(owner: OwnerContext, id: string, input: unknown) {
-  const where = ownedIdWhere(owner, z.uuid().parse(id))
+export async function updatePlanDraftConstraints(
+  owner: OwnerContext,
+  id: string,
+  input: unknown,
+  expectedVersion: number,
+) {
+  const where = ownedIdWhere(owner, planUuidSchema.parse(id))
   const constraints = planConstraintsSchema.parse(input)
-  const prisma = await getPrismaClient()
-  const result = await prisma.planDraft.updateMany({
-    where,
-    data: {
-      ...constraints,
-      startDate: constraints.startDate ? new Date(`${constraints.startDate}T00:00:00Z`) : null,
-    },
+  z.number().int().nonnegative().parse(expectedVersion)
+  return planTransaction(async (tx) => {
+    const draft = await requireDraft(tx, owner, id)
+    requireDraftVersion(draft, expectedVersion)
+    return serializeDraft(
+      await tx.planDraft.update({
+        where: { id: where.id, userId: where.userId, version: draft.version },
+        data: {
+          ...constraints,
+          startDate: constraints.startDate ? new Date(`${constraints.startDate}T00:00:00Z`) : null,
+          state: 'DRAFT',
+          content: Prisma.DbNull,
+          validatedGoalUpdatedAt: null,
+          version: { increment: 1 },
+        },
+      }),
+    )
   })
-  if (!result.count) throw new OwnedResourceNotFoundError()
-  return getPlanDraft(owner, id)
 }

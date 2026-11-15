@@ -146,6 +146,7 @@ import HealthPage from './health/page'
 import HealthLoading from './health/loading'
 import { HealthSkeleton } from './health/health-skeleton'
 import AdminPage from './admin/page'
+import WorkoutsPage from './workouts/page'
 import { AppShell } from './app-shell'
 import { AccountUnavailable } from './account-unavailable'
 import { AccountUnavailableError } from '@/server/auth/current-user'
@@ -172,6 +173,23 @@ beforeEach(() => {
 })
 
 describe('authenticated /app routes', () => {
+  it('authenticates workout editor deep links before rendering', async () => {
+    getCurrentUser.mockResolvedValue(null)
+    requestPath.mockReturnValue('/app/workouts')
+    await expect(WorkoutsPage()).rejects.toThrow('Redirect to /sign-in?next=%2Fapp%2Fworkouts')
+  })
+
+  it.each(['user-a', 'user-b'])(
+    'renders a fresh workout editor for %s without loading another owner',
+    async (id) => {
+      getCurrentUser.mockResolvedValue({ id, role: 'USER' })
+      const result = await WorkoutsPage()
+      expect(result.type).toBe(AppShell)
+      expect(result.props.user.id).toBe(id)
+      expect(getMeasurementSystem).toHaveBeenLastCalledWith({ userId: id })
+    },
+  )
+
   it('redirects signed-out and expired sessions before rendering nested pages', async () => {
     getCurrentUser.mockResolvedValue(null)
     const dashboard = <DashboardPage />

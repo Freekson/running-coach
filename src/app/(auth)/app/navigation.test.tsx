@@ -28,6 +28,7 @@ describe('app navigation', () => {
     expect([...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual([
       '/app/dashboard',
       '/app/goals',
+      '/app/workouts',
       '/app/training',
       '/app/health',
       '/app/settings',
@@ -45,6 +46,7 @@ describe('app navigation', () => {
     expect([...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual([
       '/app/dashboard',
       '/app/goals',
+      '/app/workouts',
       '/app/training',
       '/app/health',
       '/app/settings',
@@ -63,6 +65,13 @@ describe('app navigation', () => {
       expect(markup).not.toContain('/app/training/goals')
     },
   )
+
+  it('highlights Workouts and expands Training for the builder', () => {
+    usePathname.mockReturnValue('/app/workouts')
+    const markup = renderToStaticMarkup(<AppNavigation role="USER" />)
+    expect(markup).toMatch(/href="\/app\/workouts"[^>]*aria-current="page"/)
+    expect(markup).toContain('aria-expanded="true"')
+  })
 
   it('shows an email fallback and sign-out when the user has no name', () => {
     const markup = renderToStaticMarkup(

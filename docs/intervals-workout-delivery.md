@@ -3,6 +3,9 @@
 For the canonical mapping contract, supported subset, manual probe payload and
 Forerunner 165 verification procedure, see [RUN-40 workout mapping](intervals-workout-mapping.md).
 
+For durable explicit publication/retry and the pending approved-plan integration,
+see the [RUN-41 outbox foundation](intervals-publication-outbox.md).
+
 Intervals.icu is the outbound bridge for scheduled structured workouts. Completed Garmin Activities and Health data come directly from the existing Garmin Personal API integration, initiated manually by the owner through Sync now / Import / Resume / Retry. An Intervals.icu account is never required to read or import that data. There is no Intervals.icu activity or wellness ingestion, Cron, or background polling.
 
 ## Authentication decision — 2026-11-14

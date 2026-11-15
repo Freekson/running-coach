@@ -8,6 +8,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     public.athlete_profiles,
     public.goals,
     public.plan_drafts,
+    public.workout_publications,
+    public.workout_publication_attempts,
     public.body_measurements,
     public.integration_connections,
     public.integration_credentials,

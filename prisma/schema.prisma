@@ -84,6 +84,7 @@ model User {
   syncRuns                    SyncRun[]
   goals                       Goal[]
   planDrafts                  PlanDraft[]
+  workoutPublications         WorkoutPublication[]
 
   @@index([status])
   @@map("users")
@@ -258,6 +259,59 @@ model PlanDraft {
   @@index([userId, updatedAt(sort: Desc)])
   @@index([userId, goalId])
   @@map("plan_drafts")
+}
+
+// Publication intent only: never a second approved-plan/workout store.
+model WorkoutPublication {
+  id                 String              @id @default(uuid()) @db.Uuid
+  userId             String              @map("user_id") @db.Uuid
+  provider           IntegrationProvider @default(INTERVALS)
+  localWorkoutId     String              @map("local_workout_id") @db.Uuid
+  approvedRevisionId String              @map("approved_revision_id") @db.Uuid
+  publishRevision    Int                 @map("publish_revision")
+  operation          String              @db.VarChar(16)
+  status             String              @default("QUEUED") @db.VarChar(24)
+  externalId         String              @map("external_id") @db.VarChar(128)
+  remoteEventId      Int?                @map("remote_event_id")
+  // Bind remote identity to the authenticated athlete, surviving same-account key rotation.
+  remoteAthleteId    String?             @map("remote_athlete_id") @db.VarChar(64)
+  payloadHash        String              @map("payload_hash") @db.Char(64)
+  payload            Json
+  pendingWrite       Json?               @map("pending_write")
+  leaseToken         String?             @map("lease_token") @db.Uuid
+  leaseExpiresAt     DateTime?           @map("lease_expires_at") @db.Timestamptz(6)
+  attemptCount       Int                 @default(0) @map("attempt_count")
+  errorCode          String?             @map("error_code") @db.VarChar(48)
+  publishedAt        DateTime?           @map("published_at") @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts WorkoutPublicationAttempt[]
+
+  @@unique([userId, provider, localWorkoutId])
+  @@unique([userId, id])
+  @@unique([userId, provider, externalId])
+  @@unique([userId, provider, remoteAthleteId, remoteEventId])
+  @@index([userId, status, updatedAt])
+  @@map("workout_publications")
+}
+
+model WorkoutPublicationAttempt {
+  id              String    @id @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  publicationId   String    @map("publication_id") @db.Uuid
+  publishRevision Int       @map("publish_revision")
+  payloadHash     String    @map("payload_hash") @db.Char(64)
+  status          String    @db.VarChar(24)
+  errorCode       String?   @map("error_code") @db.VarChar(48)
+  startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt      DateTime? @map("finished_at") @db.Timestamptz(6)
+
+  publication WorkoutPublication @relation(fields: [userId, publicationId], references: [userId, id], onDelete: Cascade)
+
+  @@index([userId, publicationId, startedAt])
+  @@map("workout_publication_attempts")
 }
 
 model BodyMeasurement {

@@ -116,7 +116,12 @@ describe.skipIf(!enabled)('activity history on isolated PostgreSQL', () => {
   it('scopes Dashboard summaries to their owner and excludes both unresolved duplicate candidates', async () => {
     const now = new Date('2026-11-13T06:00:00Z')
     const candidates = await prisma.activity.findMany({
-      where: { userId: owner.userId, sportType: 'RUNNING' },
+      where: {
+        userId: owner.userId,
+        sportType: 'RUNNING',
+        sourceProvider: 'GARMIN',
+        garminAccountId: '444444',
+      },
       take: 2,
       orderBy: { id: 'asc' },
     })

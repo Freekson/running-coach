@@ -53,6 +53,24 @@ export const RejectedKey: Story = {
     },
   },
 }
+export const DeliveryPrepared: Story = {
+  ...Connected,
+  args: {
+    ...Connected.args,
+    deliveryInitial: {
+      status: 'READY',
+      source: 'technical-delivery-reference',
+      verifiedAt: '2026-11-15T00:00:00.000Z',
+    },
+  },
+}
+export const DeliveryNeedsAttention: Story = {
+  ...Connected,
+  args: {
+    ...Connected.args,
+    deliveryInitial: { status: 'FAILED', source: null, verifiedAt: null },
+  },
+}
 export const Narrow: Story = {
   ...Connected,
   decorators: [

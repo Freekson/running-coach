@@ -11,6 +11,11 @@ import { FormField } from '@/components/ui/FormField'
 import { SectionHeading } from '@/components/ui/SectionHeading'
 import { useToast } from '@/components/ui/Toast'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
+import {
+  intervalsPaceMessages,
+  intervalsPaceStatusSchema,
+  type IntervalsPaceStatus,
+} from '@/lib/intervals-pace-status'
 import styles from './intervals-connection.module.scss'
 
 const endpoint = '/api/integrations/intervals'
@@ -54,25 +59,54 @@ async function errorMessage(response: Response) {
   return 'The connection is temporarily unavailable. Try again later.'
 }
 
-export function IntervalsConnection({ initial }: { initial?: ProviderConnectionStatus }) {
+export function IntervalsConnection({
+  initial,
+  deliveryInitial,
+}: {
+  initial?: ProviderConnectionStatus
+  deliveryInitial?: IntervalsPaceStatus
+}) {
   const connection = initial?.provider === 'INTERVALS' ? initial : disconnected
   return (
     <IntervalsConnectionPanel
       key={`${connection.status}:${connection.updatedAt}`}
       initial={connection}
+      deliveryInitial={deliveryInitial}
     />
   )
 }
 
-function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStatus }) {
+function IntervalsConnectionPanel({
+  initial,
+  deliveryInitial,
+}: {
+  initial: ProviderConnectionStatus
+  deliveryInitial?: IntervalsPaceStatus
+}) {
   const router = useRouter()
   const toast = useToast()
   const [connection, setConnection] = useState(initial)
   const [apiKey, setApiKey] = useState('')
   const [keyOpen, setKeyOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
-  const [pending, setPending] = useState<'connect' | 'test' | 'disconnect' | null>(null)
+  const [pending, setPending] = useState<'connect' | 'test' | 'disconnect' | 'pace' | null>(null)
+  const incomingDeliveryVersion = JSON.stringify([
+    deliveryInitial?.status,
+    deliveryInitial?.source,
+    deliveryInitial?.verifiedAt,
+  ])
+  const [deliveryVersion, setDeliveryVersion] = useState(incomingDeliveryVersion)
+  const [delivery, setDelivery] = useState<IntervalsPaceStatus | null>(deliveryInitial ?? null)
+  const [deliveryError, setDeliveryError] = useState('')
   const [error, setError] = useState('')
+  // Refresh merges new server props into this mounted panel. Equivalent snapshots
+  // must retain local preparation results; changed snapshots supersede them.
+  if (deliveryVersion !== incomingDeliveryVersion) {
+    setDeliveryVersion(incomingDeliveryVersion)
+    setDelivery(deliveryInitial ?? null)
+    setDeliveryError('')
+  }
+  const displayedError = error || deliveryError
   const saved = connection.status !== 'DISCONNECTED'
   const connected = connection.status === 'CONNECTED'
   const label = connected
@@ -94,6 +128,7 @@ function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStat
     if (pending) return
     setPending(action)
     setError('')
+    setDeliveryError('')
     try {
       const response = await fetch(endpoint, {
         method: action === 'connect' ? 'PUT' : action === 'test' ? 'POST' : 'DELETE',
@@ -115,12 +150,14 @@ function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStat
         return
       }
       if (action === 'disconnect') {
+        setDelivery(null)
         setConnection(disconnected)
         setRemoveOpen(false)
       } else {
         const status: ProviderConnectionStatus = await response.json()
         if (status.provider !== 'INTERVALS') throw new Error('Unexpected provider')
         setConnection(status)
+        if (action === 'connect') setDelivery(null)
         setKeyOpen(false)
         setApiKey('')
         if (action === 'test' && status.status !== 'CONNECTED') {
@@ -157,6 +194,56 @@ function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStat
     void run('connect')
   }
 
+  async function prepareDelivery() {
+    if (pending) return
+    setPending('pace')
+    setError('')
+    setDeliveryError('')
+    try {
+      const response = await fetch(`${endpoint}/pace`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      if (!response.ok) {
+        let message =
+          response.status === 401
+            ? 'Your session expired. Sign in again.'
+            : response.status === 409
+              ? 'Your connection changed. Reconnect or prepare delivery again.'
+              : 'Unable to prepare workout delivery. Try again later.'
+        try {
+          const body: unknown = await response.json()
+          if (body && typeof body === 'object' && 'code' in body) {
+            const known = Object.entries(intervalsPaceMessages).find(([code]) => code === body.code)
+            if (known) message = known[1]
+          }
+        } catch {
+          /* Only known safe recovery copy is displayed. */
+        }
+        setDeliveryError(message)
+        setDelivery({ status: 'FAILED', source: null, verifiedAt: null })
+        return
+      }
+      const parsed = intervalsPaceStatusSchema.safeParse(await response.json())
+      if (!parsed.success || parsed.data.status !== 'READY')
+        throw new Error('Invalid delivery response')
+      setDelivery(parsed.data)
+      toast(
+        'success',
+        'Workout delivery settings verified. Garmin watch delivery is not verified.',
+        'intervals-delivery',
+      )
+    } catch {
+      setDeliveryError('Unable to reach delivery preparation. Check your connection and try again.')
+      setDelivery({ status: 'FAILED', source: null, verifiedAt: null })
+    } finally {
+      setPending(null)
+    }
+  }
+
   return (
     <Card as="section" className={styles.card} aria-label="Intervals.icu workout delivery">
       <div className={styles.header}>
@@ -191,12 +278,19 @@ function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStat
         Connect your own Intervals.icu account for planned workouts. Garmin Activity/Health Sync now
         imports completed data independently and requires no Intervals.icu account.
       </p>
+      <p>
+        Preparing or publishing pace workouts may configure missing delivery settings in your
+        Intervals.icu account. Existing settings are preserved. This can affect zones and load
+        estimates shown in Intervals.icu; Running Coach does not treat these settings as your
+        fitness measurements.
+      </p>
       <div className={styles.actions}>
         <Button
           variant={saved ? 'secondary' : 'primary'}
           disabled={Boolean(pending)}
           onClick={() => {
             setError('')
+            setDeliveryError('')
             setKeyOpen(true)
           }}
         >
@@ -209,6 +303,14 @@ function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStat
           onClick={() => void run('test')}
         >
           Test connection
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={Boolean(pending) || !saved || connection.status === 'ERROR'}
+          loading={pending === 'pace'}
+          onClick={() => void prepareDelivery()}
+        >
+          Prepare workout delivery
         </Button>
         {saved && (
           <Button
@@ -223,9 +325,20 @@ function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStat
           </Button>
         )}
       </div>
-      {error && !keyOpen && !removeOpen && (
+      {delivery?.status === 'READY' && (
+        <p role="status">
+          Delivery settings verified. No workout was published. Garmin Connect and watch receipt
+          remain unverified.
+        </p>
+      )}
+      {delivery?.status === 'FAILED' && !displayedError && (
+        <p role="status">
+          Delivery preparation needs attention. Prepare workout delivery again before publishing.
+        </p>
+      )}
+      {displayedError && !keyOpen && !removeOpen && (
         <p role="alert" className={styles.error}>
-          {error}
+          {displayedError}
         </p>
       )}
       <details className={styles.guide}>
@@ -234,7 +347,7 @@ function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStat
           <li>
             Sign in to your own Intervals.icu account. In Settings, find Developer Settings and
             generate or copy your personal API key. Connect it here. Personal keys grant broad
-            access; Running Coach uses only the planned-workout calendar.
+            access; Running Coach uses the planned-workout calendar and Run delivery settings.
           </li>
           <li>
             In Intervals.icu Settings → Connections → Garmin Connect, connect your own Garmin
@@ -245,6 +358,12 @@ function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStat
           <li>
             Use Test connection here to check calendar access. This does not verify your Garmin
             settings or watch.
+          </li>
+          <li>
+            Use Prepare workout delivery to verify pace delivery settings and configure missing
+            values automatically. No threshold-pace knowledge or manual entry is required. If
+            preparation fails, follow the displayed recovery message and try again before
+            publishing.
           </li>
         </ol>
         <p>
@@ -290,6 +409,11 @@ function IntervalsConnectionPanel({ initial }: { initial: ProviderConnectionStat
           }
         >
           <form id="intervals-key-form" onSubmit={save} className={styles.form} noValidate>
+            <p>
+              When you prepare or publish pace workouts, Running Coach may configure missing
+              delivery settings in this account. This can affect Intervals.icu zones and load
+              estimates.
+            </p>
             <FormField
               id="intervals-api-key"
               label="Intervals.icu API key"

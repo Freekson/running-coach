@@ -1,0 +1,11 @@
+[
+  {
+    "category": "WORKOUT",
+    "type": "Run",
+    "target": "PACE",
+    "name": "Running Coach delivery probe",
+    "description": "- Warm up 600s\n\n3x\n- Fast interval 400mtr 4:30-4:00/km Pace\n- Recovery 90s\n\n- Set recovery 180s\n\n3x\n- Fast interval 400mtr 4:30-4:00/km Pace\n- Recovery 90s\n\n- Set recovery 180s\n\n- Cool down 300s",
+    "start_date_local": "2026-11-15T00:00:00",
+    "external_id": "running-coach:poc:synthetic-session"
+  }
+]

@@ -5,7 +5,7 @@ import { renderToString } from 'react-dom/server'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { MeasurementSystemProvider } from '../measurement-system-provider'
 import { NavigationGuardProvider, useNavigationGuard } from '../navigation-guard'
-import { AthleteSettings } from './athlete-settings'
+import { AthleteSettings, AthleteSettingsRoute } from './athlete-settings'
 
 const { refreshProfile, notify } = vi.hoisted(() => ({
   refreshProfile: vi.fn(),
@@ -580,3 +580,45 @@ it('keeps the previous system if the server rejects the switch', async () => {
   expect(host.textContent).toContain('Measurement system could not be saved')
   expect(host.querySelector<HTMLInputElement>('input[value="METRIC"]')?.checked).toBe(true)
 })
+
+it.each(['READY', 'FAILED'] as const)(
+  'shows persisted %s delivery status after remounting the Settings route',
+  async (status) => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    for (const mount of ['first visit', 'reload']) {
+      await act(async () =>
+        root.render(
+          <MeasurementSystemProvider key={mount} initialSystem="METRIC">
+            <AthleteSettingsRoute
+              initial={initial}
+              registrationName="Avery Runner"
+              garminConnection={{
+                provider: 'GARMIN',
+                status: 'DISCONNECTED',
+                createdAt: null,
+                updatedAt: null,
+              }}
+              intervalsConnection={{
+                provider: 'INTERVALS',
+                status: 'CONNECTED',
+                createdAt: null,
+                updatedAt: '2026-11-15T00:00:00.000Z',
+              }}
+              intervalsDelivery={{
+                status,
+                source: status === 'READY' ? 'technical-delivery-reference' : null,
+                verifiedAt: status === 'READY' ? '2026-11-15T00:00:00.000Z' : null,
+              }}
+              garminImports={[]}
+            />
+          </MeasurementSystemProvider>,
+        ),
+      )
+      expect(host.textContent).toContain(
+        status === 'READY' ? 'Delivery settings verified' : 'Delivery preparation needs attention',
+      )
+    }
+    expect(fetchMock).not.toHaveBeenCalled()
+  },
+)

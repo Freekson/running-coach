@@ -5,6 +5,7 @@ import { Prisma, type IntegrationProvider } from '@prisma/client'
 import { z } from 'zod'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
 import { getPrismaClient } from '@/server/db/client'
+import { INTERVALS_PACE_REFERENCE_PREFIX } from '@/server/intervals/pace-reference'
 import {
   ownerId,
   requireOwnedConnection,
@@ -237,7 +238,15 @@ export async function saveProviderApiKey(
             })
         }
       } else {
-        await tx.syncCursor.deleteMany({ where: { userId, connectionId: connection.id } })
+        await tx.syncCursor.deleteMany({
+          where: {
+            userId,
+            connectionId: connection.id,
+            ...(provider === 'INTERVALS'
+              ? { NOT: { dataType: { startsWith: INTERVALS_PACE_REFERENCE_PREFIX } } }
+              : {}),
+          },
+        })
       }
       if (provider === 'GARMIN' && !connection.externalAccountId)
         await tx.garminImportRateLimit.updateMany({
@@ -376,7 +385,15 @@ export async function disconnectProvider(owner: OwnerContext, provider: Integrat
       data: { status: 'REVOKED' },
     })
     await tx.integrationCredential.deleteMany({ where: { userId, connectionId: connection.id } })
-    await tx.syncCursor.deleteMany({ where: { userId, connectionId: connection.id } })
+    await tx.syncCursor.deleteMany({
+      where: {
+        userId,
+        connectionId: connection.id,
+        ...(provider === 'INTERVALS'
+          ? { NOT: { dataType: { startsWith: INTERVALS_PACE_REFERENCE_PREFIX } } }
+          : {}),
+      },
+    })
     if (provider === 'GARMIN')
       await tx.garminImportRateLimit.updateMany({
         where: { userId },

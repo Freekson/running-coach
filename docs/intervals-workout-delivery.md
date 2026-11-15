@@ -1,5 +1,8 @@
 # Intervals.icu account connection (RUN-39)
 
+For the canonical mapping contract, supported subset, manual probe payload and
+Forerunner 165 verification procedure, see [RUN-40 workout mapping](intervals-workout-mapping.md).
+
 Intervals.icu is the outbound bridge for scheduled structured workouts. Completed Garmin Activities and Health data come directly from the existing Garmin Personal API integration, initiated manually by the owner through Sync now / Import / Resume / Retry. An Intervals.icu account is never required to read or import that data. There is no Intervals.icu activity or wellness ingestion, Cron, or background polling.
 
 ## Authentication decision — 2026-11-14
@@ -8,13 +11,16 @@ The provider supports OAuth 2.0 and recommends it for multi-user apps. Its curre
 
 The provider's [API access guide](https://forum.intervals.icu/t/api-access-to-intervals-icu/609) documents personal API keys, Basic authentication with literal username `API_KEY`, and athlete `0` resolving to the authenticated account. Its [OAuth guide](https://forum.intervals.icu/t/intervals-icu-oauth-support/2759) also confirms personal-key access to a user's own data. The [API terms](https://forum.intervals.icu/t/intervals-icu-api-terms-and-conditions/114087) apply. Each athlete supplies a key from their own account; never configure an app-wide key or a coach's key to address another athlete.
 
-For an eventual OAuth implementation, request only `CALENDAR:WRITE` (which implies calendar read access) for planned workout publication. No `ACTIVITY`, `WELLNESS`, `CHATS`, `LIBRARY`, or `SETTINGS` scope is needed for this flow. The provider's [planned workout upload guide](https://forum.intervals.icu/t/uploading-planned-workouts-to-intervals-icu/63624) confirms the calendar-write scope. OAuth tokens must be stored encrypted per owner, with state/PKCE protection and provider-side disconnect; OAuth is not implemented by this change. Personal keys are broader than those scopes: the UI discloses this and the adapter restricts itself to a calendar-only check.
+For an eventual OAuth implementation, planned workout publication needs `CALENDAR:WRITE` (which implies calendar read access). The RUN-40 delivery preflight also needs settings access and, when provisioning missing fields, `SETTINGS:WRITE`; the provider [documents this permission for sport-settings updates](https://forum.intervals.icu/t/api-access-to-intervals-icu/609/101). No `ACTIVITY`, `WELLNESS`, `CHATS` or `LIBRARY` access is required. OAuth tokens must be stored encrypted per owner, with state/PKCE protection and provider-side disconnect; OAuth is not implemented here. Personal keys are broader than those scopes. Connect/Test retain a read-only calendar check; the separately invoked delivery preparation uses Run sport settings.
 
 ## Athlete setup
 
 1. Sign in to your own Intervals.icu account. In [Settings](https://intervals.icu/settings), find Developer Settings near the bottom and generate/copy your personal API key.
 2. In Running Coach Settings → Intervals.icu, select **Connect Intervals.icu** and paste the key. The server checks calendar access before saving it encrypted. A failed replacement leaves the previous key intact. Keys cannot be retrieved through the status API or displayed after saving.
 3. Select **Test connection**. `Key saved` becomes `Connected` only after a successful test of the currently saved key. This verifies calendar read access; it does not perform a write or verify Garmin permissions or watch receipt.
+
+   Select **Prepare workout delivery** to verify Run delivery settings. Missing fields are configured automatically with the versioned delivery-only reference; valid existing settings are preserved. No threshold knowledge/input is required. The connection dialog explains that this can affect zones/load estimates in Intervals.icu. Preparation publishes no workout. Errors provide a recovery action before retrying. Each future explicit Publish in RUN-41 must run the preflight again against the current key.
+
 4. In Intervals.icu Settings → Connections → Garmin Connect, connect your **own Garmin Connect account**, enable **Upload planned workouts**, and authorize the matching Garmin planned-workout permission. Check that sport filters include the planned sessions. Activity import is a separate setting; it is not required for this app's outbound delivery or Garmin inbound import.
 5. Once publication is available in RUN-41, explicitly select **Publish to Intervals.icu** separately from importing/approving a plan. Connecting, testing, and approving a plan do not publish anything. RUN-39 adds no workout write endpoint.
 
@@ -46,6 +52,18 @@ Errors: 400 malformed input; 401 no session; 403 unavailable account or wrong Or
 The adapter makes one GET to `https://intervals.icu/api/v1/athlete/0/events?oldest=YYYY-MM-DD&newest=YYYY-MM-DD&category=WORKOUT` for the current UTC date. It uses Basic auth server-side, refuses redirects, times out after 10 seconds and bounds responses to 512 KiB. Calendar records are runtime-validated and discarded, never ingested. This read-only probe cannot establish write permission or Garmin delivery.
 
 ## Verification boundaries
+
+RUN-40 adds `GET /api/integrations/intervals/pace` for local metadata and an
+authenticated same-origin `POST` for explicit delivery preparation. POST accepts
+an empty body or `{}` only (maximum 512 bytes), never an owner, athlete or reference
+override. Public status exposes status, provenance source and verification time;
+credential bindings remain server-only. Disconnect/replacement clears the local
+preflight checkpoint but does not undo previously configured provider settings.
+Technical-reference provenance is retained separately for the owner and provider
+Run group; a new key must pass preflight again before readiness is restored.
+Settings page reloads display the saved local readiness without a provider call.
+See [the mapping runbook](intervals-workout-mapping.md) for the tested reference,
+readback rules, failure recovery and real watch evidence.
 
 Synthetic tests cover independent USER/ADMIN owners, encrypted storage, replacement/disconnect, stale-key status protection, negative auth and Origin paths, safe provider errors, and UI actions. A local HTTP stand-in exercises request serialization and timeout behavior. PostgreSQL coverage lives in the existing guarded provider-vault integration suite; run `pnpm test:db` only against an isolated test/development database. No live credentials are used by default tests.
 

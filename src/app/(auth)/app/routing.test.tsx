@@ -56,6 +56,13 @@ vi.mock('@/server/provider/vault', () => ({
     }),
   ),
 }))
+vi.mock('@/server/intervals/pace-state', () => ({
+  getIntervalsPaceStatus: vi.fn(async () => ({
+    status: 'NOT_CHECKED',
+    source: null,
+    verifiedAt: null,
+  })),
+}))
 vi.mock('@/server/activity/history', () => ({
   getDashboardActivityOverview: vi.fn(async () => ({ weeks: [], timezone: 'UTC' })),
   getDashboardRecentActivities: vi.fn(async () => []),
@@ -148,6 +155,7 @@ import {
   getMeasurementSystem,
 } from '@/server/athlete/profile'
 import { getProviderConnectionStatus } from '@/server/provider/vault'
+import { getIntervalsPaceStatus } from '@/server/intervals/pace-state'
 import {
   getHealthTrendRows,
   getHealthPreferredTimezone,
@@ -220,6 +228,7 @@ describe('authenticated /app routes', () => {
     expect(getActivityHistory).not.toHaveBeenCalled()
     expect(getAthleteSettings).not.toHaveBeenCalled()
     expect(getAthleteProfile).not.toHaveBeenCalled()
+    expect(getIntervalsPaceStatus).not.toHaveBeenCalled()
   })
 
   it('provides honest content for each linked route', async () => {
@@ -279,6 +288,29 @@ describe('authenticated /app routes', () => {
       { timezone: undefined },
     )
     expect(result.props.children.props.children[1].type).toBe(ActivityHistory)
+  })
+
+  it('reloads persisted delivery status for the signed-in owner on each Settings visit', async () => {
+    const ready = {
+      status: 'READY',
+      source: 'technical-delivery-reference',
+      verifiedAt: '2026-11-15T00:00:00.000Z',
+    } as const
+    const failed = { status: 'FAILED', source: null, verifiedAt: null } as const
+    vi.mocked(getIntervalsPaceStatus)
+      .mockResolvedValueOnce(ready)
+      .mockResolvedValueOnce(ready)
+      .mockResolvedValueOnce(failed)
+    getCurrentUser.mockResolvedValue({ id: 'owner-a', role: 'USER', email: null })
+    expect((await SettingsPage()).props.children.props.intervalsDelivery).toEqual(ready)
+    expect((await SettingsPage()).props.children.props.intervalsDelivery).toEqual(ready)
+    getCurrentUser.mockResolvedValue({ id: 'owner-b', role: 'ADMIN', email: null })
+    expect((await SettingsPage()).props.children.props.intervalsDelivery).toEqual(failed)
+    expect(vi.mocked(getIntervalsPaceStatus).mock.calls.map(([owner]) => owner)).toEqual([
+      { userId: 'owner-a' },
+      { userId: 'owner-a' },
+      { userId: 'owner-b' },
+    ])
   })
 
   it('shows a safe Training read error and rejects invalid filters without querying history', async () => {

@@ -12,6 +12,7 @@ import { SectionHeading } from '@/components/ui/SectionHeading'
 import { useToast } from '@/components/ui/Toast'
 import type { MeasurementSystem } from '@/lib/measurement-system'
 import type { ProviderConnectionStatus } from '@/lib/provider-connection-status'
+import type { IntervalsPaceStatus } from '@/lib/intervals-pace-status'
 import type { GarminImportStreamState } from '@/server/garmin/data-import'
 import type { ProfilePatch } from '@/server/athlete/profile'
 import { useMeasurementSystem } from '../measurement-system-provider'
@@ -56,6 +57,7 @@ export function AthleteSettingsRoute({
   registrationName,
   garminConnection,
   intervalsConnection,
+  intervalsDelivery,
   garminImports,
   garminImportPreferenceKey,
 }: {
@@ -63,6 +65,7 @@ export function AthleteSettingsRoute({
   registrationName: string | null
   garminConnection: ProviderConnectionStatus
   intervalsConnection?: ProviderConnectionStatus
+  intervalsDelivery?: IntervalsPaceStatus
   garminImports: GarminImportStreamState[]
   garminImportPreferenceKey?: string
 }) {
@@ -73,6 +76,7 @@ export function AthleteSettingsRoute({
       registrationName={registrationName}
       garminConnection={garminConnection}
       intervalsConnection={intervalsConnection}
+      intervalsDelivery={intervalsDelivery}
       garminImports={garminImports}
       garminImportPreferenceKey={garminImportPreferenceKey}
       onProfileSaved={() => router.refresh()}
@@ -85,6 +89,7 @@ export function AthleteSettings({
   registrationName,
   garminConnection,
   intervalsConnection,
+  intervalsDelivery,
   garminImports,
   garminImportPreferenceKey,
   onProfileSaved,
@@ -93,6 +98,7 @@ export function AthleteSettings({
   registrationName?: string | null
   garminConnection?: ProviderConnectionStatus
   intervalsConnection?: ProviderConnectionStatus
+  intervalsDelivery?: IntervalsPaceStatus
   garminImports?: GarminImportStreamState[]
   garminImportPreferenceKey?: string
   onProfileSaved?: () => void
@@ -469,7 +475,7 @@ export function AthleteSettings({
         garminImports={garminImports}
         garminImportPreferenceKey={garminImportPreferenceKey}
       />
-      <IntervalsConnection initial={intervalsConnection} />
+      <IntervalsConnection initial={intervalsConnection} deliveryInitial={intervalsDelivery} />
 
       <Dialog
         open={unsavedOpen}

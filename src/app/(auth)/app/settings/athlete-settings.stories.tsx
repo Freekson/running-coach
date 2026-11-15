@@ -56,6 +56,27 @@ export const Imperial: Story = {
     },
   },
 }
+export const DeliveryPrepared: Story = {
+  args: {
+    intervalsConnection: {
+      provider: 'INTERVALS',
+      status: 'CONNECTED',
+      createdAt: '2026-11-15T00:00:00.000Z',
+      updatedAt: '2026-11-15T00:00:00.000Z',
+    },
+    intervalsDelivery: {
+      status: 'READY',
+      source: 'technical-delivery-reference',
+      verifiedAt: '2026-11-15T00:00:00.000Z',
+    },
+  },
+}
+export const DeliveryNeedsAttention: Story = {
+  args: {
+    ...DeliveryPrepared.args,
+    intervalsDelivery: { status: 'FAILED', source: null, verifiedAt: null },
+  },
+}
 export const Mobile: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } },
 }

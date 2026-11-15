@@ -28,6 +28,8 @@ import {
 } from './vault'
 import { CredentialUnavailableError } from './credential-crypto'
 import { connectIntervals, testIntervalsConnection } from '@/server/intervals/connection'
+import { preflightIntervalsPace } from '@/server/intervals/pace-preflight'
+import { getIntervalsPaceStatus } from '@/server/intervals/pace-state'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
 if (requested) config()
@@ -59,6 +61,106 @@ describe.skipIf(!enabled)('provider vault on isolated PostgreSQL', () => {
     else process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION = oldVersion
     if (oldKey === undefined) delete process.env.CREDENTIAL_ENCRYPTION_KEY_V1
     else process.env.CREDENTIAL_ENCRYPTION_KEY_V1 = oldKey
+  })
+
+  it('isolates pace configuration checkpoints and encrypted keys for two owners, including replacement', async () => {
+    const a = await prisma.user.create({ data: { authSubject: `${prefix}-pace-a` } })
+    const b = await prisma.user.create({ data: { authSubject: `${prefix}-pace-b`, role: 'ADMIN' } })
+    const ownerA = getOwnerContext({ id: a.id, role: 'USER', email: null })
+    const ownerB = getOwnerContext({ id: b.id, role: 'ADMIN', email: null })
+    const keyA = 'synthetic-pace-db-key-a'
+    const keyB = 'synthetic-pace-db-key-b'
+    await saveProviderApiKey(ownerA, 'INTERVALS', keyA)
+    await saveProviderApiKey(ownerB, 'INTERVALS', keyB)
+    const settings = new Map<
+      string,
+      {
+        id: number
+        types: string[]
+        threshold_pace: number | null
+        pace_zones: number[] | null
+        pace_zone_names: string[] | null
+      }
+    >([
+      [
+        keyA,
+        { id: 123, types: ['Run'], threshold_pace: null, pace_zones: null, pace_zone_names: null },
+      ],
+      [
+        keyB,
+        {
+          id: 456,
+          types: ['Run'],
+          threshold_pace: 4,
+          pace_zones: [80, 100, 999],
+          pace_zone_names: ['A', 'B', 'C'],
+        },
+      ],
+    ])
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      expect(String(input)).toContain('/athlete/0/sport-settings')
+      const authorization = new Headers(init?.headers).get('Authorization')
+      const key = [...settings.keys()].find(
+        (value) => authorization === `Basic ${Buffer.from(`API_KEY:${value}`).toString('base64')}`,
+      )
+      if (!key) return new Response(null, { status: 401 })
+      if (init?.method === 'PUT') {
+        const patch: unknown = JSON.parse(String(init.body))
+        if (!patch || typeof patch !== 'object') throw new Error('Invalid patch')
+        Object.assign(settings.get(key)!, patch)
+        return Response.json(settings.get(key))
+      }
+      return Response.json([settings.get(key)])
+    })
+    try {
+      expect((await preflightIntervalsPace(ownerA)).summary.source).toBe(
+        'technical-delivery-reference',
+      )
+      expect((await getIntervalsPaceStatus(ownerB)).status).toBe('NOT_CHECKED')
+      expect((await preflightIntervalsPace(ownerB)).summary.source).toBe(
+        'existing-user-configuration',
+      )
+      const checkpointA = await prisma.syncCursor.findFirstOrThrow({
+        where: { userId: a.id, dataType: 'INTERVALS_PACE_PREFLIGHT_V1' },
+      })
+      const checkpointB = await prisma.syncCursor.findFirstOrThrow({
+        where: { userId: b.id, dataType: 'INTERVALS_PACE_PREFLIGHT_V1' },
+      })
+      expect(checkpointA.connectionId).not.toBe(checkpointB.connectionId)
+      expect(JSON.stringify(checkpointA.cursorOrCheckpoint)).not.toContain(keyA)
+      expect(settings.get(keyB)?.threshold_pace).toBe(4)
+      await saveProviderApiKey(ownerA, 'INTERVALS', 'synthetic-pace-db-replacement')
+      expect((await getIntervalsPaceStatus(ownerA)).status).toBe('NOT_CHECKED')
+      expect((await getIntervalsPaceStatus(ownerB)).status).toBe('READY')
+      settings.set('synthetic-pace-db-replacement', settings.get(keyA)!)
+      expect((await preflightIntervalsPace(ownerA)).summary.source).toBe(
+        'technical-delivery-reference',
+      )
+      const restored = await prisma.syncCursor.findFirstOrThrow({
+        where: { userId: a.id, dataType: 'INTERVALS_PACE_PREFLIGHT_V1' },
+      })
+      expect(restored.cursorOrCheckpoint).toMatchObject({
+        referenceVersion: 1,
+        technicalReferenceMps: expect.closeTo(1000 / 300, 12),
+      })
+      expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1)
+      await saveProviderApiKey(ownerA, 'INTERVALS', 'synthetic-pace-db-other-account')
+      settings.set('synthetic-pace-db-other-account', { ...settings.get(keyA)!, id: 789 })
+      expect((await preflightIntervalsPace(ownerA)).summary.source).toBe(
+        'existing-user-configuration',
+      )
+      await disconnectProvider(ownerA, 'INTERVALS')
+      expect((await getIntervalsPaceStatus(ownerA)).status).toBe('NOT_CHECKED')
+      await saveProviderApiKey(ownerA, 'INTERVALS', keyA)
+      expect((await preflightIntervalsPace(ownerA)).summary.source).toBe(
+        'technical-delivery-reference',
+      )
+      expect((await getIntervalsPaceStatus(ownerB)).status).toBe('READY')
+      await disconnectProvider(ownerB, 'INTERVALS')
+      expect((await getIntervalsPaceStatus(ownerB)).status).toBe('NOT_CHECKED')
+    } finally {
+      fetcher.mockRestore()
+    }
   })
 
   it('keeps two Intervals accounts independent through connect, test, replacement and disconnect', async () => {

@@ -28,6 +28,34 @@ export class InvalidCredentialError extends Error {
   }
 }
 
+export class CredentialWriteConflictError extends CredentialUnavailableError {}
+
+type ConnectionWriteVersion = { id: string; version: string }
+
+/** Capture a short-lived server-only version before checking a replacement key remotely. */
+export async function beginProviderApiKeyWrite(
+  owner: OwnerContext,
+  provider: IntegrationProvider,
+): Promise<ConnectionWriteVersion> {
+  const userId = ownerId(owner)
+  const prisma = await getPrismaClient()
+  return prisma.$transaction(async (tx) => {
+    // Keep a credential-free row so Disconnect can invalidate even a first connection attempt.
+    await tx.integrationConnection.upsert({
+      where: { userId_provider: { userId, provider } },
+      create: { id: randomUUID(), userId, provider, authMethod: 'API_KEY', status: 'PENDING' },
+      update: {},
+    })
+    const rows = await tx.$queryRaw<ConnectionWriteVersion[]>`
+      SELECT id, xmin::text AS version FROM integration_connections
+      WHERE user_id = ${userId}::uuid AND provider::text = ${provider}
+      FOR UPDATE
+    `
+    if (rows.length !== 1) throw new CredentialWriteConflictError()
+    return rows[0]
+  })
+}
+
 export class GarminAccountMismatchError extends Error {
   constructor(readonly code: 'ACCOUNT_MISMATCH' | 'ACCOUNT_ALREADY_LINKED') {
     super('Garmin account does not match the saved association')
@@ -56,7 +84,9 @@ function publicStatus(
           : connection.lastSuccessAt === null
             ? 'KEY_SAVED'
             : 'CONNECTED'
-        : 'CONNECTED'
+        : provider === 'INTERVALS' && connection.lastSuccessAt === null
+          ? 'KEY_SAVED'
+          : 'CONNECTED'
       : connection.status === 'EXPIRED'
         ? 'EXPIRED'
         : 'ERROR'
@@ -93,7 +123,11 @@ export async function saveProviderApiKey(
   owner: OwnerContext,
   provider: IntegrationProvider,
   rawKey: string,
-  options: { verifiedGarminAccountId?: string; expectedCredentialNonce?: Uint8Array } = {},
+  options: {
+    verifiedGarminAccountId?: string
+    expectedCredentialNonce?: Uint8Array
+    expectedConnectionVersion?: ConnectionWriteVersion
+  } = {},
 ): Promise<ProviderConnectionStatus> {
   const userId = ownerId(owner)
   const parsed = apiKeySchema.safeParse(rawKey)
@@ -123,6 +157,18 @@ export async function saveProviderApiKey(
   const encrypted = encryptCredential(key, userId, connectionId, provider)
   try {
     await prisma.$transaction(async (tx) => {
+      if (options.expectedConnectionVersion) {
+        // xmin changes on every committed row update, including Disconnect. Lock before
+        // writing credentials so a concurrent replacement/removal cannot pass this check.
+        const rows = await tx.$queryRaw<ConnectionWriteVersion[]>`
+          SELECT id, xmin::text AS version FROM integration_connections
+          WHERE user_id = ${userId}::uuid AND provider::text = ${provider}
+          FOR UPDATE
+        `
+        const expected = options.expectedConnectionVersion
+        if (rows.length !== 1 || rows[0].id !== expected.id || rows[0].version !== expected.version)
+          throw new CredentialWriteConflictError()
+      }
       const connection = await tx.integrationConnection.upsert({
         where: { userId_provider: { userId, provider } },
         create: { id: connectionId, userId, provider, authMethod: 'API_KEY', status: 'PENDING' },

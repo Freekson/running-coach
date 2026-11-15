@@ -1,0 +1,65 @@
+.card {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: clamp(18px, 2.5vw, 24px);
+  overflow-wrap: anywhere;
+}
+
+.header,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.header {
+  justify-content: space-between;
+}
+
+.card p,
+.form p,
+.guide li {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.guide {
+  display: grid;
+  min-width: 0;
+}
+
+.guide summary {
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.guide p,
+.guide a,
+.guide li {
+  margin-top: 12px;
+}
+
+.guide a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--icon-gap);
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.card .error,
+.form .error {
+  color: var(--color-error);
+}
+
+@media (max-width: 600px) {
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

@@ -4,6 +4,8 @@ The vault stores one connection per user and provider in `integration_connection
 
 ## Secret configuration
 
+Intervals.icu account setup, connection checks, personal-key revocation and the outbound-only delivery boundary are documented in [Intervals.icu workout delivery (RUN-39)](intervals-workout-delivery.md).
+
 Set `CREDENTIAL_ENCRYPTION_ACTIVE_VERSION=1` and `CREDENTIAL_ENCRYPTION_KEY_V1` to a separately generated, base64-encoded 32-byte random key in each environment's server-side secret store. For example, generate a value privately with `node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64'))"`. Never put the value in source, `.env.example`, GitHub Actions, a browser variable, logs, or Neon. Use distinct keys for local, Preview, and Production. Missing or malformed key material fails credential writes and reads closed; existing ciphertext remains in the database.
 
 AES-256-GCM encrypts each credential with a fresh 96-bit nonce and authenticates the owner ID, connection ID, provider, and API-key type as associated data. The database stores ciphertext, nonce, tag, and key version. Status responses contain only provider, connection status, and timestamps. The API never returns a key after saving it. Deleting a connection's credential disables local reads; it does **not** revoke the key at OpenAI or another provider.

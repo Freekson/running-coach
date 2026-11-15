@@ -19,6 +19,7 @@ import { useNavigationGuard } from '../navigation-guard'
 import { TrainingExperienceSelect, type TrainingExperience } from './training-experience-select'
 import { useClientReady } from '@/lib/use-client-ready'
 import { ProviderCredentials } from './provider-credentials'
+import { IntervalsConnection } from './intervals-connection'
 import styles from './athlete-settings.module.scss'
 
 type Profile = {
@@ -54,12 +55,14 @@ export function AthleteSettingsRoute({
   initial,
   registrationName,
   garminConnection,
+  intervalsConnection,
   garminImports,
   garminImportPreferenceKey,
 }: {
   initial: Settings
   registrationName: string | null
   garminConnection: ProviderConnectionStatus
+  intervalsConnection?: ProviderConnectionStatus
   garminImports: GarminImportStreamState[]
   garminImportPreferenceKey?: string
 }) {
@@ -69,6 +72,7 @@ export function AthleteSettingsRoute({
       initial={initial}
       registrationName={registrationName}
       garminConnection={garminConnection}
+      intervalsConnection={intervalsConnection}
       garminImports={garminImports}
       garminImportPreferenceKey={garminImportPreferenceKey}
       onProfileSaved={() => router.refresh()}
@@ -80,6 +84,7 @@ export function AthleteSettings({
   initial,
   registrationName,
   garminConnection,
+  intervalsConnection,
   garminImports,
   garminImportPreferenceKey,
   onProfileSaved,
@@ -87,6 +92,7 @@ export function AthleteSettings({
   initial: Settings
   registrationName?: string | null
   garminConnection?: ProviderConnectionStatus
+  intervalsConnection?: ProviderConnectionStatus
   garminImports?: GarminImportStreamState[]
   garminImportPreferenceKey?: string
   onProfileSaved?: () => void
@@ -463,6 +469,7 @@ export function AthleteSettings({
         garminImports={garminImports}
         garminImportPreferenceKey={garminImportPreferenceKey}
       />
+      <IntervalsConnection initial={intervalsConnection} />
 
       <Dialog
         open={unsavedOpen}

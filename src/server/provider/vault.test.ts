@@ -11,8 +11,10 @@ vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser }))
 
 import { getOwnerContext, OwnedResourceNotFoundError } from '@/server/authorization/ownership'
 import { CredentialUnavailableError } from './credential-crypto'
+import { connectIntervals, testIntervalsConnection } from '@/server/intervals/connection'
 import {
   disconnectProvider,
+  CredentialWriteConflictError,
   getProviderConnectionStatus,
   InvalidCredentialError,
   readProviderApiKey,
@@ -45,11 +47,12 @@ type Credential = {
 
 const connections = new Map<string, Connection>()
 const credentials = new Map<string, Credential>()
+const revisions = new Map<string, number>()
 const idFor = (userId: string, provider: string) => `${userId}:${provider}`
 const connectionFor = (where: { userId_provider: { userId: string; provider: string } }) =>
   connections.get(idFor(where.userId_provider.userId, where.userId_provider.provider)) ?? null
 
-const prisma = {
+const prismaStore = {
   integrationConnection: {
     findUnique: vi.fn(async ({ where }: { where: Parameters<typeof connectionFor>[0] }) => {
       const connection = connectionFor(where)
@@ -74,6 +77,7 @@ const prisma = {
         if (existing) return existing
         const connection = { ...create, createdAt: new Date(), updatedAt: new Date() }
         connections.set(idFor(connection.userId, connection.provider), connection)
+        revisions.set(connection.id, 1)
         return connection
       },
     ),
@@ -91,6 +95,7 @@ const prisma = {
         if (!connection) throw new Error('not found')
         Object.assign(connection, data)
         connection.updatedAt = new Date()
+        revisions.set(connection.id, (revisions.get(connection.id) ?? 0) + 1)
         return connection
       },
     ),
@@ -118,6 +123,7 @@ const prisma = {
           return { count: 0 }
         Object.assign(connection, data)
         connection.updatedAt = new Date()
+        revisions.set(connection.id, (revisions.get(connection.id) ?? 0) + 1)
         return { count: 1 }
       },
     ),
@@ -149,7 +155,17 @@ const prisma = {
   garminImportRateLimit: {
     updateMany: vi.fn(async () => ({ count: 0 })),
   },
-  $transaction: vi.fn(async (operation: (tx: typeof prisma) => Promise<void>) => operation(prisma)),
+  $queryRaw: vi.fn(async (_query: TemplateStringsArray, userId: string, provider: string) => {
+    const connection = connections.get(idFor(userId, provider))
+    return connection ? [{ id: connection.id, version: String(revisions.get(connection.id)) }] : []
+  }),
+}
+
+const prisma = {
+  ...prismaStore,
+  $transaction: vi.fn(async <T>(operation: (tx: typeof prismaStore) => Promise<T>): Promise<T> =>
+    operation(prismaStore),
+  ),
 }
 
 const ownerA = () => getOwnerContext({ id: 'owner-a', role: 'USER', email: null })
@@ -160,12 +176,173 @@ beforeEach(() => {
   vi.clearAllMocks()
   connections.clear()
   credentials.clear()
+  revisions.clear()
   getPrismaClient.mockResolvedValue(prisma)
   process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION = '1'
   process.env.CREDENTIAL_ENCRYPTION_KEY_V1 = Buffer.alloc(32, 21).toString('base64')
 })
 
 describe('owner-scoped provider vault', () => {
+  it.each(['initial', 'replacement', 'reconnect'])(
+    'does not restore a credential after Disconnect during %s verification',
+    async (scenario) => {
+      const fetcher = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () => Response.json([]))
+      try {
+        const owner = ownerA()
+        if (scenario !== 'initial') await connectIntervals(owner, 'synthetic-original-key')
+        if (scenario === 'reconnect') await disconnectProvider(owner, 'INTERVALS')
+        fetcher.mockImplementationOnce(async () => {
+          await disconnectProvider(owner, 'INTERVALS')
+          return Response.json([])
+        })
+        await expect(connectIntervals(owner, 'synthetic-late-key')).rejects.toBeInstanceOf(
+          CredentialWriteConflictError,
+        )
+        expect((await getProviderConnectionStatus(owner, 'INTERVALS')).status).toBe('DISCONNECTED')
+        expect(credentials.size).toBe(0)
+      } finally {
+        fetcher.mockRestore()
+      }
+    },
+  )
+
+  it('does not overwrite a newer key replacement that finishes during provider verification', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json([]))
+    try {
+      const owner = ownerA()
+      await connectIntervals(owner, 'synthetic-original-key')
+      fetcher.mockImplementationOnce(async () => {
+        await connectIntervals(owner, 'synthetic-newer-key')
+        return Response.json([])
+      })
+      await expect(connectIntervals(owner, 'synthetic-stale-key')).rejects.toBeInstanceOf(
+        CredentialWriteConflictError,
+      )
+      expect(await readProviderApiKey(owner, 'INTERVALS')).toBe('synthetic-newer-key')
+    } finally {
+      fetcher.mockRestore()
+    }
+  })
+
+  it.each([
+    new Headers({ 'cf-mitigated': 'challenge', 'content-type': 'application/json' }),
+    new Headers({ 'content-type': 'text/html; charset=utf-8' }),
+    new Headers({ 'content-type': 'application/xhtml+xml' }),
+  ])(
+    'preserves a tested key through a Cloudflare/HTML 403 and permits the next test: %j',
+    async (headers) => {
+      const fetcher = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () => Response.json([]))
+      try {
+        const owner = ownerA()
+        await connectIntervals(owner, 'synthetic-working-key')
+        await testIntervalsConnection(owner)
+        const original = await readProviderApiKeySnapshot(owner, 'INTERVALS')
+        fetcher.mockResolvedValueOnce(new Response('challenge', { status: 403, headers }))
+        await expect(testIntervalsConnection(owner)).rejects.toMatchObject({
+          code: 'PROVIDER_UNAVAILABLE',
+        })
+        expect((await getProviderConnectionStatus(owner, 'INTERVALS')).status).toBe('CONNECTED')
+        expect((await readProviderApiKeySnapshot(owner, 'INTERVALS')).nonce).toEqual(original.nonce)
+        expect((await testIntervalsConnection(owner)).status).toBe('CONNECTED')
+      } finally {
+        fetcher.mockRestore()
+      }
+    },
+  )
+
+  it('connects, tests, replaces and revokes two independent Intervals accounts without Garmin credentials', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json([]))
+    try {
+      const a = ownerA()
+      const b = ownerB()
+      const keyA = 'synthetic-intervals-owner-a'
+      const keyB = 'synthetic-intervals-owner-b'
+      expect((await connectIntervals(a, keyA)).status).toBe('KEY_SAVED')
+      expect((await getProviderConnectionStatus(b, 'INTERVALS')).status).toBe('DISCONNECTED')
+      await expect(testIntervalsConnection(b)).rejects.toBeInstanceOf(CredentialUnavailableError)
+      expect((await connectIntervals(b, keyB)).status).toBe('KEY_SAVED')
+      expect((await testIntervalsConnection(a)).status).toBe('CONNECTED')
+      expect((await getProviderConnectionStatus(b, 'INTERVALS')).status).toBe('KEY_SAVED')
+      expect((await testIntervalsConnection(b)).status).toBe('CONNECTED')
+      expect(fetcher.mock.calls.map(([, init]) => init?.headers)).toEqual([
+        {
+          Authorization: `Basic ${Buffer.from(`API_KEY:${keyA}`).toString('base64')}`,
+          Accept: 'application/json',
+        },
+        {
+          Authorization: `Basic ${Buffer.from(`API_KEY:${keyB}`).toString('base64')}`,
+          Accept: 'application/json',
+        },
+        {
+          Authorization: `Basic ${Buffer.from(`API_KEY:${keyA}`).toString('base64')}`,
+          Accept: 'application/json',
+        },
+        {
+          Authorization: `Basic ${Buffer.from(`API_KEY:${keyB}`).toString('base64')}`,
+          Accept: 'application/json',
+        },
+      ])
+      const original = await readProviderApiKeySnapshot(a, 'INTERVALS')
+      await connectIntervals(a, 'synthetic-replacement-key')
+      await recordProviderApiKeyAccess(a, 'INTERVALS', original.nonce, 'REJECTED')
+      expect((await getProviderConnectionStatus(a, 'INTERVALS')).status).toBe('KEY_SAVED')
+      await recordProviderApiKeyAccess(b, 'INTERVALS', original.nonce, 'REJECTED')
+      expect((await getProviderConnectionStatus(b, 'INTERVALS')).status).toBe('CONNECTED')
+
+      fetcher.mockResolvedValueOnce(new Response('revoked', { status: 401 }))
+      await expect(testIntervalsConnection(a)).rejects.toMatchObject({ code: 'INVALID_KEY' })
+      expect((await getProviderConnectionStatus(a, 'INTERVALS')).status).toBe('ERROR')
+      expect((await getProviderConnectionStatus(b, 'INTERVALS')).status).toBe('CONNECTED')
+      await disconnectProvider(a, 'INTERVALS')
+      await expect(testIntervalsConnection(a)).rejects.toBeInstanceOf(CredentialUnavailableError)
+      expect(await readProviderApiKey(b, 'INTERVALS')).toBe(keyB)
+      await disconnectProvider(b, 'INTERVALS')
+      expect(credentials.size).toBe(0)
+      expect([...connections.values()].every((row) => row.provider === 'INTERVALS')).toBe(true)
+      expect(
+        fetcher.mock.calls.every(
+          ([url, init]) => String(url).includes('/athlete/0/events?') && init?.method === 'GET',
+        ),
+      ).toBe(true)
+    } finally {
+      fetcher.mockRestore()
+    }
+  })
+
+  it('retains the existing Intervals key on failed replacement and transient test failures', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json([]))
+    try {
+      const a = ownerA()
+      await connectIntervals(a, 'synthetic-original-intervals-key')
+      await testIntervalsConnection(a)
+      const original = await readProviderApiKeySnapshot(a, 'INTERVALS')
+      fetcher.mockResolvedValueOnce(new Response(null, { status: 401 }))
+      await expect(connectIntervals(a, 'synthetic-bad-replacement')).rejects.toMatchObject({
+        code: 'INVALID_KEY',
+      })
+      expect((await readProviderApiKeySnapshot(a, 'INTERVALS')).nonce).toEqual(original.nonce)
+      for (const status of [429, 500]) {
+        fetcher.mockResolvedValueOnce(new Response(null, { status }))
+        await expect(testIntervalsConnection(a)).rejects.toThrow()
+        expect((await getProviderConnectionStatus(a, 'INTERVALS')).status).toBe('CONNECTED')
+      }
+      fetcher.mockImplementationOnce(async () => {
+        await disconnectProvider(a, 'INTERVALS')
+        return Response.json([])
+      })
+      expect((await testIntervalsConnection(a)).status).toBe('DISCONNECTED')
+      await expect(readProviderApiKey(a, 'INTERVALS')).rejects.toBeInstanceOf(
+        CredentialUnavailableError,
+      )
+    } finally {
+      fetcher.mockRestore()
+    }
+  })
+
   it('saves encrypted keys, replaces them and separates OpenAI from Intervals', async () => {
     const a = ownerA()
     expect(await getProviderConnectionStatus(a, 'OPENAI')).toMatchObject({ status: 'DISCONNECTED' })

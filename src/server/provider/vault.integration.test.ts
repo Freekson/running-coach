@@ -23,8 +23,11 @@ import {
   readProviderApiKeySnapshot,
   recordProviderApiKeyAccess,
   saveProviderApiKey,
+  beginProviderApiKeyWrite,
+  CredentialWriteConflictError,
 } from './vault'
 import { CredentialUnavailableError } from './credential-crypto'
+import { connectIntervals, testIntervalsConnection } from '@/server/intervals/connection'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
 if (requested) config()
@@ -56,6 +59,158 @@ describe.skipIf(!enabled)('provider vault on isolated PostgreSQL', () => {
     else process.env.CREDENTIAL_ENCRYPTION_ACTIVE_VERSION = oldVersion
     if (oldKey === undefined) delete process.env.CREDENTIAL_ENCRYPTION_KEY_V1
     else process.env.CREDENTIAL_ENCRYPTION_KEY_V1 = oldKey
+  })
+
+  it('keeps two Intervals accounts independent through connect, test, replacement and disconnect', async () => {
+    const a = await prisma.user.create({ data: { authSubject: `${prefix}-intervals-a` } })
+    const b = await prisma.user.create({
+      data: { authSubject: `${prefix}-intervals-b`, role: 'ADMIN' },
+    })
+    const ownerA = getOwnerContext({ id: a.id, role: 'USER', email: null })
+    const ownerB = getOwnerContext({ id: b.id, role: 'ADMIN', email: null })
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json([]))
+    try {
+      await connectIntervals(ownerA, 'synthetic-intervals-db-owner-a')
+      await expect(testIntervalsConnection(ownerB)).rejects.toBeInstanceOf(
+        CredentialUnavailableError,
+      )
+      await connectIntervals(ownerB, 'synthetic-intervals-db-owner-b')
+      expect((await testIntervalsConnection(ownerA)).status).toBe('CONNECTED')
+      expect((await getProviderConnectionStatus(ownerB, 'INTERVALS')).status).toBe('KEY_SAVED')
+      expect((await testIntervalsConnection(ownerB)).status).toBe('CONNECTED')
+      const original = await readProviderApiKeySnapshot(ownerA, 'INTERVALS')
+      await connectIntervals(ownerA, 'synthetic-intervals-db-replacement')
+      await recordProviderApiKeyAccess(ownerA, 'INTERVALS', original.nonce, 'REJECTED')
+      await recordProviderApiKeyAccess(ownerB, 'INTERVALS', original.nonce, 'REJECTED')
+      expect((await getProviderConnectionStatus(ownerA, 'INTERVALS')).status).toBe('KEY_SAVED')
+      expect((await getProviderConnectionStatus(ownerB, 'INTERVALS')).status).toBe('CONNECTED')
+      const connection = await prisma.integrationConnection.findUniqueOrThrow({
+        where: { userId_provider: { userId: a.id, provider: 'INTERVALS' } },
+        include: { credential: true },
+      })
+      expect(Buffer.from(connection.credential!.ciphertext).toString()).not.toContain(
+        'synthetic-intervals',
+      )
+      await disconnectProvider(ownerA, 'INTERVALS')
+      await expect(testIntervalsConnection(ownerA)).rejects.toBeInstanceOf(
+        CredentialUnavailableError,
+      )
+      expect(await readProviderApiKey(ownerB, 'INTERVALS')).toBe('synthetic-intervals-db-owner-b')
+      await disconnectProvider(ownerB, 'INTERVALS')
+      expect(
+        await prisma.integrationCredential.count({ where: { userId: { in: [a.id, b.id] } } }),
+      ).toBe(0)
+      expect(
+        await prisma.integrationConnection.count({
+          where: { userId: { in: [a.id, b.id] }, provider: 'GARMIN' },
+        }),
+      ).toBe(0)
+    } finally {
+      fetcher.mockRestore()
+    }
+  })
+
+  it.each(['initial', 'replacement', 'reconnect'])(
+    'rejects a delayed %s save after Disconnect on PostgreSQL',
+    async (scenario) => {
+      const user = await prisma.user.create({
+        data: { authSubject: `${prefix}-delayed-${scenario}` },
+      })
+      const owner = getOwnerContext({ id: user.id, role: 'USER', email: null })
+      const fetcher = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () => Response.json([]))
+      let release: (response: Response) => void = () => {}
+      let started: () => void = () => {}
+      const checking = new Promise<void>((resolve) => {
+        started = resolve
+      })
+      const providerResponse = new Promise<Response>((resolve) => {
+        release = resolve
+      })
+      try {
+        if (scenario !== 'initial') await connectIntervals(owner, 'synthetic-original-race-key')
+        if (scenario === 'reconnect') await disconnectProvider(owner, 'INTERVALS')
+        fetcher.mockImplementationOnce(async () => {
+          started()
+          return providerResponse
+        })
+        const delayed = connectIntervals(owner, 'synthetic-delayed-race-key')
+        const rejected = expect(delayed).rejects.toBeInstanceOf(CredentialWriteConflictError)
+        await checking
+        await disconnectProvider(owner, 'INTERVALS')
+        release(Response.json([]))
+        await rejected
+        expect((await getProviderConnectionStatus(owner, 'INTERVALS')).status).toBe('DISCONNECTED')
+        expect(await prisma.integrationCredential.count({ where: { userId: user.id } })).toBe(0)
+      } finally {
+        release(Response.json([]))
+        fetcher.mockRestore()
+      }
+    },
+  )
+
+  it('rejects a stale replacement and enforces the write version under concurrent saves', async () => {
+    const user = await prisma.user.create({ data: { authSubject: `${prefix}-write-version` } })
+    const other = await prisma.user.create({
+      data: { authSubject: `${prefix}-write-version-other`, role: 'ADMIN' },
+    })
+    const owner = getOwnerContext({ id: user.id, role: 'USER', email: null })
+    const otherOwner = getOwnerContext({ id: other.id, role: 'ADMIN', email: null })
+    const original = await beginProviderApiKeyWrite(owner, 'INTERVALS')
+    await expect(
+      saveProviderApiKey(otherOwner, 'INTERVALS', 'synthetic-cross-owner-version-key', {
+        expectedConnectionVersion: original,
+      }),
+    ).rejects.toBeInstanceOf(CredentialWriteConflictError)
+    expect(await prisma.integrationCredential.count({ where: { userId: other.id } })).toBe(0)
+    await saveProviderApiKey(owner, 'INTERVALS', 'synthetic-newer-version-key', {
+      expectedConnectionVersion: original,
+    })
+    await expect(
+      saveProviderApiKey(owner, 'INTERVALS', 'synthetic-stale-version-key', {
+        expectedConnectionVersion: original,
+      }),
+    ).rejects.toBeInstanceOf(CredentialWriteConflictError)
+    expect(await readProviderApiKey(owner, 'INTERVALS')).toBe('synthetic-newer-version-key')
+
+    const expected = await beginProviderApiKeyWrite(owner, 'INTERVALS')
+    const keys = ['synthetic-concurrent-key-a', 'synthetic-concurrent-key-b']
+    const outcomes = await Promise.allSettled(
+      keys.map((key) =>
+        saveProviderApiKey(owner, 'INTERVALS', key, { expectedConnectionVersion: expected }),
+      ),
+    )
+    expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+    const failure = outcomes.find((result) => result.status === 'rejected')
+    expect(failure?.reason).toBeInstanceOf(CredentialWriteConflictError)
+    const winner = outcomes.findIndex((result) => result.status === 'fulfilled')
+    expect(await readProviderApiKey(owner, 'INTERVALS')).toBe(keys[winner])
+  })
+
+  it('can test the same saved key after a Cloudflare challenge on PostgreSQL', async () => {
+    const user = await prisma.user.create({ data: { authSubject: `${prefix}-cloudflare` } })
+    const owner = getOwnerContext({ id: user.id, role: 'USER', email: null })
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json([]))
+    try {
+      await connectIntervals(owner, 'synthetic-cloudflare-working-key')
+      await testIntervalsConnection(owner)
+      const original = await readProviderApiKeySnapshot(owner, 'INTERVALS')
+      fetcher.mockResolvedValueOnce(
+        new Response('<html>Challenge</html>', {
+          status: 403,
+          headers: { 'cf-mitigated': 'challenge', 'content-type': 'text/html' },
+        }),
+      )
+      await expect(testIntervalsConnection(owner)).rejects.toMatchObject({
+        code: 'PROVIDER_UNAVAILABLE',
+      })
+      expect((await getProviderConnectionStatus(owner, 'INTERVALS')).status).toBe('CONNECTED')
+      expect((await readProviderApiKeySnapshot(owner, 'INTERVALS')).nonce).toEqual(original.nonce)
+      expect((await testIntervalsConnection(owner)).status).toBe('CONNECTED')
+    } finally {
+      fetcher.mockRestore()
+    }
   })
 
   it('re-verifies a legacy saved key with a nonce guard before enabling imports', async () => {

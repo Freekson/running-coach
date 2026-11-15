@@ -11,10 +11,11 @@ export default async function SettingsPage() {
   const user = await getAppUser()
   if (!user) return <AccountUnavailable />
   const owner = getOwnerContext(user)
-  const [profile, garminConnection, garminImports] = await Promise.all([
+  const [profile, garminConnection, garminImports, intervalsConnection] = await Promise.all([
     getAthleteProfile(owner),
     getProviderConnectionStatus(owner, 'GARMIN'),
     getGarminImportState(owner),
+    getProviderConnectionStatus(owner, 'INTERVALS'),
   ])
   return (
     <AppShell user={user} measurementSystem={profile.measurementSystem}>
@@ -23,6 +24,7 @@ export default async function SettingsPage() {
         initial={{ profile }}
         registrationName={user.name ?? null}
         garminConnection={garminConnection}
+        intervalsConnection={intervalsConnection}
         garminImports={garminImports}
         garminImportPreferenceKey={`running-coach:garmin-import-expanded:v1:${user.id}`}
       />

@@ -47,12 +47,14 @@ vi.mock('@/server/athlete/profile', () => ({
   })),
 }))
 vi.mock('@/server/provider/vault', () => ({
-  getProviderConnectionStatus: vi.fn(async (_owner: unknown, provider: 'OPENAI' | 'GARMIN') => ({
-    provider,
-    status: 'DISCONNECTED',
-    createdAt: null,
-    updatedAt: null,
-  })),
+  getProviderConnectionStatus: vi.fn(
+    async (_owner: unknown, provider: 'OPENAI' | 'GARMIN' | 'INTERVALS') => ({
+      provider,
+      status: 'DISCONNECTED',
+      createdAt: null,
+      updatedAt: null,
+    }),
+  ),
 }))
 vi.mock('@/server/activity/history', () => ({
   getDashboardActivityOverview: vi.fn(async () => ({ weeks: [], timezone: 'UTC' })),
@@ -238,7 +240,12 @@ describe('authenticated /app routes', () => {
     expect(settings.props.children.props.garminImportPreferenceKey).toBe(
       'running-coach:garmin-import-expanded:v1:user-a',
     )
-    expect(getProviderConnectionStatus).toHaveBeenCalledTimes(1)
+    expect(getProviderConnectionStatus).toHaveBeenCalledWith({ userId: 'user-a' }, 'INTERVALS')
+    expect(settings.props.children.props.intervalsConnection).toMatchObject({
+      provider: 'INTERVALS',
+      status: 'DISCONNECTED',
+    })
+    expect(getProviderConnectionStatus).toHaveBeenCalledTimes(2)
     const health = await HealthPage()
     expect(health.type).toBe(AppShell)
     expect(getHealthTrendRows).toHaveBeenCalledWith({ userId: 'user-a' }, null, expect.any(String))

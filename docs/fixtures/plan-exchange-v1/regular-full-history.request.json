@@ -1,0 +1,3214 @@
+{
+  "schemaVersion": 1,
+  "requestId": "00000000-0000-4000-8000-000000000100",
+  "generatedAt": "2026-11-15T03:00:00.000Z",
+  "athleteLocalDate": "2026-11-15",
+  "timezone": "Asia/Tokyo",
+  "goal": {
+    "name": "Synthetic arbitrary distance",
+    "type": "COMPLETION",
+    "distanceMeters": 12345,
+    "targetTimeSeconds": null,
+    "targetCount": null,
+    "measurementWindow": null,
+    "targetDate": "2027-01-31",
+    "surface": "ANY",
+    "elevationGainM": null
+  },
+  "draft": {
+    "draftId": "00000000-0000-4000-8000-000000000101",
+    "version": 0,
+    "constraints": {
+      "sessionsPerWeek": 3,
+      "availableWeekdays": [0, 1, 2, 3, 4, 5, 6],
+      "maxSessionMinutes": 60,
+      "startDate": "2026-11-16",
+      "timezone": "Asia/Tokyo"
+    }
+  },
+  "allowedDetailWindow": { "startDate": "2026-11-16", "endDate": "2026-12-13" },
+  "lockedDates": [],
+  "trainingContext": {
+    "activityHistoryCoverage": {
+      "status": "sufficient",
+      "provider": "GARMIN",
+      "timezone": "Asia/Tokyo",
+      "window": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+      "lastManualSyncAt": "2026-11-15T02:00:00Z",
+      "completeWindows": [{ "startDate": "2026-08-23", "endDate": "2026-11-14" }],
+      "failedWindows": [],
+      "unfetchedWindows": [],
+      "label": "recorded history only"
+    },
+    "lastRecordedRunAt": "2026-11-14T00:00:00.000Z",
+    "daysSinceLastRecordedRun": {
+      "value": 1,
+      "unit": "days",
+      "provenance": {
+        "source": "DERIVED",
+        "observedAt": "2026-11-15T03:00:00.000Z",
+        "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+        "quality": "derived"
+      }
+    },
+    "recentTrainingSummary": {
+      "sport": "RUNNING",
+      "timezone": "Asia/Tokyo",
+      "weeks": [
+        {
+          "window": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+          "coverage": "complete",
+          "distance": {
+            "value": 0,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 0,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 7,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+          "coverage": "complete",
+          "distance": {
+            "value": 0,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 0,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 7,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+          "coverage": "complete",
+          "distance": {
+            "value": 0,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 0,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 7,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+          "coverage": "complete",
+          "distance": {
+            "value": 0,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 0,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 7,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+          "coverage": "complete",
+          "distance": {
+            "value": 0,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 0,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": null,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "unavailable"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 7,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+          "coverage": "complete",
+          "distance": {
+            "value": 26000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 3,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 5700,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": 16000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "derived"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 4,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+          "coverage": "complete",
+          "distance": {
+            "value": 15000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 3,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 5700,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": 5000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "derived"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 4,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+          "coverage": "complete",
+          "distance": {
+            "value": 20000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 4,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 7600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": 5000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "derived"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 3,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+          "coverage": "complete",
+          "distance": {
+            "value": 15000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 3,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 5700,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": 5000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "derived"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 4,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+          "coverage": "complete",
+          "distance": {
+            "value": 20000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 4,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 7600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": 5000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "derived"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 3,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+          "coverage": "complete",
+          "distance": {
+            "value": 15000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 3,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 5700,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": 5000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "derived"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 4,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "window": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+          "coverage": "complete",
+          "distance": {
+            "value": 20000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 4,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 7600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "longestRun": {
+            "value": 5000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "daysWithoutRecordedRuns": {
+            "value": 3,
+            "unit": "days",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          }
+        }
+      ],
+      "rollingTotals": [
+        {
+          "weeks": 4,
+          "window": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+          "distance": {
+            "value": 70000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 14,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 26600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "weeks": 8,
+          "window": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+          "distance": {
+            "value": 131000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 24,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 45600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          }
+        },
+        {
+          "weeks": 12,
+          "window": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+          "distance": {
+            "value": 131000,
+            "unit": "m",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "completedSessions": {
+            "value": 24,
+            "unit": "sessions",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "duration": {
+            "value": 45600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          }
+        }
+      ],
+      "recentToOlderDistanceRatio": {
+        "value": 1.1475409836065573,
+        "unit": "ratio",
+        "provenance": {
+          "source": "DERIVED",
+          "observedAt": "2026-11-15T03:00:00.000Z",
+          "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+          "quality": "derived"
+        }
+      }
+    },
+    "recentRunSamples": [
+      {
+        "activityId": "00000000-0000-4000-8000-000000000001",
+        "sport": "RUNNING",
+        "startedAt": "2026-11-14T00:00:00.000Z",
+        "localDate": "2026-11-14",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-14", "endDate": "2026-11-14" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000002",
+        "sport": "RUNNING",
+        "startedAt": "2026-11-12T00:00:00.000Z",
+        "localDate": "2026-11-12",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-12", "endDate": "2026-11-12" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000003",
+        "sport": "RUNNING",
+        "startedAt": "2026-11-10T00:00:00.000Z",
+        "localDate": "2026-11-10",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-10", "endDate": "2026-11-10" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000004",
+        "sport": "RUNNING",
+        "startedAt": "2026-11-08T00:00:00.000Z",
+        "localDate": "2026-11-08",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-08", "endDate": "2026-11-08" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000005",
+        "sport": "RUNNING",
+        "startedAt": "2026-11-06T00:00:00.000Z",
+        "localDate": "2026-11-06",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-06", "endDate": "2026-11-06" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000006",
+        "sport": "RUNNING",
+        "startedAt": "2026-11-04T00:00:00.000Z",
+        "localDate": "2026-11-04",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000007",
+        "sport": "RUNNING",
+        "startedAt": "2026-11-02T00:00:00.000Z",
+        "localDate": "2026-11-02",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-11-02", "endDate": "2026-11-02" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000008",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-31T00:00:00.000Z",
+        "localDate": "2026-10-31",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-31", "endDate": "2026-10-31" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000009",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-29T00:00:00.000Z",
+        "localDate": "2026-10-29",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-29", "endDate": "2026-10-29" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000010",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-27T00:00:00.000Z",
+        "localDate": "2026-10-27",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-27", "endDate": "2026-10-27" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000011",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-25T00:00:00.000Z",
+        "localDate": "2026-10-25",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-25", "endDate": "2026-10-25" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000012",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-23T00:00:00.000Z",
+        "localDate": "2026-10-23",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-23", "endDate": "2026-10-23" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000013",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-21T00:00:00.000Z",
+        "localDate": "2026-10-21",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-21", "endDate": "2026-10-21" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000014",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-19T00:00:00.000Z",
+        "localDate": "2026-10-19",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-19", "endDate": "2026-10-19" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000015",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-17T00:00:00.000Z",
+        "localDate": "2026-10-17",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-17", "endDate": "2026-10-17" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000016",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-15T00:00:00.000Z",
+        "localDate": "2026-10-15",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-15", "endDate": "2026-10-15" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000017",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-13T00:00:00.000Z",
+        "localDate": "2026-10-13",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-13", "endDate": "2026-10-13" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000018",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-11T00:00:00.000Z",
+        "localDate": "2026-10-11",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-11", "endDate": "2026-10-11" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000019",
+        "sport": "RUNNING",
+        "startedAt": "2026-10-09T00:00:00.000Z",
+        "localDate": "2026-10-09",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 5000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 2.7777777777777777,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 360,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-10-09", "endDate": "2026-10-09" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      },
+      {
+        "activityId": "00000000-0000-4000-8000-000000000024",
+        "sport": "RUNNING",
+        "startedAt": "2026-09-29T00:00:00.000Z",
+        "localDate": "2026-09-29",
+        "timezone": "Asia/Tokyo",
+        "sourceTimezone": "Asia/Tokyo",
+        "source": {
+          "source": "GARMIN",
+          "observedAt": "2026-11-15T02:00:00.000Z",
+          "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+          "quality": "recorded"
+        },
+        "distance": {
+          "value": 16000,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "recorded"
+          }
+        },
+        "elapsedTime": {
+          "value": 1900,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "recorded"
+          }
+        },
+        "movingTime": {
+          "value": 1800,
+          "unit": "s",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "recorded"
+          }
+        },
+        "averageSpeed": {
+          "value": 8.88888888888889,
+          "unit": "m/s",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "derived"
+          }
+        },
+        "averagePace": {
+          "value": 112.5,
+          "unit": "s/km",
+          "provenance": {
+            "source": "DERIVED",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "derived"
+          }
+        },
+        "averageHr": {
+          "value": 140,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "recorded"
+          }
+        },
+        "maxHr": {
+          "value": 160,
+          "unit": "bpm",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "recorded"
+          }
+        },
+        "cadence": {
+          "value": 170,
+          "unit": "steps/min",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "recorded"
+          }
+        },
+        "elevationGain": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "recorded"
+          }
+        },
+        "elevationLoss": {
+          "value": 20,
+          "unit": "m",
+          "provenance": {
+            "source": "GARMIN",
+            "observedAt": "2026-11-15T02:00:00.000Z",
+            "period": { "startDate": "2026-09-29", "endDate": "2026-09-29" },
+            "quality": "recorded"
+          }
+        },
+        "surface": "ROAD",
+        "paceBasis": "moving",
+        "flags": [],
+        "lapSamples": null
+      }
+    ],
+    "selection": {
+      "policy": "v1: exclude unresolved duplicates; reserve longest and fastest evidenced run; then newest; timestamp/id tie-break",
+      "window": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+      "eligibleRuns": 24,
+      "excludedDuplicateCandidates": 0,
+      "truncatedRuns": 4,
+      "truncatedLaps": 0
+    },
+    "schemaVersion": 1,
+    "lifecycle": { "firstPlanForAthlete": true, "firstWorkoutInPlan": true },
+    "athleteReport": {
+      "experience": "currently_training",
+      "firstWorkoutEver": false,
+      "provenance": {
+        "source": "ATHLETE",
+        "observedAt": "2026-11-15T03:00:00.000Z",
+        "period": { "startDate": "2026-11-15", "endDate": "2026-11-15" },
+        "quality": "reported"
+      }
+    }
+  },
+  "consent": {
+    "recordedActivityMetrics": true,
+    "activityHeartRate": true,
+    "recordedLaps": true,
+    "athleteReport": true,
+    "limitationsOrFatigue": false,
+    "recovery": false
+  },
+  "mode": "initial"
+}

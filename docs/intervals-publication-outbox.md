@@ -1,4 +1,4 @@
-# RUN-41: explicit publication outbox foundation
+# RUN-41: explicit workout publication outbox
 
 Issue: [RUN-41](https://linear.app/fr-running-coach/issue/RUN-41/implement-idempotent-intervalsicu-workout-publication-outbox).
 
@@ -10,6 +10,21 @@ reader, a local diff preview and separately confirmed per-workout publication
 actions. [Plan refresh](plan-refresh.md) describes the current UI and verification.
 Historical verification notes below describe the earlier foundation boundary;
 they do not establish live provider or Garmin device delivery.
+
+From the current approved plan's history page, choose **Review Intervals.icu
+changes** to read saved per-workout statuses and preview pending operations.
+The saved-status list includes settled publications that no longer appear in the
+pending diff, and survives reopening the page. Workouts with no receipt explicitly
+show local approval or local cancellation only. Queued, running, published, failed,
+uncertain, superseded and cancelled receipts remain distinct. Expired running
+leases appear uncertain in both the saved list and pending diff.
+
+The displayed date is the current approved local date. A receipt from an earlier
+revision is labeled as such; it cannot confirm publication of the new revision.
+Reading these statuses never contacts Intervals.icu, queues work or retries a write.
+The owner must separately confirm each send/recovery operation. No polling, Cron,
+automatic drain or Garmin sync is started. Provider credential/account bindings
+remain server-only and are excluded from this owner-scoped DTO.
 
 `createIntervalsPublicationService(readApproved)` requires a server-only
 `ApprovedWorkoutReader`. `readApprovedPlanWorkout` implements it against the plan
@@ -32,11 +47,11 @@ tests the persisted reader and explicitly confirmed create/cancel operations
 against the local HTTP provider fixture. Composite plan/revision/workout ownership
 is enforced by RUN-33's foreign keys. Publication intent remains a separate store.
 
-RUN-31/38 integration must preview the resulting provider changes and nested
+RUN-31/38 integration previews the resulting provider changes and nested
 repeat expansion before an explicit Publish/Update/Reschedule/Cancel action.
 Approval, import, page visits and provider connection must never call `queue`
-or `dispatch`. The future route/action must authenticate, issue an owner context,
-enforce same-origin writes, validate a small request, and delegate. Configure a
+or `dispatch`. The server actions authenticate, issue an owner context,
+validate a small request, and delegate; Next.js enforces same-origin writes. Configure a
 sufficient request duration for the bounded pace preflight and calendar/FIT
 requests; no continuation is scheduled when the request ends.
 
@@ -105,14 +120,14 @@ server errors, malformed responses and missing markers retain uncertainty.
 changed receipts, and exposes no credential bindings, provider body or raw error.
 Its DTO and browser-safe status copy are in `src/lib/workout-publication.ts`.
 An expired running receipt is presented as uncertain. Locally approved with no
-receipt remains a separate state for the future planning UI.
+receipt remains a separate state in the planning UI.
 
 ## Truthful downstream status
 
 Queued, failed, uncertain, superseded, cancelled and published are distinct.
 `PUBLISHED` means the Intervals calendar and FIT prescription were verified;
 `garminConnect` and `watch` remain `UNVERIFIED` in every response.
-The future UI must use the supplied status labels and downstream guidance:
+The UI uses the supplied status labels and downstream guidance:
 connect Garmin Connect in Intervals Settings, enable **Upload planned workouts**,
 inspect Garmin Connect, sync the watch and verify the workout on the device.
 Cancellation in Intervals also does not prove removal from the watch.
@@ -262,13 +277,56 @@ verified against a fresh temporary database and representative synthetic recover
 rows. Both temporary databases were removed. No production/provider mutation was
 performed. The Windows engine DLL lock recurred; client generation used a temporary
 workspace output while retaining the identical pinned engine DLL, followed by
-cleanup. RUN-33 integration remains pending.
+cleanup. RUN-33 integration was still pending at that foundation stage.
+
+## Completion verification (2026-11-16)
+
+The remaining saved-status UI gap is implemented in
+`src/app/(auth)/app/training/plan/revision-publication.tsx` and the owner-scoped
+`src/server/plans/publication.ts` preview. Browser-safe types and lease presentation
+are in `src/lib/plan-publication.ts` and `src/lib/workout-publication.ts`;
+`src/server/intervals/publication.ts` shares the same expired-lease status logic.
+Co-located unit/browser tests and stories cover persisted statuses, earlier
+revisions, local-only approval/cancellation, retry confirmation and credential
+binding exclusion. The persisted-reader PostgreSQL/HTTP regression now checks
+saved published/cancelled statuses, stale-revision labels, foreign-owner rejection
+and zero provider calls during status reads. The wizard fixture and the delivery
+and refresh guides were updated for this contract.
+
+| Command                       | Result                                    |
+| ----------------------------- | ----------------------------------------- |
+| `pnpm db:assert:development`  | Passed against local PostgreSQL           |
+| `pnpm format:check`           | Passed                                    |
+| `pnpm lint`                   | Passed                                    |
+| `pnpm typecheck`              | Passed                                    |
+| `pnpm test --maxWorkers=2`    | 1,648 passed; 211 guarded DB/live skips   |
+| `pnpm test:db --maxWorkers=2` | 205 passed, including all 30 outbox cases |
+| `pnpm build`                  | Passed                                    |
+| `pnpm build-storybook`        | Passed with bundler/deprecation warnings  |
+| `git diff --check`            | Passed                                    |
+
+The 205 DB tests ran separately against guarded local development PostgreSQL
+with synthetic fixtures and local HTTP provider stand-ins. Live tests remained
+disabled. No new migration, environment variable, provider mutation, deployment
+or remote Git operation is required by this follow-up. Existing publication and
+confirmed-baseline migrations remain prerequisites. Physical browser mobile/zoom
+inspection, live personal-key marker/upsert recovery and Garmin device delivery
+remain unverified; automated browser tests use jsdom. Linear's current RUN-41
+description and acceptance criteria were read and matched the supplied ticket;
+its status was not changed.
 
 ## Implementation handoff
 
-Suggested change title: `feat(intervals): add RUN-41 publication outbox foundation`.
+Suggested change title: `feat(intervals): complete RUN-41 saved publication statuses`.
 
-Changed files:
+Suggested PR description: Restore owner-scoped publication statuses when reviewing
+an approved plan, including settled receipts, local-only approval/cancellation and
+expired attempts. Label earlier revisions explicitly, retain manual confirmation
+for publication/recovery, and keep Garmin delivery unverified. Add unit, browser,
+PostgreSQL/HTTP coverage and feature stories. Validation and external verification
+limits are listed above. The current changes are uncommitted on `development`.
+
+Original foundation files (historical):
 
 - `src/server/intervals/publication.ts`, `publication-contract.ts` and
   `publication-client.ts`: owner-authorized intent, leases, provider I/O and recovery.
@@ -286,8 +344,10 @@ Changed files:
 - `docs/intervals-publication-outbox.md` and `docs/intervals-workout-delivery.md`:
   protocol, operations, limitations and integration boundary.
 
-The agreed foundation scope is complete. Original RUN-41 end-to-end acceptance
-remains pending RUN-33's production approval reader, ownership-compatible plan
-foreign keys, authenticated publication entry points, connected Publish/Retry UI,
-provider recovery checks and downstream device verification. No issue status,
-commit or remote Git operation was changed.
+The foundation is now connected to RUN-33/38's production approval reader,
+ownership-compatible plan foreign keys, authenticated publication actions and
+separately confirmed publication/recovery UI. The remaining release checks are
+real provider marker/upsert behavior, downstream Garmin/device delivery and
+deployed-environment behavior. Local PostgreSQL/HTTP tests establish the app's
+recovery protocol, not those external guarantees. No issue status, commit or
+remote Git operation was changed.

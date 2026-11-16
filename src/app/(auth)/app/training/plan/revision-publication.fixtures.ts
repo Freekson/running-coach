@@ -4,6 +4,15 @@ import { refreshChoice, refreshPreview } from './refresh/plan-refresh.fixtures'
 export const publicationPreviewFixture: RevisionPublicationPreview = {
   planId: refreshChoice.id,
   revisionId: refreshChoice.revisionId,
+  workouts: refreshPreview.preview.refresh!.changes.map((change) => ({
+    workoutId: change.workoutId,
+    name: change.after.definition.name,
+    scheduledDate: change.after.scheduledDate,
+    cancelled: change.after.cancelled ?? false,
+    status: change.before ? 'PUBLISHED' : null,
+    fromEarlierRevision: !!change.before,
+    errorCode: null,
+  })),
   changes: refreshPreview.preview.refresh!.changes.map((change, index) => ({
     ...change,
     kind: change.kind === 'unchanged' ? 'changed' : change.kind,

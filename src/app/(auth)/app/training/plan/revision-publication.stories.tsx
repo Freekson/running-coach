@@ -34,6 +34,41 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 export const ReviewAndConfirm: Story = {}
+export const Published: Story = {
+  args: {
+    onPreview: async () => ({
+      success: true,
+      value: {
+        ...preview,
+        changes: [],
+        workouts: preview.workouts.map((workout) => ({
+          ...workout,
+          status: 'PUBLISHED',
+          fromEarlierRevision: false,
+        })),
+      },
+    }),
+  },
+}
+export const RetryPendingChanges: Story = {
+  args: {
+    onPreview: async () => ({
+      success: true,
+      value: {
+        ...preview,
+        workouts: preview.workouts.map((workout, index) => ({
+          ...workout,
+          status: index === 0 ? 'QUEUED' : 'FAILED',
+          errorCode: index === 0 ? null : 'PERMISSION_REQUIRED',
+        })),
+        changes: preview.changes.map((change, index) => ({
+          ...change,
+          status: index === 0 ? 'QUEUED' : 'FAILED',
+        })),
+      },
+    }),
+  },
+}
 export const UnknownRemoteBaseline: Story = {
   args: {
     onPreview: async () => ({

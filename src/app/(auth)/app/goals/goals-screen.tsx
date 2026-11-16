@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ArrowUpRight, CalendarDays, Mountain, Plus, Target, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
+import { Button, ButtonLink } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { ConfirmDialog } from '@/components/ui/Dialog'
 import { Select } from '@/components/ui/Select'
@@ -212,6 +212,15 @@ export function GoalsScreen({
                     )}
                   </div>
                   <footer className={styles.cardActions}>
+                    {!goal.archived && !goal.progress?.achieved && (
+                      <ButtonLink
+                        href={`/app/goals/${goal.id}/export`}
+                        variant="secondary"
+                        size="compact"
+                      >
+                        Plan request
+                      </ButtonLink>
+                    )}
                     {onDelete && (
                       <Button
                         variant="secondary"

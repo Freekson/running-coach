@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "oneOf": [{ "$ref": "#/$defs/__schema0" }, { "$ref": "#/$defs/__schema48" }],
+  "oneOf": [{ "$ref": "#/$defs/__schema0" }, { "$ref": "#/$defs/__schema49" }],
   "$defs": {
     "__schema0": {
       "type": "object",
@@ -11,11 +11,12 @@
         "athleteLocalDate": { "$ref": "#/$defs/__schema4" },
         "timezone": { "$ref": "#/$defs/__schema5" },
         "goal": { "$ref": "#/$defs/__schema6" },
-        "draft": { "$ref": "#/$defs/__schema16" },
-        "allowedDetailWindow": { "$ref": "#/$defs/__schema22" },
-        "lockedDates": { "$ref": "#/$defs/__schema23" },
-        "trainingContext": { "$ref": "#/$defs/__schema24" },
-        "consent": { "$ref": "#/$defs/__schema47" },
+        "measurementSystem": { "$ref": "#/$defs/__schema16" },
+        "draft": { "$ref": "#/$defs/__schema17" },
+        "allowedDetailWindow": { "$ref": "#/$defs/__schema23" },
+        "lockedDates": { "$ref": "#/$defs/__schema24" },
+        "trainingContext": { "$ref": "#/$defs/__schema25" },
+        "consent": { "$ref": "#/$defs/__schema48" },
         "mode": { "type": "string", "const": "initial" }
       },
       "required": [
@@ -105,7 +106,8 @@
     "__schema15": {
       "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 1000000 }, { "type": "null" }]
     },
-    "__schema16": {
+    "__schema16": { "type": "string", "enum": ["METRIC", "IMPERIAL"] },
+    "__schema17": {
       "type": "object",
       "properties": {
         "draftId": { "$ref": "#/$defs/__schema2" },
@@ -113,10 +115,10 @@
         "constraints": {
           "type": "object",
           "properties": {
-            "sessionsPerWeek": { "$ref": "#/$defs/__schema17" },
-            "availableWeekdays": { "$ref": "#/$defs/__schema18" },
-            "maxSessionMinutes": { "$ref": "#/$defs/__schema20" },
-            "startDate": { "$ref": "#/$defs/__schema21" },
+            "sessionsPerWeek": { "$ref": "#/$defs/__schema18" },
+            "availableWeekdays": { "$ref": "#/$defs/__schema19" },
+            "maxSessionMinutes": { "$ref": "#/$defs/__schema21" },
+            "startDate": { "$ref": "#/$defs/__schema22" },
             "timezone": { "$ref": "#/$defs/__schema5" }
           },
           "required": [
@@ -132,19 +134,19 @@
       "required": ["draftId", "version", "constraints"],
       "additionalProperties": false
     },
-    "__schema17": { "type": "integer", "minimum": 1, "maximum": 7 },
-    "__schema18": {
+    "__schema18": { "type": "integer", "minimum": 1, "maximum": 7 },
+    "__schema19": {
       "minItems": 1,
       "maxItems": 7,
       "type": "array",
-      "items": { "$ref": "#/$defs/__schema19" }
+      "items": { "$ref": "#/$defs/__schema20" }
     },
-    "__schema19": { "type": "integer", "minimum": 0, "maximum": 6 },
-    "__schema20": {
+    "__schema20": { "type": "integer", "minimum": 0, "maximum": 6 },
+    "__schema21": {
       "anyOf": [{ "type": "integer", "minimum": 5, "maximum": 1440 }, { "type": "null" }]
     },
-    "__schema21": { "anyOf": [{ "$ref": "#/$defs/__schema4" }, { "type": "null" }] },
-    "__schema22": {
+    "__schema22": { "anyOf": [{ "$ref": "#/$defs/__schema4" }, { "type": "null" }] },
+    "__schema23": {
       "type": "object",
       "properties": {
         "startDate": { "$ref": "#/$defs/__schema4" },
@@ -153,20 +155,20 @@
       "required": ["startDate", "endDate"],
       "additionalProperties": false
     },
-    "__schema23": { "maxItems": 28, "type": "array", "items": { "$ref": "#/$defs/__schema4" } },
-    "__schema24": {
+    "__schema24": { "maxItems": 28, "type": "array", "items": { "$ref": "#/$defs/__schema4" } },
+    "__schema25": {
       "type": "object",
       "properties": {
-        "activityHistoryCoverage": { "$ref": "#/$defs/__schema25" },
-        "lastRecordedRunAt": { "$ref": "#/$defs/__schema26" },
-        "daysSinceLastRecordedRun": { "$ref": "#/$defs/__schema27" },
-        "recentTrainingSummary": { "$ref": "#/$defs/__schema31" },
-        "recentRunSamples": { "$ref": "#/$defs/__schema34" },
-        "selection": { "$ref": "#/$defs/__schema38" },
-        "schemaVersion": { "$ref": "#/$defs/__schema39" },
-        "lifecycle": { "$ref": "#/$defs/__schema40" },
-        "athleteReport": { "$ref": "#/$defs/__schema41" },
-        "recoveryContext": { "$ref": "#/$defs/__schema45" }
+        "activityHistoryCoverage": { "$ref": "#/$defs/__schema26" },
+        "lastRecordedRunAt": { "$ref": "#/$defs/__schema27" },
+        "daysSinceLastRecordedRun": { "$ref": "#/$defs/__schema28" },
+        "recentTrainingSummary": { "$ref": "#/$defs/__schema32" },
+        "recentRunSamples": { "$ref": "#/$defs/__schema35" },
+        "selection": { "$ref": "#/$defs/__schema39" },
+        "schemaVersion": { "$ref": "#/$defs/__schema40" },
+        "lifecycle": { "$ref": "#/$defs/__schema41" },
+        "athleteReport": { "$ref": "#/$defs/__schema42" },
+        "recoveryContext": { "$ref": "#/$defs/__schema46" }
       },
       "required": [
         "activityHistoryCoverage",
@@ -180,13 +182,13 @@
       ],
       "additionalProperties": false
     },
-    "__schema25": {
+    "__schema26": {
       "type": "object",
       "properties": {
         "status": { "type": "string", "enum": ["sufficient", "partial", "absent", "unknown"] },
         "provider": { "type": "string", "const": "GARMIN" },
         "timezone": { "$ref": "#/$defs/__schema5" },
-        "window": { "anyOf": [{ "$ref": "#/$defs/__schema22" }, { "type": "null" }] },
+        "window": { "anyOf": [{ "$ref": "#/$defs/__schema23" }, { "type": "null" }] },
         "lastManualSyncAt": {
           "anyOf": [
             {
@@ -200,19 +202,28 @@
         "completeWindows": {
           "maxItems": 100,
           "type": "array",
-          "items": { "$ref": "#/$defs/__schema22" }
+          "items": { "$ref": "#/$defs/__schema23" }
         },
         "failedWindows": {
           "maxItems": 100,
           "type": "array",
-          "items": { "$ref": "#/$defs/__schema22" }
+          "items": { "$ref": "#/$defs/__schema23" }
         },
         "unfetchedWindows": {
           "maxItems": 100,
           "type": "array",
-          "items": { "$ref": "#/$defs/__schema22" }
+          "items": { "$ref": "#/$defs/__schema23" }
         },
-        "label": { "type": "string", "const": "recorded history only" }
+        "label": { "type": "string", "const": "recorded history only" },
+        "historicalImport": {
+          "type": "object",
+          "properties": {
+            "status": { "type": "string", "enum": ["complete", "partial", "unknown"] },
+            "window": { "anyOf": [{ "$ref": "#/$defs/__schema23" }, { "type": "null" }] }
+          },
+          "required": ["status", "window"],
+          "additionalProperties": false
+        }
       },
       "required": [
         "status",
@@ -227,7 +238,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema26": {
+    "__schema27": {
       "anyOf": [
         {
           "type": "string",
@@ -237,26 +248,26 @@
         { "type": "null" }
       ]
     },
-    "__schema27": {
+    "__schema28": {
       "type": "object",
       "properties": {
-        "value": { "$ref": "#/$defs/__schema28" },
+        "value": { "$ref": "#/$defs/__schema29" },
         "unit": { "type": "string", "const": "days" },
-        "provenance": { "$ref": "#/$defs/__schema29" }
+        "provenance": { "$ref": "#/$defs/__schema30" }
       },
       "required": ["value", "unit", "provenance"],
       "additionalProperties": false
     },
-    "__schema28": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] },
-    "__schema29": {
+    "__schema29": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] },
+    "__schema30": {
       "type": "object",
       "properties": {
         "source": {
           "type": "string",
           "enum": ["GARMIN", "INTERVALS", "MANUAL", "FILE", "ATHLETE", "DERIVED"]
         },
-        "observedAt": { "$ref": "#/$defs/__schema30" },
-        "period": { "$ref": "#/$defs/__schema22" },
+        "observedAt": { "$ref": "#/$defs/__schema31" },
+        "period": { "$ref": "#/$defs/__schema23" },
         "quality": {
           "type": "string",
           "enum": ["recorded", "reported", "derived", "partial", "unavailable", "inconsistent"]
@@ -265,12 +276,12 @@
       "required": ["source", "observedAt", "period", "quality"],
       "additionalProperties": false
     },
-    "__schema30": {
+    "__schema31": {
       "type": "string",
       "format": "date-time",
       "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
     },
-    "__schema31": {
+    "__schema32": {
       "type": "object",
       "properties": {
         "sport": { "type": "string", "const": "RUNNING" },
@@ -279,20 +290,20 @@
           "minItems": 12,
           "maxItems": 12,
           "type": "array",
-          "items": { "$ref": "#/$defs/__schema32" }
+          "items": { "$ref": "#/$defs/__schema33" }
         },
         "rollingTotals": {
           "minItems": 3,
           "maxItems": 3,
           "type": "array",
-          "items": { "$ref": "#/$defs/__schema33" }
+          "items": { "$ref": "#/$defs/__schema34" }
         },
         "recentToOlderDistanceRatio": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "ratio" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -301,17 +312,17 @@
       "required": ["sport", "timezone", "weeks", "rollingTotals", "recentToOlderDistanceRatio"],
       "additionalProperties": false
     },
-    "__schema32": {
+    "__schema33": {
       "type": "object",
       "properties": {
-        "window": { "$ref": "#/$defs/__schema22" },
+        "window": { "$ref": "#/$defs/__schema23" },
         "coverage": { "type": "string", "enum": ["complete", "partial", "unavailable"] },
         "distance": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "m" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -319,9 +330,9 @@
         "completedSessions": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "sessions" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -329,9 +340,19 @@
         "duration": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "s" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
+          },
+          "required": ["value", "unit", "provenance"],
+          "additionalProperties": false
+        },
+        "movingDuration": {
+          "type": "object",
+          "properties": {
+            "value": { "$ref": "#/$defs/__schema29" },
+            "unit": { "type": "string", "const": "s" },
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -339,9 +360,9 @@
         "longestRun": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "m" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -349,9 +370,9 @@
         "daysWithoutRecordedRuns": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "days" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -368,7 +389,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema33": {
+    "__schema34": {
       "type": "object",
       "properties": {
         "weeks": {
@@ -378,13 +399,13 @@
             { "type": "number", "const": 12 }
           ]
         },
-        "window": { "$ref": "#/$defs/__schema22" },
+        "window": { "$ref": "#/$defs/__schema23" },
         "distance": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "m" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -392,9 +413,9 @@
         "completedSessions": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "sessions" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -402,9 +423,19 @@
         "duration": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "s" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
+          },
+          "required": ["value", "unit", "provenance"],
+          "additionalProperties": false
+        },
+        "movingDuration": {
+          "type": "object",
+          "properties": {
+            "value": { "$ref": "#/$defs/__schema29" },
+            "unit": { "type": "string", "const": "s" },
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -413,8 +444,8 @@
       "required": ["weeks", "window", "distance", "completedSessions", "duration"],
       "additionalProperties": false
     },
-    "__schema34": { "maxItems": 20, "type": "array", "items": { "$ref": "#/$defs/__schema35" } },
-    "__schema35": {
+    "__schema35": { "maxItems": 20, "type": "array", "items": { "$ref": "#/$defs/__schema36" } },
+    "__schema36": {
       "type": "object",
       "properties": {
         "activityId": { "$ref": "#/$defs/__schema2" },
@@ -427,13 +458,13 @@
         "localDate": { "$ref": "#/$defs/__schema4" },
         "timezone": { "$ref": "#/$defs/__schema5" },
         "sourceTimezone": { "anyOf": [{ "$ref": "#/$defs/__schema5" }, { "type": "null" }] },
-        "source": { "$ref": "#/$defs/__schema29" },
+        "source": { "$ref": "#/$defs/__schema30" },
         "distance": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "m" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -441,9 +472,9 @@
         "elapsedTime": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "s" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -451,9 +482,9 @@
         "movingTime": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "s" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -461,9 +492,9 @@
         "averageSpeed": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "m/s" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -471,9 +502,9 @@
         "averagePace": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "s/km" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -481,9 +512,9 @@
         "averageHr": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "bpm" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -491,9 +522,9 @@
         "maxHr": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "bpm" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -501,9 +532,9 @@
         "cadence": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "steps/min" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -511,9 +542,9 @@
         "elevationGain": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "m" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -521,9 +552,9 @@
         "elevationLoss": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "m" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -538,10 +569,10 @@
           "type": "string",
           "enum": ["moving", "elapsed", "recorded_average_speed", "unavailable"]
         },
-        "flags": { "maxItems": 3, "type": "array", "items": { "$ref": "#/$defs/__schema36" } },
+        "flags": { "maxItems": 3, "type": "array", "items": { "$ref": "#/$defs/__schema37" } },
         "lapSamples": {
           "anyOf": [
-            { "maxItems": 8, "type": "array", "items": { "$ref": "#/$defs/__schema37" } },
+            { "maxItems": 8, "type": "array", "items": { "$ref": "#/$defs/__schema38" } },
             { "type": "null" }
           ]
         }
@@ -571,11 +602,11 @@
       ],
       "additionalProperties": false
     },
-    "__schema36": {
+    "__schema37": {
       "type": "string",
       "enum": ["inconsistent_times", "missing_hr", "average_speed_only"]
     },
-    "__schema37": {
+    "__schema38": {
       "type": "object",
       "properties": {
         "lapIndex": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
@@ -592,9 +623,9 @@
         "distance": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "m" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -602,9 +633,9 @@
         "elapsedTime": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "s" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -612,9 +643,9 @@
         "movingTime": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "s" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -622,9 +653,9 @@
         "averageSpeed": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "m/s" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -632,9 +663,9 @@
         "averagePace": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "s/km" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -642,9 +673,9 @@
         "averageHr": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "bpm" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -667,14 +698,14 @@
       ],
       "additionalProperties": false
     },
-    "__schema38": {
+    "__schema39": {
       "type": "object",
       "properties": {
         "policy": {
           "type": "string",
           "const": "v1: exclude unresolved duplicates; reserve longest and fastest evidenced run; then newest; timestamp/id tie-break"
         },
-        "window": { "$ref": "#/$defs/__schema22" },
+        "window": { "$ref": "#/$defs/__schema23" },
         "eligibleRuns": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "excludedDuplicateCandidates": {
           "type": "integer",
@@ -694,8 +725,8 @@
       ],
       "additionalProperties": false
     },
-    "__schema39": { "type": "number", "const": 1 },
-    "__schema40": {
+    "__schema40": { "type": "number", "const": 1 },
+    "__schema41": {
       "type": "object",
       "properties": {
         "firstPlanForAthlete": { "type": "boolean" },
@@ -704,7 +735,7 @@
       "required": ["firstPlanForAthlete", "firstWorkoutInPlan"],
       "additionalProperties": false
     },
-    "__schema41": {
+    "__schema42": {
       "type": "object",
       "properties": {
         "experience": {
@@ -712,74 +743,74 @@
           "enum": ["new_runner", "returning_runner", "currently_training", "unknown"]
         },
         "firstWorkoutEver": { "type": ["boolean", "null"] },
-        "provenance": { "$ref": "#/$defs/__schema42" },
-        "previousExperience": { "$ref": "#/$defs/__schema43" },
-        "easyEffort": { "$ref": "#/$defs/__schema43" },
+        "provenance": { "$ref": "#/$defs/__schema43" },
+        "previousExperience": { "$ref": "#/$defs/__schema44" },
+        "easyEffort": { "$ref": "#/$defs/__schema44" },
         "raceOrTestResults": {
           "maxItems": 5,
           "type": "array",
-          "items": { "$ref": "#/$defs/__schema44" }
+          "items": { "$ref": "#/$defs/__schema45" }
         },
-        "crossTraining": { "$ref": "#/$defs/__schema43" },
-        "preferredWorkoutTypes": { "$ref": "#/$defs/__schema43" },
-        "limitationsOrFatigue": { "$ref": "#/$defs/__schema43" }
+        "crossTraining": { "$ref": "#/$defs/__schema44" },
+        "preferredWorkoutTypes": { "$ref": "#/$defs/__schema44" },
+        "limitationsOrFatigue": { "$ref": "#/$defs/__schema44" }
       },
       "required": ["experience", "firstWorkoutEver", "provenance"],
-      "additionalProperties": false
-    },
-    "__schema42": {
-      "type": "object",
-      "properties": {
-        "source": { "type": "string", "const": "ATHLETE" },
-        "observedAt": { "$ref": "#/$defs/__schema30" },
-        "period": { "$ref": "#/$defs/__schema22" },
-        "quality": { "type": "string", "const": "reported" }
-      },
-      "required": ["source", "observedAt", "period", "quality"],
       "additionalProperties": false
     },
     "__schema43": {
       "type": "object",
       "properties": {
+        "source": { "type": "string", "const": "ATHLETE" },
+        "observedAt": { "$ref": "#/$defs/__schema31" },
+        "period": { "$ref": "#/$defs/__schema23" },
+        "quality": { "type": "string", "const": "reported" }
+      },
+      "required": ["source", "observedAt", "period", "quality"],
+      "additionalProperties": false
+    },
+    "__schema44": {
+      "type": "object",
+      "properties": {
         "value": { "type": "string", "minLength": 1, "maxLength": 1000 },
-        "provenance": { "$ref": "#/$defs/__schema42" }
+        "provenance": { "$ref": "#/$defs/__schema43" }
       },
       "required": ["value", "provenance"],
       "additionalProperties": false
     },
-    "__schema44": {
+    "__schema45": {
       "type": "object",
       "properties": {
         "date": { "$ref": "#/$defs/__schema4" },
         "distanceMeters": { "type": "number", "exclusiveMinimum": 0 },
         "elapsedSeconds": { "type": "number", "exclusiveMinimum": 0 },
         "kind": { "type": "string", "enum": ["race", "test", "historical_pb"] },
-        "provenance": { "$ref": "#/$defs/__schema42" }
+        "provenance": { "$ref": "#/$defs/__schema43" }
       },
       "required": ["date", "distanceMeters", "elapsedSeconds", "kind", "provenance"],
       "additionalProperties": false
     },
-    "__schema45": {
+    "__schema46": {
       "type": "object",
       "properties": {
         "consentSelected": { "type": "boolean", "const": true },
         "timezone": { "$ref": "#/$defs/__schema5" },
-        "coverage": { "$ref": "#/$defs/__schema25" },
-        "days": { "maxItems": 28, "type": "array", "items": { "$ref": "#/$defs/__schema46" } }
+        "coverage": { "$ref": "#/$defs/__schema26" },
+        "days": { "maxItems": 28, "type": "array", "items": { "$ref": "#/$defs/__schema47" } }
       },
       "required": ["consentSelected", "timezone", "coverage", "days"],
       "additionalProperties": false
     },
-    "__schema46": {
+    "__schema47": {
       "type": "object",
       "properties": {
         "date": { "$ref": "#/$defs/__schema4" },
         "restingHr": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "bpm" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -787,9 +818,9 @@
         "hrv": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "ms" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -797,9 +828,9 @@
         "sleepDuration": {
           "type": "object",
           "properties": {
-            "value": { "$ref": "#/$defs/__schema28" },
+            "value": { "$ref": "#/$defs/__schema29" },
             "unit": { "type": "string", "const": "s" },
-            "provenance": { "$ref": "#/$defs/__schema29" }
+            "provenance": { "$ref": "#/$defs/__schema30" }
           },
           "required": ["value", "unit", "provenance"],
           "additionalProperties": false
@@ -808,7 +839,7 @@
       "required": ["date", "restingHr", "hrv", "sleepDuration"],
       "additionalProperties": false
     },
-    "__schema47": {
+    "__schema48": {
       "type": "object",
       "properties": {
         "recordedActivityMetrics": { "type": "boolean" },
@@ -828,7 +859,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema48": {
+    "__schema49": {
       "type": "object",
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/__schema1" },
@@ -837,11 +868,12 @@
         "athleteLocalDate": { "$ref": "#/$defs/__schema4" },
         "timezone": { "$ref": "#/$defs/__schema5" },
         "goal": { "$ref": "#/$defs/__schema6" },
-        "draft": { "$ref": "#/$defs/__schema16" },
-        "allowedDetailWindow": { "$ref": "#/$defs/__schema22" },
-        "lockedDates": { "$ref": "#/$defs/__schema23" },
-        "trainingContext": { "$ref": "#/$defs/__schema24" },
-        "consent": { "$ref": "#/$defs/__schema47" },
+        "measurementSystem": { "$ref": "#/$defs/__schema16" },
+        "draft": { "$ref": "#/$defs/__schema17" },
+        "allowedDetailWindow": { "$ref": "#/$defs/__schema23" },
+        "lockedDates": { "$ref": "#/$defs/__schema24" },
+        "trainingContext": { "$ref": "#/$defs/__schema25" },
+        "consent": { "$ref": "#/$defs/__schema48" },
         "mode": { "type": "string", "const": "refresh" },
         "currentApprovedRevision": {
           "type": "object",
@@ -863,19 +895,25 @@
                   "minItems": 1,
                   "maxItems": 200,
                   "type": "array",
-                  "items": { "$ref": "#/$defs/__schema49" }
+                  "items": { "$ref": "#/$defs/__schema50" }
                 }
               },
               "required": ["startDate", "endDate", "strategy", "phases"],
               "additionalProperties": false
             },
-            "detailWindow": { "$ref": "#/$defs/__schema22" },
+            "detailWindow": { "$ref": "#/$defs/__schema23" },
             "workouts": {
               "maxItems": 200,
               "type": "array",
-              "items": { "$ref": "#/$defs/__schema50" }
+              "items": { "$ref": "#/$defs/__schema51" }
             },
-            "commitmentsCoverage": { "type": "string", "enum": ["complete", "partial"] }
+            "commitmentsCoverage": { "type": "string", "enum": ["complete", "partial"] },
+            "omittedHistoricalCommitments": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "narrativePolicy": { "type": "string", "const": "withheld" }
           },
           "required": [
             "planId",
@@ -918,7 +956,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema49": {
+    "__schema50": {
       "type": "object",
       "properties": {
         "startDate": { "$ref": "#/$defs/__schema4" },
@@ -929,7 +967,7 @@
       "required": ["startDate", "endDate", "label", "notes"],
       "additionalProperties": false
     },
-    "__schema50": {
+    "__schema51": {
       "type": "object",
       "properties": {
         "workoutId": { "$ref": "#/$defs/__schema2" },
@@ -947,7 +985,7 @@
               "minItems": 1,
               "maxItems": 100,
               "type": "array",
-              "items": { "$ref": "#/$defs/__schema51" }
+              "items": { "$ref": "#/$defs/__schema52" }
             }
           },
           "required": ["schemaVersion", "name", "sport", "steps"],
@@ -991,9 +1029,9 @@
       ],
       "additionalProperties": false
     },
-    "__schema51": {
+    "__schema52": {
       "oneOf": [
-        { "$ref": "#/$defs/__schema52" },
+        { "$ref": "#/$defs/__schema53" },
         {
           "type": "object",
           "properties": {
@@ -1003,7 +1041,7 @@
               "minItems": 1,
               "maxItems": 100,
               "type": "array",
-              "items": { "$ref": "#/$defs/__schema59" }
+              "items": { "$ref": "#/$defs/__schema60" }
             }
           },
           "required": ["type", "count", "steps"],
@@ -1011,7 +1049,7 @@
         }
       ]
     },
-    "__schema52": {
+    "__schema53": {
       "type": "object",
       "properties": {
         "type": { "type": "string", "const": "step" },
@@ -1055,9 +1093,9 @@
             {
               "type": "object",
               "properties": {
-                "type": { "$ref": "#/$defs/__schema53" },
-                "minSecondsPerKm": { "$ref": "#/$defs/__schema54" },
-                "maxSecondsPerKm": { "$ref": "#/$defs/__schema55" }
+                "type": { "$ref": "#/$defs/__schema54" },
+                "minSecondsPerKm": { "$ref": "#/$defs/__schema55" },
+                "maxSecondsPerKm": { "$ref": "#/$defs/__schema56" }
               },
               "required": ["type", "minSecondsPerKm", "maxSecondsPerKm"],
               "additionalProperties": false
@@ -1065,9 +1103,9 @@
             {
               "type": "object",
               "properties": {
-                "type": { "$ref": "#/$defs/__schema56" },
-                "minBpm": { "$ref": "#/$defs/__schema57" },
-                "maxBpm": { "$ref": "#/$defs/__schema58" }
+                "type": { "$ref": "#/$defs/__schema57" },
+                "minBpm": { "$ref": "#/$defs/__schema58" },
+                "maxBpm": { "$ref": "#/$defs/__schema59" }
               },
               "required": ["type", "minBpm", "maxBpm"],
               "additionalProperties": false
@@ -1078,15 +1116,15 @@
       "required": ["type", "termination", "target"],
       "additionalProperties": false
     },
-    "__schema53": { "type": "string", "const": "pace" },
-    "__schema54": { "type": "number", "exclusiveMinimum": 0, "maximum": 36000 },
+    "__schema54": { "type": "string", "const": "pace" },
     "__schema55": { "type": "number", "exclusiveMinimum": 0, "maximum": 36000 },
-    "__schema56": { "type": "string", "const": "heartRate" },
-    "__schema57": { "type": "integer", "exclusiveMinimum": 0, "maximum": 300 },
+    "__schema56": { "type": "number", "exclusiveMinimum": 0, "maximum": 36000 },
+    "__schema57": { "type": "string", "const": "heartRate" },
     "__schema58": { "type": "integer", "exclusiveMinimum": 0, "maximum": 300 },
-    "__schema59": {
+    "__schema59": { "type": "integer", "exclusiveMinimum": 0, "maximum": 300 },
+    "__schema60": {
       "oneOf": [
-        { "$ref": "#/$defs/__schema52" },
+        { "$ref": "#/$defs/__schema53" },
         {
           "type": "object",
           "properties": {
@@ -1096,7 +1134,7 @@
               "minItems": 1,
               "maxItems": 100,
               "type": "array",
-              "items": { "$ref": "#/$defs/__schema60" }
+              "items": { "$ref": "#/$defs/__schema61" }
             }
           },
           "required": ["type", "count", "steps"],
@@ -1104,9 +1142,9 @@
         }
       ]
     },
-    "__schema60": {
+    "__schema61": {
       "oneOf": [
-        { "$ref": "#/$defs/__schema52" },
+        { "$ref": "#/$defs/__schema53" },
         {
           "type": "object",
           "properties": {
@@ -1116,7 +1154,7 @@
               "minItems": 1,
               "maxItems": 100,
               "type": "array",
-              "items": { "$ref": "#/$defs/__schema52" }
+              "items": { "$ref": "#/$defs/__schema53" }
             }
           },
           "required": ["type", "count", "steps"],

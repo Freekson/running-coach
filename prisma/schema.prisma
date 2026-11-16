@@ -266,11 +266,31 @@ model PlanDraft {
   plan             TrainingPlan? @relation(fields: [userId, goalId, planId], references: [userId, goalId, id], onDelete: NoAction)
   baseRevision     PlanRevision? @relation("DraftBase", fields: [userId, planId, baseRevisionId], references: [userId, planId, id], onDelete: NoAction)
   approvedRevision PlanRevision? @relation("RevisionSource")
+  exchangeRequests PlanExchangeRequest[]
 
+  @@unique([userId, goalId, id])
   @@unique([userId, planId, id])
   @@index([userId, updatedAt(sort: Desc)])
   @@index([userId, goalId])
   @@map("plan_drafts")
+}
+
+// Issued consent-filtered snapshots bind later manual AI responses to a draft.
+model PlanExchangeRequest {
+  id            String   @id @db.Uuid
+  issuanceSequence BigInt @unique @default(autoincrement()) @map("issuance_sequence")
+  userId        String   @map("user_id") @db.Uuid
+  goalId        String   @map("goal_id") @db.Uuid
+  draftId       String   @map("draft_id") @db.Uuid
+  draftVersion  Int      @map("draft_version")
+  schemaVersion Int      @map("schema_version")
+  generatedAt   DateTime @map("generated_at") @db.Timestamptz(6)
+  snapshot      Json
+
+  draft PlanDraft @relation(fields: [userId, goalId, draftId], references: [userId, goalId, id], onDelete: Cascade, map: "plan_exchange_requests_draft_owner_fkey")
+
+  @@index([userId, draftId, issuanceSequence(sort: Desc)])
+  @@map("plan_exchange_requests")
 }
 
 model TrainingPlan {

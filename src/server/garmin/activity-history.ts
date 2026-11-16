@@ -15,6 +15,11 @@ import { localDay } from './health-sync'
 import { allowGarminImport, getGarminImportBlock } from './import-rate-limit'
 import { claimGarminProviderLease, releaseGarminProviderLease } from './provider-lease'
 import { processGarminStreamWork } from './stream-coordinator'
+import {
+  confirmedActivityWindowSchema,
+  confirmedActivityWindows,
+  mergeConfirmedActivityWindows,
+} from './activity-coverage'
 
 export const ACTIVITY_HISTORY_CURSOR = 'GARMIN_IMPORT_ACTIVITIES'
 export const ACTIVITY_RECENT_CURSOR = 'GARMIN_IMPORT_ACTIVITIES_RECENT'
@@ -49,6 +54,7 @@ export const activityHistoryCheckpointSchema = z
     passIds: idList,
     previousPassIds: idList.nullable(),
     verificationPass: z.number().int().min(0).max(4),
+    confirmedWindows: z.array(confirmedActivityWindowSchema).max(100).optional(),
   })
   .refine(
     (value) =>
@@ -326,6 +332,18 @@ export async function runActivityHistory(
         parsed.success ? parsed.data.generation + 1 : 1,
       )
     }
+    // Carry verified closed-day coverage when a recent window moves forward.
+    // Connection-scoped cursors are reset on account replacement/disconnect;
+    // dates from a different timezone never establish this window's coverage.
+    const carriedWindows = [
+      ...(parsed.success && parsed.data.timezone === timezone
+        ? confirmedActivityWindows(parsed.data, cursor?.lastSyncedAt ?? null, now)
+        : []),
+      ...(historyCheckpoint.success && historyCheckpoint.data.timezone === timezone
+        ? confirmedActivityWindows(historyCheckpoint.data, history?.lastSyncedAt ?? null, now)
+        : []),
+    ]
+    checkpoint = { ...checkpoint, confirmedWindows: mergeConfirmedActivityWindows(carriedWindows) }
     if (checkpoint.nextDate === null) return
     if (!(await allowGarminImport(owner))) throw new GarminDataImportError('RATE_LIMITED')
     const run = await prisma.$transaction(async (tx) => {
@@ -426,11 +444,13 @@ export async function runActivityHistory(
         await prisma.$transaction(async (tx) => {
           await guardLease(tx)
           await beforeCheckpoint?.(tx)
+          const checkedAt = clock()
+          const confirmedWindows = confirmedActivityWindows(step.checkpoint, checkedAt, checkedAt)
           const saved = await tx.syncCursor.updateMany({
             where: { ...cursorKey, leaseToken: token, leaseExpiresAt: { gt: clock() } },
             data: {
-              cursorOrCheckpoint: step.checkpoint,
-              lastSyncedAt: clock(),
+              cursorOrCheckpoint: { ...step.checkpoint, confirmedWindows },
+              lastSyncedAt: checkedAt,
               nextAttemptAt: null,
               consecutiveFailures: 0,
             },

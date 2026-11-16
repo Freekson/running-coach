@@ -44,6 +44,17 @@ export const Narrow: Story = {
   ],
 }
 
+export const ZoomedWidth: Story = {
+  args: { label: 'First detailed training day', placeholder: 'Choose a date' },
+  decorators: [
+    (Story) => (
+      <div style={{ width: 160, maxWidth: '100%' }}>
+        <Story />
+      </div>
+    ),
+  ],
+}
+
 function InDialogExample() {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('2026-11-07')

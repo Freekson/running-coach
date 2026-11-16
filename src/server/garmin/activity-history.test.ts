@@ -111,6 +111,42 @@ it('uses the shared leap-safe calendar window and counts only verified ranges', 
   expect(checked.activityCount).toBe(2)
   expect(checked.nextDate).toBeNull()
 })
+it('persists cumulative closed-day coverage across repeated manual recent-window resets', async () => {
+  const history = { ...activityHistoryWindow('2026-10-02', 'Asia/Tokyo'), nextDate: null }
+  let recent:
+    { cursorOrCheckpoint: ActivityHistoryCheckpoint; lastSyncedAt: Date | null } | undefined
+  prisma.syncCursor.findFirst.mockImplementation(async ({ where }) =>
+    where.dataType === 'GARMIN_REQUESTS'
+      ? { id: 'lease' }
+      : where.dataType === ACTIVITY_HISTORY_CURSOR
+        ? { cursorOrCheckpoint: history, lastSyncedAt: new Date('2026-10-02T02:00:00Z') }
+        : (recent ?? null),
+  )
+  prisma.syncCursor.upsert.mockImplementation(async ({ create }) => {
+    recent = {
+      cursorOrCheckpoint: create.cursorOrCheckpoint,
+      lastSyncedAt: recent?.lastSyncedAt ?? null,
+    }
+  })
+  prisma.syncCursor.updateMany.mockImplementation(async ({ data }) => {
+    if (data.cursorOrCheckpoint)
+      recent = { cursorOrCheckpoint: data.cursorOrCheckpoint, lastSyncedAt: data.lastSyncedAt }
+    return { count: 1 }
+  })
+  for (const date of ['2026-10-03', '2026-10-10', '2026-10-20', '2026-11-15']) {
+    await runActivityHistory(
+      owner,
+      { action: 'sync', browserTimezone: 'Asia/Tokyo' },
+      { now: () => new Date(`${date}T03:00:00Z`), importActivityPage: emptyPage },
+    )
+  }
+  expect(recent?.cursorOrCheckpoint).toMatchObject({
+    startDate: '2026-10-14',
+    endDate: '2026-11-15',
+    nextDate: null,
+    confirmedWindows: [{ startDate: history.startDate, endDate: '2026-11-14' }],
+  })
+})
 
 it('traverses 62 synthetic activities, provider-capped short pages, overlaps and a changed dataset', () => {
   let cp = activityHistoryWindow('2026-11-12', 'UTC')

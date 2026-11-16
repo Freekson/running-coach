@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { config } from 'dotenv'
 import type { PrismaClient } from '@prisma/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -137,6 +138,78 @@ describe.skipIf(!enabled)('RUN-41 durable outbox on PostgreSQL and local provide
     expect(attempts).toHaveLength(4)
     expect(attempts.every((attempt) => attempt.finishedAt !== null)).toBe(true)
     expect(ctx.provider.calls.filter((call) => call.method === 'POST')).toHaveLength(3)
+    const confirmed = await prisma.workoutPublication.findUniqueOrThrow({
+      where: { id: cancel.id },
+    })
+    expect(publicationPayloadSchema.parse(confirmed.lastConfirmedPayload).cancelled).toBe(true)
+  })
+
+  it('backfills only settled receipts and leaves unknown legacy outcomes nullable', async () => {
+    const migration = await readFile(
+      'prisma/migrations/20261116020000_publication_confirmed_baseline/migration.sql',
+      'utf8',
+    )
+    await prisma.$transaction(async (tx) => {
+      // A temporary table shadows the production name only in this transaction.
+      await tx.$executeRawUnsafe(
+        'CREATE TEMP TABLE workout_publications (status TEXT, payload JSONB, pending_write JSONB, lease_token UUID) ON COMMIT DROP',
+      )
+      for (const status of [
+        'PUBLISHED',
+        'CANCELLED',
+        'UNCERTAIN',
+        'FAILED',
+        'RUNNING',
+        'QUEUED',
+        'SUPERSEDED',
+      ])
+        await tx.$executeRaw`INSERT INTO workout_publications (status, payload) VALUES (${status}, '{"synthetic":"baseline"}'::jsonb)`
+      for (const statement of migration.split(';').filter((part) => part.trim()))
+        await tx.$executeRawUnsafe(statement)
+      const rows = await tx.$queryRaw<
+        { status: string; confirmed: unknown }[]
+      >`SELECT status, last_confirmed_payload AS confirmed FROM workout_publications`
+      for (const row of rows)
+        expect(row.confirmed).toEqual(
+          ['PUBLISHED', 'CANCELLED'].includes(row.status) ? { synthetic: 'baseline' } : null,
+        )
+    })
+  })
+
+  it('retains confirmed payload through queue and failed dispatch, advancing it only after successful reconciliation', async () => {
+    const ctx = await setup()
+    const initial = await ctx.queue()
+    await ctx.dispatch(initial)
+    const before = await prisma.workoutPublication.findUniqueOrThrow({ where: { id: initial.id } })
+    const baseline = publicationPayloadSchema.parse(before.lastConfirmedPayload)
+    ctx.source.revisionId = randomUUID()
+    ctx.source.schedule.localDate = '2027-03-23'
+    const queued = await ctx.queue(1)
+    expect(
+      (await prisma.workoutPublication.findUniqueOrThrow({ where: { id: queued.id } }))
+        .lastConfirmedPayload,
+    ).toEqual(baseline)
+    ctx.provider.control.failReads = true
+    await ctx.dispatch(queued)
+    expect(
+      (await prisma.workoutPublication.findUniqueOrThrow({ where: { id: queued.id } }))
+        .lastConfirmedPayload,
+    ).toEqual(baseline)
+    ctx.provider.control.failReads = false
+    ctx.provider.control.loseWriteResponse = true
+    await ctx.dispatch(queued)
+    expect(
+      (await prisma.workoutPublication.findUniqueOrThrow({ where: { id: queued.id } }))
+        .lastConfirmedPayload,
+    ).toEqual(baseline)
+    expect(await ctx.dispatch(queued)).toMatchObject({ status: 'PUBLISHED' })
+    expect(
+      publicationPayloadSchema.parse(
+        (await prisma.workoutPublication.findUniqueOrThrow({ where: { id: queued.id } }))
+          .lastConfirmedPayload,
+      ).schedule.localDate,
+    ).toBe('2027-03-23')
+    expect(ctx.provider.calls.filter((call) => call.method === 'POST')).toHaveLength(2)
   })
 
   it('recovers a committed create whose response was lost without issuing a second create', async () => {
@@ -300,6 +373,7 @@ describe.skipIf(!enabled)('RUN-41 durable outbox on PostgreSQL and local provide
   it('supersedes stale interrupted intent by reconciliation without publishing the old revision', async () => {
     const ctx = await setup()
     const queued = await ctx.queue()
+    const oldWorkoutName = ctx.source.workout.name
     ctx.provider.control.loseWriteResponse = true
     expect(await ctx.dispatch(queued)).toMatchObject({ status: 'UNCERTAIN' })
     ctx.source.revisionId = randomUUID()
@@ -309,6 +383,12 @@ describe.skipIf(!enabled)('RUN-41 durable outbox on PostgreSQL and local provide
       status: 'SUPERSEDED',
       errorCode: 'STALE_REVISION',
     })
+    const reconciled = await prisma.workoutPublication.findUniqueOrThrow({
+      where: { id: queued.id },
+    })
+    expect(publicationPayloadSchema.parse(reconciled.lastConfirmedPayload).workout.name).toBe(
+      oldWorkoutName,
+    )
     const next = await ctx.queue(1)
     expect(await ctx.dispatch(next)).toMatchObject({ status: 'PUBLISHED' })
     expect(ctx.provider.events.get(ctx.key)?.size).toBe(1)

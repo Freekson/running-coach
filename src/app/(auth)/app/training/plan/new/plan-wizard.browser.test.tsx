@@ -13,6 +13,7 @@ import {
 } from './plan-wizard.fixtures'
 import { wizardStorageKey } from './wizard-state'
 import { estimateWorkout } from '@/lib/workout-estimate'
+import { refreshChoice, refreshPreview, refreshSaved } from '../refresh/plan-refresh.fixtures'
 
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
 HTMLDialogElement.prototype.showModal = function () {
@@ -56,9 +57,117 @@ const click = async (el: HTMLElement) => {
   await act(async () => el.click())
 }
 async function render(saved = wizardSaved) {
-  window.localStorage.setItem(wizardStorageKey(wizardOwner), JSON.stringify(saved))
+  window.localStorage.setItem(
+    wizardStorageKey(wizardOwner, props.refresh?.id),
+    JSON.stringify(saved),
+  )
   await act(async () => root.render(<PlanWizard {...props} />))
 }
+
+it('RUN-38 reuses the wizard with fixed constraints, inspectable diffs and separate publication after explicit approval', async () => {
+  props.refresh = refreshChoice
+  props.onPreview = vi.fn().mockResolvedValue({ success: true, value: refreshPreview })
+  props.publication = {
+    onPreview: vi.fn().mockResolvedValue({
+      success: true,
+      value: { planId: refreshChoice.id, revisionId: 'revision', changes: [] },
+    }),
+    onSend: vi.fn(),
+  }
+  await render({ ...refreshSaved, step: 1 })
+  expect(host.textContent).toContain('Refresh training plan')
+  expect(host.textContent).toContain('Saved constraints: 3 sessions per week')
+  expect(host.querySelector('#sessions')).toBeNull()
+  expect(host.querySelector('#wizard-goal')).toBeNull()
+  expect(button('Create goal')).toBeUndefined()
+  expect(host.querySelector('#detail-start')).not.toBeNull()
+  await submit()
+  expect(props.onSchedule).not.toHaveBeenCalled()
+  await click(button('Validate and preview'))
+  expect(host.textContent).toContain('1 created · 0 changed · 1 canceled · 1 unchanged')
+  expect(host.textContent).toContain('Changes from the approved revision')
+  expect(button('Approve locally').disabled).toBe(true)
+  const labels = [...host.querySelectorAll('label')].filter((label) => !label.closest('[hidden]'))
+  await click(
+    labels
+      .find((label) => label.textContent?.includes('I reviewed this warning'))!
+      .querySelector('input')!,
+  )
+  await click(
+    labels.find((label) => label.textContent?.includes('I have reviewed'))!.querySelector('input')!,
+  )
+  expect(button('Approve locally').disabled).toBe(false)
+  await click(button('Approve locally'))
+  expect(props.onApprove).toHaveBeenCalledWith(
+    expect.objectContaining({ approve: true }),
+    refreshSaved.text,
+  )
+  expect(host.textContent).toContain('Separate Intervals.icu publication')
+  expect(props.publication.onPreview).not.toHaveBeenCalled()
+  expect(props.publication.onSend).not.toHaveBeenCalled()
+  await click(button('Review Intervals.icu changes'))
+  expect(props.publication.onPreview).toHaveBeenCalled()
+  expect(props.publication.onSend).not.toHaveBeenCalled()
+  expect(window.localStorage.getItem(wizardStorageKey(wizardOwner, refreshChoice.id))).toBeNull()
+})
+
+it('RUN-38 retains a stale refresh response and shows the server conflict without saving or publishing', async () => {
+  props.refresh = refreshChoice
+  props.onPreview = vi.fn().mockResolvedValue({
+    success: true,
+    value: {
+      valid: false,
+      errors: [
+        {
+          severity: 'blocking',
+          code: 'stale_request',
+          path: ['requestId'],
+          message: 'Plan changed',
+          expected: 'Reload the approved plan and export a fresh request',
+        },
+      ],
+      repairPrompt: null,
+    },
+  })
+  await render(refreshSaved)
+  await click(button('Validate and preview'))
+  expect(host.textContent).toContain('Reload the approved plan and export a fresh request')
+  expect(host.querySelector<HTMLTextAreaElement>('#plan-response')?.value).toBe(refreshSaved.text)
+  expect(props.onApprove).not.toHaveBeenCalled()
+  expect(window.localStorage.getItem(wizardStorageKey(wizardOwner, refreshChoice.id))).toContain(
+    refreshChoice.goalId,
+  )
+})
+it('routes an incompatible goal refresh to new-plan creation while preserving the response', async () => {
+  props.refresh = refreshChoice
+  props.onPreview = vi.fn().mockResolvedValue({
+    success: true,
+    value: {
+      valid: false,
+      errors: [
+        {
+          severity: 'blocking',
+          code: 'goal_horizon_changed',
+          path: ['goal', 'targetDate'],
+          message: 'The goal date changed.',
+          expected: 'Create a new training plan for the updated goal.',
+        },
+      ],
+      repairPrompt: null,
+    },
+  })
+  await render(refreshSaved)
+  await click(button('Validate and preview'))
+  const link = [...host.querySelectorAll<HTMLAnchorElement>('a')].find(
+    (element) => element.textContent === 'Create a new plan for the updated goal',
+  )
+  expect(link?.getAttribute('href')).toBe('/app/training/plan/new')
+  expect(host.textContent).not.toContain(
+    'Return to step 1 and reopen the draft, then export a fresh request.',
+  )
+  expect(host.querySelector<HTMLTextAreaElement>('#plan-response')?.value).toBe(refreshSaved.text)
+  expect(props.onApprove).not.toHaveBeenCalled()
+})
 async function enter(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
   await act(async () => {
     Object.getOwnPropertyDescriptor(

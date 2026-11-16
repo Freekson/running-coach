@@ -110,6 +110,7 @@ function setupRefresh() {
     id: revision.revisionId,
     planId: revision.planId,
     revisionNumber: 1,
+    snapshot: { macroPlan: revision.macroPlan },
   })
   const rows = revision.workouts.map((w) => ({
     ...w,
@@ -124,6 +125,29 @@ function setupRefresh() {
 }
 
 describe('RUN-36 live owner-bound preview', () => {
+  it('gives new-plan guidance when the goal horizon changes after export', async () => {
+    setupRefresh()
+    const goal = await tx.goal.findFirst()
+    tx.goal.findFirst.mockResolvedValue({ ...goal, targetDate: new Date('2027-02-07') })
+    const result = await previewPlanImport(owner, command, JSON.stringify(refreshResponseFixture()))
+    expect(!result.valid && result.errors[0].code).toBe('goal_horizon_changed')
+    expect(!result.valid && result.repairPrompt).toBeNull()
+  })
+  it('blocks a fresh legacy refresh issued after the goal date changed, with new-plan guidance', async () => {
+    const { request } = setupRefresh()
+    request.goal.targetDate = '2027-02-07'
+    const goal = await tx.goal.findFirst()
+    tx.goal.findFirst.mockResolvedValue({ ...goal, targetDate: new Date(request.goal.targetDate) })
+    const result = await previewPlanImport(owner, command, JSON.stringify(refreshResponseFixture()))
+    expect(result.valid).toBe(false)
+    if (result.valid) throw new Error('Expected a blocking conflict')
+    expect(result.errors[0]).toMatchObject({
+      code: 'goal_horizon_changed',
+      path: ['goal', 'targetDate'],
+    })
+    expect(result.errors[0].expected).toContain('Create a new training plan')
+    expect(result.repairPrompt).toBeNull()
+  })
   it('validates without draft, approval, publication or provider mutations', async () => {
     const result = await previewPlanImport(owner, command, JSON.stringify(initialResponseFixture()))
     expect(result.valid).toBe(true)
@@ -239,7 +263,14 @@ describe('RUN-36 live owner-bound preview', () => {
     const before = JSON.stringify(rows)
     const result = await previewPlanImport(owner, command, JSON.stringify(refreshResponseFixture()))
     expect(result.valid).toBe(true)
-    expect(JSON.stringify(result)).not.toContain('PRIVATE')
+    if (!result.valid) throw new Error('Expected a valid preview')
+    // Original text is visible in the owner's local diff, never in AI-facing response/repair data.
+    expect(JSON.stringify(result.preview.response)).not.toContain('PRIVATE')
+    expect(result.repairPrompt).toBeNull()
+    expect(
+      result.preview.refresh?.schedule.find((w) => w.workoutId === rows[1].workoutId)?.definition
+        .name,
+    ).toBe('PRIVATE prior-plan narrative')
     expect(JSON.stringify(rows)).toBe(before)
   })
   it('rejects a new session landing on a newly locked date', async () => {

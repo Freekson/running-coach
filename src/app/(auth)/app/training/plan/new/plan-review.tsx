@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { SectionHeading } from '@/components/ui/SectionHeading'
 import { addHealthDays } from '@/lib/health-history'
-import type { PlanImportResult } from '@/lib/plan-import'
+import type { PlanImportResult, RefreshDiff } from '@/lib/plan-import'
 import { formatDuration, formatEstimate } from '@/lib/workout-estimate'
 import type { WorkoutNode } from '@/schemas/workout-definition.v1'
 import styles from './plan-wizard.module.scss'
@@ -23,14 +23,19 @@ export function PlanReview({
   disabled: boolean
 }) {
   const response = preview.response
-  if (response.mode !== 'initial')
+  if (response.mode === 'refresh' && !preview.refresh)
     return (
       <Card>
         <p role="alert">
-          This is a refresh response. Use the separate refresh workflow to review its changes.
+          Reload and validate this refresh against the saved revision to inspect its changes.
         </p>
       </Card>
     )
+  const macro = preview.refresh?.macroPlan ?? response.macroPlan
+  const schedule =
+    response.mode === 'initial'
+      ? response.workouts
+      : preview.refresh!.schedule.filter((w) => !w.cancelled)
   const dates: string[] = []
   for (
     let date = response.detailWindow.startDate;
@@ -43,11 +48,14 @@ export function PlanReview({
       <Card className={styles.stack}>
         <SectionHeading icon={Layers} title="Full-goal strategy and macro phases" />
         <p>
-          {response.macroPlan.startDate} – {response.macroPlan.endDate}
+          {macro.startDate} – {macro.endDate}
         </p>
-        <p>{response.macroPlan.strategy}</p>
+        <p>{macro.strategy}</p>
+        {preview.refresh && (
+          <p>The approved macro strategy is preserved. Refresh changes near-term workouts only.</p>
+        )}
         <ol>
-          {response.macroPlan.phases.map((phase, index) => (
+          {macro.phases.map((phase, index) => (
             <li key={index}>
               <h3>{phase.label}</h3>
               <p>
@@ -58,6 +66,16 @@ export function PlanReview({
           ))}
         </ol>
       </Card>
+      {preview.refresh && (
+        <Card className={styles.stack}>
+          <SectionHeading icon={Layers} title="Changes from the approved revision" />
+          <p>
+            {preview.refresh.retainedOutsideWindow} workouts outside this window are retained.
+            Omitted workouts keep their saved definitions and dates.
+          </p>
+          <RefreshChanges changes={preview.refresh.changes} />
+        </Card>
+      )}
       <Card className={styles.stack}>
         <SectionHeading icon={CalendarDays} title="Detailed training calendar" />
         <p>
@@ -67,7 +85,7 @@ export function PlanReview({
         </p>
         <div className={styles.calendar}>
           {dates.map((date) => {
-            const workouts = response.workouts.filter((workout) => workout.scheduledDate === date)
+            const workouts = schedule.filter((workout) => workout.scheduledDate === date)
             return (
               <section key={date} className={styles.day}>
                 <h3>
@@ -81,6 +99,9 @@ export function PlanReview({
                   return (
                     <article key={workout.workoutId}>
                       <h4>{workout.definition.name}</h4>
+                      {'timezone' in workout && typeof workout.timezone === 'string' && (
+                        <p>{workout.timezone}</p>
+                      )}
                       <Badge>{workout.definition.sport.toLowerCase()}</Badge>
                       {estimate && (
                         <p>
@@ -174,7 +195,46 @@ export function PlanReview({
   )
 }
 
-function WorkoutSteps({ nodes }: { nodes: WorkoutNode[] }) {
+export function RefreshChanges({ changes }: { changes: RefreshDiff[] }) {
+  return (
+    <>
+      <p>
+        {(['created', 'changed', 'canceled', 'unchanged'] as const)
+          .map((kind) => `${changes.filter((change) => change.kind === kind).length} ${kind}`)
+          .join(' · ')}
+      </p>
+      {changes.map((change) => (
+        <details key={change.workoutId} className={styles.day}>
+          <summary>
+            {change.kind}: {change.after.definition.name} · {change.after.scheduledDate}
+          </summary>
+          {change.before && (
+            <section>
+              <h3>Before</h3>
+              <p>
+                {change.before.definition.name} · {change.before.scheduledDate} ·{' '}
+                {change.before.timezone} · {change.before.cancelled ? 'Canceled' : 'Scheduled'}
+              </p>
+              <Badge>{change.before.definition.sport.toLowerCase()}</Badge>
+              <WorkoutSteps nodes={change.before.definition.steps} />
+            </section>
+          )}
+          <section>
+            <h3>After</h3>
+            <p>
+              {change.after.definition.name} · {change.after.scheduledDate} ·{' '}
+              {change.after.timezone} · {change.after.cancelled ? 'Canceled' : 'Scheduled'}
+            </p>
+            <Badge>{change.after.definition.sport.toLowerCase()}</Badge>
+            <WorkoutSteps nodes={change.after.definition.steps} />
+          </section>
+        </details>
+      ))}
+    </>
+  )
+}
+
+export function WorkoutSteps({ nodes }: { nodes: WorkoutNode[] }) {
   return (
     <ol>
       {nodes.map((node, index) => (

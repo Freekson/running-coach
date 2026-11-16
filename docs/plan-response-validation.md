@@ -125,8 +125,10 @@ user-confirmed RUN-41 action.
 RUN-37's [plan creation wizard](plan-creation-wizard.md) now composes this preview
 with the manual exchange UX. Its initial-plan approval reruns preview and warning
 acknowledgements in the same serializable transaction as immutable revision
-persistence. Import alone remains read-only, and refresh/diff approval remains
-separate RUN-38 work.
+persistence. RUN-38's [refresh workflow](plan-refresh.md) uses the same service
+with an owner-only diff from complete persisted definitions. Import alone remains
+read-only. Original approved narrative is visible in that local diff, never added
+to AI request/repair payloads by the preview service.
 
 ## Verification
 

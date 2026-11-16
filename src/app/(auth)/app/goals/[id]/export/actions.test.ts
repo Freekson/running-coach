@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+import { RefreshGoalConflictError, RefreshWindowError } from '@/server/plans/transaction'
 vi.mock('server-only', () => ({}))
 const mocks = vi.hoisted(() => ({
   user: vi.fn(),
@@ -37,6 +38,22 @@ it('requires authentication for every public export action', async () => {
   expect(mocks.open).not.toHaveBeenCalled()
   expect(mocks.issue).not.toHaveBeenCalled()
   expect(mocks.schedule).not.toHaveBeenCalled()
+})
+it('returns new-plan guidance for an incompatible refresh goal on both open and export', async () => {
+  mocks.open.mockRejectedValueOnce(new RefreshGoalConflictError())
+  mocks.issue.mockRejectedValueOnce(new RefreshGoalConflictError())
+  for (const result of [await openPlanExportAction({}), await previewPlanExportAction({})])
+    expect(result).toEqual({ success: false, error: new RefreshGoalConflictError().message })
+})
+it('returns the approved macro boundaries and window guidance without requesting a re-export', async () => {
+  const error = new RefreshWindowError('2026-11-16', '2027-01-31')
+  mocks.issue.mockRejectedValueOnce(error)
+  const result = await previewPlanExportAction({})
+  expect(result).toEqual({ success: false, error: error.message })
+  expect(JSON.stringify(result)).toContain('2026-11-16 to 2027-01-31')
+  expect(JSON.stringify(result)).toContain('create a new training plan')
+  expect(JSON.stringify(result)).toContain('No new request was issued')
+  expect(JSON.stringify(result)).not.toContain('Reopen the request')
 })
 it('passes only a session-issued owner and never exposes private errors', async () => {
   mocks.issue.mockRejectedValue(new OwnedResourceNotFoundError())

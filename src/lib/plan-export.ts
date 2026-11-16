@@ -57,6 +57,7 @@ export type ExportConsent = z.infer<typeof exportConsentSchema>
 export type ExportBackground = z.infer<typeof exportBackgroundSchema>
 export type ExportSelection = z.infer<typeof exportSelectionSchema>
 export type ExportSetup = {
+  mode?: 'initial' | 'refresh'
   goalName: string
   goalDate: string | null
   draftId: string

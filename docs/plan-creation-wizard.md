@@ -30,7 +30,8 @@ shared import/review/approval stages. Future automatic generation can replace th
 stage and converge on the same response boundary. No automatic mode, credentials,
 paid fallback, Garmin sync, provider request or publication is added here.
 Publishing requires a separate explicit Intervals.icu action; this wizard does not
-provide a shortcut that publishes imported suggestions. Refresh/diff is RUN-38.
+provide a shortcut that publishes imported suggestions. The shared wizard also
+supports [approved-plan refresh](plan-refresh.md) through RUN-38's separate entry point.
 
 ## Persistence and authorization
 
@@ -58,7 +59,8 @@ fresh validation.
 All server actions authenticate independently and derive the owner from the
 verified session. `approvePlanImport` reruns the issued-request validator and
 warning review inside the same serializable transaction as draft validation and
-immutable approval. It accepts only initial responses and `approve: true`.
+immutable approval. The creation route accepts initial responses; the refresh
+route uses the same service with explicit operations. Both require `approve: true`.
 Live request/draft/goal versions, dates, identity collisions and warning IDs are
 rechecked. Existing revision persistence handles immutable snapshots and conflict
 retries. Concurrent approvals produce one revision; replay is refused. No

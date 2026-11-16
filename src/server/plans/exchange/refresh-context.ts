@@ -4,7 +4,13 @@ import type { PlannedWorkout, PlanRevisionWorkout } from '@prisma/client'
 import { addHealthDays, healthLocalDay } from '@/lib/health-history'
 import { macroPlanSchema } from '@/schemas/plan-content.v1'
 import { workoutDefinitionSchema, type WorkoutNode } from '@/schemas/workout-definition.v1'
-import { PlanStateError } from '../transaction'
+import { PlanStateError, RefreshGoalConflictError } from '../transaction'
+
+/** Refresh preserves the approved macro horizon; a different goal needs a new plan. */
+export function assertRefreshGoalHorizon(approvedMacro: unknown, targetDate: string | null) {
+  const macro = macroPlanSchema.parse(approvedMacro)
+  if (targetDate && macro.endDate !== targetDate) throw new RefreshGoalConflictError()
+}
 
 export type StoredCommitment = Pick<
   PlanRevisionWorkout,

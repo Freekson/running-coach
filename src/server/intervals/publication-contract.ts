@@ -46,7 +46,7 @@ export const approvedWorkoutSchema = z.strictObject({
 })
 export type ApprovedPublicationWorkout = z.infer<typeof approvedWorkoutSchema>
 
-/** RUN-33 must supply this from persisted current revisions, within the supplied
+/** The plan service supplies this from persisted current revisions, within the supplied
  * transaction. Lock its current-revision pointer until commit. Never implement
  * this by trusting a request payload, an AI import or a client approval flag. */
 export type ApprovedWorkoutReader = (

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { PlanWizard, type PlanWizardProps } from './plan-wizard'
 import { PlanReview } from './plan-review'
+import { refreshChoice, refreshPreview } from '../refresh/plan-refresh.fixtures'
 import {
   wizardArtifact,
   wizardGoal,
@@ -34,6 +35,45 @@ export default meta
 type Story = StoryObj<typeof meta>
 export const GuidedFlow: Story = {}
 export const NoGoals: Story = { args: { ownerId: 'storybook-no-goals', goals: [] } }
+export const RefreshFlow: Story = {
+  args: {
+    ownerId: 'storybook-refresh',
+    refresh: refreshChoice,
+    onPreview: async () => ({ success: true, value: refreshPreview }),
+  },
+}
+export const ChangedGoalDate: Story = {
+  args: {
+    ownerId: 'storybook-changed-goal',
+    refresh: refreshChoice,
+    onOpen: async () => ({
+      success: false,
+      error:
+        'The goal date changed since this plan was approved. Create a new training plan for the updated goal; your approved revisions are preserved.',
+    }),
+  },
+}
+export const RefreshReview: Story = {
+  render: () => (
+    <PlanReview
+      preview={refreshPreview.preview}
+      timezone="Asia/Tokyo"
+      acknowledged={[]}
+      onAcknowledge={() => {}}
+      disabled={false}
+    />
+  ),
+}
+export const NarrowRefreshReview: Story = {
+  ...RefreshReview,
+  decorators: [
+    (Story) => (
+      <div style={{ width: 320, maxWidth: '100%' }}>
+        <Story />
+      </div>
+    ),
+  ],
+}
 export const ServiceFailure: Story = {
   args: {
     ownerId: 'storybook-unavailable',

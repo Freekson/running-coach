@@ -23,8 +23,13 @@
   h2,
   h3,
   h4,
+  summary,
   label {
     overflow-wrap: anywhere;
+  }
+  summary {
+    cursor: pointer;
+    padding-block: 0.5rem;
   }
   textarea {
     width: 100%;

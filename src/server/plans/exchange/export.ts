@@ -18,6 +18,7 @@ import {
   type ExchangeRequest,
 } from '@/schemas/plan-exchange.v1'
 import { athleteReportSchema } from '@/schemas/training-context.v1'
+import { macroPlanSchema } from '@/schemas/plan-content.v1'
 import {
   ownedWhere,
   ownerId,
@@ -31,16 +32,22 @@ import {
   requireDraftVersion,
   PlanConflictError,
   PlanStateError,
+  RefreshWindowError,
 } from '../transaction'
 import { buildTrainingEvidence, readTrainingEvidence } from './evidence'
 import { createPlanExchangePackage } from './package'
 import { readStoredActivityCoverage, readStoredRecovery } from './stored-context'
-import { projectCommitment, projectMacroPlan, selectRefreshCommitments } from './refresh-context'
+import {
+  assertRefreshGoalHorizon,
+  projectCommitment,
+  projectMacroPlan,
+  selectRefreshCommitments,
+} from './refresh-context'
 
 export async function openPlanExport(
   owner: OwnerContext,
   input: unknown,
-  options?: { initialOnly: true },
+  options?: { initialOnly: true } | { planId: string; expectedRevisionId: string },
 ): Promise<ExportSetup> {
   const userId = ownerId(owner)
   const { goalId } = openExportSchema.parse(input)
@@ -50,10 +57,12 @@ export async function openPlanExport(
     })
     if (!goal) throw new OwnedResourceNotFoundError()
     const profile = await tx.athleteProfile.findUnique({ where: { userId } })
-    const plan = options?.initialOnly
+    const initialOnly = options && 'initialOnly' in options
+    const selected = options && 'planId' in options ? options : null
+    const plan = initialOnly
       ? null
       : await tx.trainingPlan.findFirst({
-          where: ownedWhere(owner, { goalId }),
+          where: ownedWhere(owner, { goalId, ...(selected ? { id: selected.planId } : {}) }),
           orderBy: { updatedAt: 'desc' },
         })
     const base = plan?.currentRevisionId
@@ -61,15 +70,28 @@ export async function openPlanExport(
           where: ownedWhere(owner, { id: plan.currentRevisionId, planId: plan.id, goalId }),
         })
       : null
+    if (selected && (!plan || !base)) throw new OwnedResourceNotFoundError()
+    if (selected && base?.id !== selected.expectedRevisionId) throw new PlanConflictError()
+    if (base)
+      assertRefreshGoalHorizon(
+        z.object({ macroPlan: z.unknown() }).parse(base.snapshot).macroPlan,
+        goal.targetDate?.toISOString().slice(0, 10) ?? null,
+      )
     let draft = await tx.planDraft.findFirst({
       where: ownedWhere(owner, {
         goalId,
         state: { not: 'APPROVED' },
         baseRevisionId: base?.id ?? null,
-        ...(options?.initialOnly ? { planId: null } : {}),
+        ...(initialOnly ? { planId: null } : {}),
       }),
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
     })
+    if (base && draft) {
+      const saved = planConstraintsSchema.parse(
+        z.object({ constraints: z.unknown() }).parse(base.snapshot).constraints,
+      )
+      if (JSON.stringify(saved) !== JSON.stringify(constraintsFromDraft(draft))) draft = null
+    }
     if (!draft) {
       const constraints = base
         ? planConstraintsSchema.parse(
@@ -88,6 +110,7 @@ export async function openPlanExport(
       })
     }
     return {
+      mode: base ? 'refresh' : 'initial',
       goalName: goal.name,
       goalDate: goal.targetDate?.toISOString().slice(0, 10) ?? null,
       draftId: draft.id,
@@ -119,8 +142,9 @@ export async function issuePlanExport(
     const today = healthLocalDay(now.toISOString(), timezone)
     const window = selection.allowedDetailWindow
     if (
-      (constraints.startDate && window.startDate < constraints.startDate) ||
-      (goal.targetDate && window.endDate > goal.targetDate.toISOString().slice(0, 10))
+      !draft.baseRevisionId &&
+      ((constraints.startDate && window.startDate < constraints.startDate) ||
+        (goal.targetDate && window.endDate > goal.targetDate.toISOString().slice(0, 10)))
     )
       throw new PlanStateError()
     const consent = {
@@ -232,9 +256,23 @@ export async function issuePlanExport(
         where: ownedWhere(owner, { id: draft.baseRevisionId, planId: plan.id, goalId: goal.id }),
       })
       if (!base) throw new OwnedResourceNotFoundError()
+      const approvedConstraints = planConstraintsSchema.parse(
+        z.object({ constraints: z.unknown() }).parse(base.snapshot).constraints,
+      )
+      if (JSON.stringify(approvedConstraints) !== JSON.stringify(constraints))
+        throw new PlanConflictError()
       const snapshot = z
-        .object({ macroPlan: z.unknown(), detailWindow: z.unknown() })
+        .object({ macroPlan: macroPlanSchema, detailWindow: z.unknown() })
         .parse(base.snapshot)
+      assertRefreshGoalHorizon(
+        snapshot.macroPlan,
+        goal.targetDate?.toISOString().slice(0, 10) ?? null,
+      )
+      if (
+        window.startDate < snapshot.macroPlan.startDate ||
+        window.endDate > snapshot.macroPlan.endDate
+      )
+        throw new RefreshWindowError(snapshot.macroPlan.startDate, snapshot.macroPlan.endDate)
       const rows = await tx.planRevisionWorkout.findMany({
         where: ownedWhere(owner, { revisionId: base.id, planId: plan.id }),
         include: { workout: true },

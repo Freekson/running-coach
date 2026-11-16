@@ -4,16 +4,16 @@ Issue: [RUN-41](https://linear.app/fr-running-coach/issue/RUN-41/implement-idemp
 
 ## Scope and integration boundary
 
-This change implements the durable server outbox. The user explicitly chose to
-leave RUN-33 integration pending: this checkout has Goal/PlanDraft persistence,
-but no current approved plan revisions or stable scheduled workout records.
-There is deliberately no production service instance, publication endpoint or
-Publish button accepting client-supplied workout/approval data. RUN-41 is not
-fully accepted end to end until that integration exists.
+RUN-38 now connects this durable outbox to RUN-33's persisted approved revisions
+through `src/server/plans/publication.ts`. It provides the production approval
+reader, a local diff preview and separately confirmed per-workout publication
+actions. [Plan refresh](plan-refresh.md) describes the current UI and verification.
+Historical verification notes below describe the earlier foundation boundary;
+they do not establish live provider or Garmin device delivery.
 
 `createIntervalsPublicationService(readApproved)` requires a server-only
-`ApprovedWorkoutReader`. RUN-33 must implement it against its existing plan store,
-using the supplied Prisma transaction and verified owner context. It must:
+`ApprovedWorkoutReader`. `readApprovedPlanWorkout` implements it against the plan
+store using the supplied Prisma transaction and verified owner context. It must:
 
 - Check owner on the plan, revision and logical workout, including nested links.
 - Read the **current, explicitly approved**, immutable revision and lock its
@@ -27,10 +27,10 @@ using the supplied Prisma transaction and verified owner context. It must:
   database transaction and never writes the approved plan store.
 
 The reader is dependency-injected for this boundary, not a substitute approval
-store. Its test implementation supplies synthetic approved snapshots; the tests
-do not establish that a production approval workflow exists. Once RUN-33 adds
-its tables, reinforce nested ownership with composite foreign keys rather than
-leaving the approval IDs as unrelated UUIDs.
+store. Foundation tests supply synthetic approved snapshots. RUN-38 additionally
+tests the persisted reader and explicitly confirmed create/cancel operations
+against the local HTTP provider fixture. Composite plan/revision/workout ownership
+is enforced by RUN-33's foreign keys. Publication intent remains a separate store.
 
 RUN-31/38 integration must preview the resulting provider changes and nested
 repeat expansion before an explicit Publish/Update/Reschedule/Cancel action.
@@ -45,6 +45,10 @@ requests; no continuation is scheduled when the request ends.
 1. `queue(owner, { localWorkoutId, expectedRevisionId,
 expectedPublishRevision })` reads approval from the trusted reader and commits
    an intent. It requires no connected provider and makes no network calls.
+   The queued `payload` is separate from `lastConfirmedPayload`, the last
+   provider-confirmed prescription. Queue/retry never promotes an intent into
+   the confirmed baseline. Failed/uncertain retries retain the earlier before-state;
+   unreconstructable legacy state stays explicitly unknown.
    An initial publication expects revision `0`; the receipt returns revision `1`.
    Exact repeated clicks return the existing receipt. A changed approved snapshot
    requires the latest publication revision, otherwise it returns a conflict.
@@ -85,6 +89,9 @@ publishRevision })` claims that single receipt. Retry calls the same method.
    receipt; retry reconciles and verifies again. A newer approval supersedes old
    intent only after any pending write is resolved, without resending its
    prescription. The owner then explicitly queues the new revision.
+   Successful verification advances the confirmed payload. When a superseded
+   effect is proven by matching remote readback, its observed payload becomes
+   the baseline for the separately confirmed successor.
 
 A pending upsert is resolved by its exact unique tag and intended prescription
 in provider readback, or by a valid acknowledged write response. An empty calendar,

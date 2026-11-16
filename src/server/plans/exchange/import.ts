@@ -6,18 +6,25 @@ import { goalInputSchema } from '@/lib/goals'
 import { healthLocalDay } from '@/lib/health-history'
 import { planImportCommandSchema, type ImportError, type PlanImportResult } from '@/lib/plan-import'
 import { exchangeRequestSchema } from '@/schemas/plan-exchange.v1'
-import { scheduledPlanWorkoutSchema, type PlanContent } from '@/schemas/plan-content.v1'
 import {
   ownedWhere,
   ownerId,
   OwnedResourceNotFoundError,
   type OwnerContext,
 } from '@/server/authorization/ownership'
-import { constraintsFromDraft, mergePlanWorkouts, PlanValidationError } from '../content'
-import { planTransaction, requireDraft, PlanConflictError, PlanStateError } from '../transaction'
+import { constraintsFromDraft, PlanValidationError } from '../content'
+import {
+  planTransaction,
+  requireDraft,
+  PlanConflictError,
+  PlanStateError,
+  RefreshGoalConflictError,
+} from '../transaction'
 import { assertExchangeCurrent } from './package'
 import { importError, invalidImport, schemaImportErrors } from './repair'
 import { validatePlanResponse } from './validation'
+import { buildImportProposal } from './proposal'
+import { assertRefreshGoalHorizon } from './refresh-context'
 
 /** One serializable read view. Validation never writes drafts, revisions, outboxes or provider state. */
 export async function previewPlanImport(
@@ -69,11 +76,6 @@ export async function previewPlanImport(
         elevationGainM: goal.elevationGainM,
         targetDate: goal.targetDate?.toISOString().slice(0, 10) ?? null,
       })
-      if (
-        JSON.stringify(currentGoal) !== JSON.stringify(request.goal) ||
-        JSON.stringify(constraintsFromDraft(draft)) !== JSON.stringify(request.draft.constraints)
-      )
-        throw new PlanConflictError()
       const plan = draft.planId
         ? await tx.trainingPlan.findFirst({
             where: ownedWhere(owner, { id: draft.planId, goalId: input.goalId }),
@@ -90,6 +92,16 @@ export async function previewPlanImport(
           })
         : null
       if (draft.baseRevisionId !== (base?.id ?? null) || (plan?.currentRevisionId && !base))
+        throw new PlanConflictError()
+      if (base)
+        assertRefreshGoalHorizon(
+          z.object({ macroPlan: z.unknown() }).parse(base.snapshot).macroPlan,
+          currentGoal.targetDate,
+        )
+      if (
+        JSON.stringify(currentGoal) !== JSON.stringify(request.goal) ||
+        JSON.stringify(constraintsFromDraft(draft)) !== JSON.stringify(request.draft.constraints)
+      )
         throw new PlanConflictError()
       try {
         assertExchangeCurrent(request, {
@@ -188,43 +200,15 @@ export async function previewPlanImport(
           ),
         )
       if (errors.length) return invalidImport(errors, false)
-      // Supply retained entries explicitly: RUN-33's replacement merge otherwise
-      // cancels omissions. Use original definitions, never privacy-redacted labels.
-      const schedule = new Map(rows.map((w) => [w.workoutId, scheduleOriginal(w)]))
-      for (const entry of entries) {
-        if ('operation' in entry && entry.operation === 'cancel') {
-          const old = schedule.get(entry.workoutId)
-          if (!old) throw new PlanConflictError()
-          schedule.set(entry.workoutId, { ...old, cancelled: true })
-        } else if ('scheduledDate' in entry)
-          schedule.set(entry.workoutId, {
-            workoutId: entry.workoutId,
-            scheduledDate: entry.scheduledDate,
-            definition: entry.definition,
-            cancelled: false,
-          })
-      }
-      const content: PlanContent = {
-        schemaVersion: 1,
-        macroPlan: response.macroPlan,
-        detailWindow: response.detailWindow,
-        workouts: [...schedule.values()].filter(
-          (w) =>
-            w.scheduledDate >= response.detailWindow.startDate &&
-            w.scheduledDate <= response.detailWindow.endDate,
-        ),
-      }
-      mergePlanWorkouts(
-        rows.map((w) => ({ ...scheduleOriginal(w), timezone: w.timezone })),
-        content,
+      const proposal = buildImportProposal(
+        rows,
+        response,
         request.draft.constraints,
-        rows.map((w) => ({
-          id: w.workoutId,
-          completedAt: w.workout.completedAt,
-          lockedAt: w.workout.lockedAt,
-        })),
         now,
+        base ? z.object({ macroPlan: z.unknown() }).parse(base.snapshot).macroPlan : undefined,
+        currentGoal.targetDate,
       )
+      if (response.mode === 'refresh') result.preview.refresh = proposal.refresh
       return result
     }
     return await (transaction ? inspect(transaction) : planTransaction(inspect))
@@ -238,6 +222,11 @@ export async function previewPlanImport(
             'Select an issued request for your own selected goal and draft',
           ),
         ],
+        false,
+      )
+    if (error instanceof RefreshGoalConflictError)
+      return invalidImport(
+        [importError('goal_horizon_changed', ['goal', 'targetDate'], error.message)],
         false,
       )
     if (error instanceof PlanConflictError || error instanceof PlanStateError)
@@ -275,18 +264,4 @@ export async function previewPlanImport(
       )
     throw error
   }
-}
-
-function scheduleOriginal(w: {
-  workoutId: string
-  scheduledDate: Date
-  definition: unknown
-  cancelled: boolean
-}) {
-  return scheduledPlanWorkoutSchema.parse({
-    workoutId: w.workoutId,
-    scheduledDate: w.scheduledDate.toISOString().slice(0, 10),
-    definition: w.definition,
-    cancelled: w.cancelled,
-  })
 }

@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest'
 vi.mock('server-only', () => ({}))
 import {
   projectCommitment,
+  assertRefreshGoalHorizon,
   projectMacroPlan,
   selectRefreshCommitments,
   type StoredCommitment,
@@ -38,6 +39,20 @@ function row(index: number, date: string, cancelled = false): StoredCommitment {
   }
 }
 const window = { startDate: '2026-11-16', endDate: '2026-12-13' }
+
+it('rejects an incompatible goal date without changing the approved macro strategy', () => {
+  const macro = {
+    startDate: '2026-11-01',
+    endDate: '2026-12-31',
+    strategy: privateText,
+    phases: [{ startDate: '2026-11-01', endDate: '2026-12-31', label: 'Base', notes: '' }],
+  }
+  const original = structuredClone(macro)
+  expect(() => assertRefreshGoalHorizon(macro, '2027-01-07')).toThrow('Create a new training plan')
+  expect(() => assertRefreshGoalHorizon(macro, '2026-12-31')).not.toThrow()
+  expect(() => assertRefreshGoalHorizon(macro, null)).not.toThrow()
+  expect(macro).toEqual(original)
+})
 
 it('projects macro and recursively nested workout text without mutating approved source records', () => {
   const macro = {

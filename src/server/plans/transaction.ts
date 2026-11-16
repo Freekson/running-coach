@@ -9,8 +9,24 @@ import {
 } from '@/server/authorization/ownership'
 
 export class PlanConflictError extends Error {
+  constructor(message = 'Plan or draft changed; reload before continuing') {
+    super(message)
+  }
+}
+
+export class RefreshGoalConflictError extends PlanConflictError {
   constructor() {
-    super('Plan or draft changed; reload before continuing')
+    super(
+      'The goal date changed since this plan was approved. Create a new training plan for the updated goal; your approved revisions are preserved.',
+    )
+  }
+}
+
+export class RefreshWindowError extends Error {
+  constructor(startDate: string, endDate: string) {
+    super(
+      `Choose a future 14–28 day window within the approved macro period (${startDate} to ${endDate}), or create a new training plan to use different dates. No new request was issued; your previous request and approved revisions are preserved.`,
+    )
   }
 }
 

@@ -29,11 +29,26 @@ function fail(path: string[], message: string): never {
 }
 function boundedJson(text: string, limit: number) {
   if (new TextEncoder().encode(text).byteLength > limit)
-    fail([], 'Exchange JSON exceeds byte limit')
+    fail([], `Exchange JSON exceeds byte limit; expected at most ${limit} UTF-8 bytes`)
+  // Bound arbitrary JSON before schema traversal, including unknown properties.
+  // Count delimiters outside strings without recursively visiting untrusted data.
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (const character of text) {
+    if (inString) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === '"') inString = false
+    } else if (character === '"') inString = true
+    else if (character === '{' || character === '[') {
+      if (++depth > 32) fail([], 'JSON nesting exceeds limit; expected at most 32 levels')
+    } else if (character === '}' || character === ']') depth--
+  }
   try {
     return JSON.parse(text) as unknown
   } catch {
-    return fail([], 'Malformed JSON')
+    return fail([], 'Malformed JSON; expected a JSON document without code fences or trailing text')
   }
 }
 

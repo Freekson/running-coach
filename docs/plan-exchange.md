@@ -3,8 +3,9 @@
 RUN-34 defines the provider-neutral JSON boundary for manual ChatGPT generation
 and a possible future generation adapter. It adds no UI, provider reads/writes,
 automatic approval or database migration. RUN-35 owns owner-authorized export and
-privacy selection UI; RUN-36 owns import orchestration, repair prompts and live
-staleness checks. RUN-33 remains the only persistence and explicit approval store.
+privacy selection UI; RUN-36 implements import preview, repair prompts and live
+staleness checks in [plan-response-validation.md](plan-response-validation.md).
+RUN-33 remains the only persistence and explicit approval store.
 
 ## Authoritative schemas
 

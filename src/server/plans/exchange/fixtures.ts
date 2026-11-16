@@ -148,7 +148,13 @@ export function initialResponseFixture(): Extract<ExchangeResponse, { mode: 'ini
       ],
     },
     detailWindow: { startDate: '2026-11-16', endDate: '2026-12-13' },
-    workouts: [{ workoutId: fixtureId(200), scheduledDate: '2026-11-17', definition }],
+    workouts: [
+      {
+        workoutId: fixtureId(200),
+        scheduledDate: '2026-11-17',
+        definition: structuredClone(definition),
+      },
+    ],
     warnings: ['Recorded history may be incomplete. Explicit review is required.'],
   }
 }
@@ -223,7 +229,12 @@ export function refreshResponseFixture(): ExchangeResponse {
     baseRevisionNumber: 1,
     operations: [
       { operation: 'cancel', workoutId: fixtureId(200) },
-      { operation: 'create', workoutId: fixtureId(203), scheduledDate: '2026-11-19', definition },
+      {
+        operation: 'create',
+        workoutId: fixtureId(203),
+        scheduledDate: '2026-11-19',
+        definition: structuredClone(definition),
+      },
     ],
   }
 }

@@ -113,6 +113,35 @@ export function RevisionPublication({
           {receipt.errorCode ? ` · ${receipt.errorCode.replaceAll('_', ' ')}` : ''}
         </p>
       ))}
+      {preview && (
+        <section className={styles.stack} aria-label="Saved publication status">
+          <h3>Saved publication status</h3>
+          <p>
+            These statuses are saved locally; they do not check the live Intervals.icu calendar.
+            Queued and failed changes require a separate confirmation below to send or retry.
+          </p>
+          {preview.workouts.map((workout) => (
+            <div className={styles.day} key={workout.workoutId}>
+              <h4>{workout.name}</h4>
+              <p>Approved local date: {workout.scheduledDate}</p>
+              <p>
+                {workout.status
+                  ? publicationStatusLabels[workout.status]
+                  : workout.cancelled
+                    ? 'Cancelled locally · no publication recorded'
+                    : 'Approved locally · no publication recorded'}
+                {workout.errorCode ? ` · ${workout.errorCode.replaceAll('_', ' ')}` : ''}
+              </p>
+              {workout.fromEarlierRevision && (
+                <p>
+                  This status belongs to an earlier approved revision. It does not confirm
+                  publication of the current revision.
+                </p>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
       {preview && !preview.changes.length && (
         <p>No pending changes to publish for editable future workouts.</p>
       )}

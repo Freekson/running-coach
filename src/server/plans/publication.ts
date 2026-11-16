@@ -4,13 +4,14 @@ import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { healthLocalDay } from '@/lib/health-history'
-import { publicationStatusSchema } from '@/lib/workout-publication'
+import { publicationStatusAt } from '@/lib/workout-publication'
 import {
   revisionPublicationSchema,
   sendRevisionPublicationSchema,
   type RevisionPublicationPreview,
 } from '@/lib/plan-publication'
 import { planUuidSchema, scheduledPlanWorkoutSchema } from '@/schemas/plan-content.v1'
+import { workoutDefinitionSchema } from '@/schemas/workout-definition.v1'
 import {
   ownerId,
   ownedWhere,
@@ -102,6 +103,18 @@ async function inspect(
     }),
   })
   const prior = new Map(receipts.map((receipt) => [receipt.localWorkoutId, receipt]))
+  const workouts: RevisionPublicationPreview['workouts'] = rows.map((row) => {
+    const receipt = prior.get(row.workoutId)
+    return {
+      workoutId: row.workoutId,
+      name: workoutDefinitionSchema.parse(row.definition).name,
+      scheduledDate: row.scheduledDate.toISOString().slice(0, 10),
+      cancelled: row.cancelled,
+      status: receipt ? publicationStatusAt(receipt) : null,
+      fromEarlierRevision: !!receipt && receipt.approvedRevisionId !== input.expectedRevisionId,
+      errorCode: receipt?.errorCode ?? null,
+    }
+  })
   const changes: RevisionPublicationPreview['changes'] = []
   for (const row of rows) {
     const receipt = prior.get(row.workoutId)
@@ -183,7 +196,7 @@ async function inspect(
       operation,
       reviewToken,
       expectedPublishRevision: receipt?.publishRevision ?? 0,
-      status: receipt ? publicationStatusSchema.parse(receipt.status) : null,
+      status: receipt ? publicationStatusAt(receipt) : null,
       baselineStatus,
       remoteStateUncertain: needsRecovery,
       ...(receipt && needsRecovery
@@ -192,7 +205,7 @@ async function inspect(
       ...(protectedWorkout ? { recoveryOnly: true as const } : {}),
     })
   }
-  return { planId: plan.id, revisionId: input.expectedRevisionId, changes }
+  return { planId: plan.id, revisionId: input.expectedRevisionId, workouts, changes }
 }
 
 /** Local outbox comparison only. Opening a preview never contacts a provider. */

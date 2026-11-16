@@ -987,6 +987,7 @@ describe.skipIf(!enabled)('RUN-36/37/38 PostgreSQL import, approval and owner is
       const input = { planId: approved.planId, expectedRevisionId: approved.revisionId }
       const review = await previewRevisionPublication(owner, input)
       expect(provider.calls).toHaveLength(0)
+      expect(review.workouts[0]).toMatchObject({ status: null, errorCode: null })
       const change = review.changes[0]
       const receipt = await sendRevisionPublication(owner, {
         ...input,
@@ -1001,6 +1002,17 @@ describe.skipIf(!enabled)('RUN-36/37/38 PostgreSQL import, approval and owner is
         garminConnect: 'UNVERIFIED',
       })
       expect(provider.events.get(key)?.size).toBe(1)
+      const callsAfterPublication = provider.calls.length
+      const reopened = await previewRevisionPublication(owner, input)
+      expect(reopened.changes).toHaveLength(0)
+      expect(reopened.workouts[0]).toMatchObject({
+        status: 'PUBLISHED',
+        fromEarlierRevision: false,
+        errorCode: null,
+      })
+      expect(provider.calls).toHaveLength(callsAfterPublication)
+      await expect(previewRevisionPublication(other, input)).rejects.toThrow()
+      expect(provider.calls).toHaveLength(callsAfterPublication)
       // Model an interrupted runner after an acknowledged write.
       await prisma.workoutPublication.update({
         where: { id: receipt.id },
@@ -1023,6 +1035,10 @@ describe.skipIf(!enabled)('RUN-36/37/38 PostgreSQL import, approval and owner is
       expect(provider.calls).toHaveLength(callsBeforeApproval)
       const nextInput = { planId: next.planId, expectedRevisionId: next.revisionId }
       const pending = await previewRevisionPublication(owner, nextInput)
+      expect(pending.workouts[0]).toMatchObject({
+        status: 'UNCERTAIN',
+        fromEarlierRevision: true,
+      })
       expect(pending.changes[0].operation).toBe('CANCEL')
       expect(provider.calls).toHaveLength(callsBeforeApproval)
       expect(pending.changes[0].recovery).toEqual({ publicationId: receipt.id, publishRevision: 1 })
@@ -1048,6 +1064,11 @@ describe.skipIf(!enabled)('RUN-36/37/38 PostgreSQL import, approval and owner is
         watch: 'UNVERIFIED',
       })
       expect(provider.events.get(key)?.size).toBe(0)
+      const callsAfterCancellation = provider.calls.length
+      const settled = await previewRevisionPublication(owner, nextInput)
+      expect(settled.workouts[0]).toMatchObject({ status: 'CANCELLED', cancelled: true })
+      expect(settled.changes).toHaveLength(0)
+      expect(provider.calls).toHaveLength(callsAfterCancellation)
     }))
   it.each(['read_failure', 'write_rejected', 'lost_response'] as const)(
     'keeps the confirmed A-to-B reschedule diff after %s and advances the baseline only on confirmation',

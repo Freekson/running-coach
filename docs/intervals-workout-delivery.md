@@ -3,8 +3,8 @@
 For the canonical mapping contract, supported subset, manual probe payload and
 Forerunner 165 verification procedure, see [RUN-40 workout mapping](intervals-workout-mapping.md).
 
-For durable explicit publication/retry and the pending approved-plan integration,
-see the [RUN-41 outbox foundation](intervals-publication-outbox.md).
+For durable explicit publication/retry from current approved plans,
+see the [RUN-41 publication outbox](intervals-publication-outbox.md).
 
 Intervals.icu is the outbound bridge for scheduled structured workouts. Completed Garmin Activities and Health data come directly from the existing Garmin Personal API integration, initiated manually by the owner through Sync now / Import / Resume / Retry. An Intervals.icu account is never required to read or import that data. There is no Intervals.icu activity or wellness ingestion, Cron, or background polling.
 
@@ -25,7 +25,7 @@ For an eventual OAuth implementation, planned workout publication needs `CALENDA
    Select **Prepare workout delivery** to verify Run delivery settings. Missing fields are configured automatically with the versioned delivery-only reference; valid existing settings are preserved. No threshold knowledge/input is required. The connection dialog explains that this can affect zones/load estimates in Intervals.icu. Preparation publishes no workout. Errors provide a recovery action before retrying. Each future explicit Publish in RUN-41 must run the preflight again against the current key.
 
 4. In Intervals.icu Settings → Connections → Garmin Connect, connect your **own Garmin Connect account**, enable **Upload planned workouts**, and authorize the matching Garmin planned-workout permission. Check that sport filters include the planned sessions. Activity import is a separate setting; it is not required for this app's outbound delivery or Garmin inbound import.
-5. Once publication is available in RUN-41, explicitly select **Publish to Intervals.icu** separately from importing/approving a plan. Connecting, testing, and approving a plan do not publish anything. RUN-39 adds no workout write endpoint.
+5. Open the current approved plan's history page and select **Review Intervals.icu changes**. Inspect the saved per-workout statuses and each proposed change, then separately confirm its create/update/reschedule/cancel or recovery check. Queued and failed receipts can be retried through the same explicit confirmation. Connecting, testing, previewing, and approving a plan do not publish anything. A published status does not establish Garmin Connect/watch delivery.
 
 Intervals.icu documents forwarding approximately the **next seven days** of scheduled workouts automatically. Sessions farther out may wait until they enter that window. This is provider-managed forwarding, independent of manually initiated Running Coach → Intervals.icu publication and Running Coach's manual Garmin Activity/Health import. See the provider's [Garmin setup guide](https://forum.intervals.icu/t/upload-planned-workouts-to-garmin-connect/1521) and [seven-day window confirmation](https://forum.intervals.icu/t/upload-planned-workouts-to-garmin-connect/1521?page=10). Sync the watch with Garmin Connect and inspect the workout on the actual device. Intervals.icu acceptance, `Connected`, and Garmin calendar presence do not prove watch delivery. Real Forerunner 165 verification belongs to RUN-40.
 

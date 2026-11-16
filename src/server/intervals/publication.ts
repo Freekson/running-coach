@@ -3,7 +3,7 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { Prisma, type WorkoutPublication } from '@prisma/client'
 import { z } from 'zod'
-import { publicationSummarySchema } from '@/lib/workout-publication'
+import { publicationStatusAt, publicationSummarySchema } from '@/lib/workout-publication'
 import {
   ownerId,
   OwnedResourceNotFoundError,
@@ -46,10 +46,7 @@ function summary(row: WorkoutPublication) {
     approvedRevisionId: row.approvedRevisionId,
     publishRevision: row.publishRevision,
     operation: row.operation,
-    status:
-      row.status === 'RUNNING' && row.leaseExpiresAt && row.leaseExpiresAt <= new Date()
-        ? 'UNCERTAIN'
-        : row.status,
+    status: publicationStatusAt(row),
     remoteEventId: row.remoteEventId,
     attemptCount: row.attemptCount,
     errorCode: row.errorCode,

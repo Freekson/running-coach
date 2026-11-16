@@ -15,6 +15,15 @@ export const sendRevisionPublicationSchema = revisionPublicationSchema.extend({
 export type RevisionPublicationPreview = {
   planId: string
   revisionId: string
+  workouts: {
+    workoutId: string
+    name: string
+    scheduledDate: string
+    cancelled: boolean
+    status: PublicationStatus | null
+    fromEarlierRevision: boolean
+    errorCode: string | null
+  }[]
   changes: (RefreshDiff & {
     operation: 'CREATE' | 'UPDATE' | 'RESCHEDULE' | 'CANCEL'
     reviewToken: string

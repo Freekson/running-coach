@@ -70,7 +70,7 @@ it('RUN-38 reuses the wizard with fixed constraints, inspectable diffs and separ
   props.publication = {
     onPreview: vi.fn().mockResolvedValue({
       success: true,
-      value: { planId: refreshChoice.id, revisionId: 'revision', changes: [] },
+      value: { planId: refreshChoice.id, revisionId: 'revision', workouts: [], changes: [] },
     }),
     onSend: vi.fn(),
   }

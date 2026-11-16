@@ -70,6 +70,12 @@ changes** compares editable future sessions against the last confirmed publicati
 It is a local comparison, not a claim that the live remote calendar was read.
 Each create/update/reschedule/cancel has before/after dates, zones and steps,
 a separate confirmation checkbox and an explicit send button.
+The same review restores saved per-workout publication statuses after a page
+reload, including settled receipts omitted from the pending diff. Local approval
+without a receipt is labeled separately. A receipt from an earlier revision is
+identified explicitly and cannot confirm that the current approved date or
+prescription was sent. Status review reads local data only; it never sends or
+retries a provider operation.
 Both sides of the shared diff also show the sport, including sport-only changes.
 If an approved prescription cannot be mapped by the Intervals.icu adapter (for
 example, absolute-HR targets or a non-running sport), publication explains the

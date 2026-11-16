@@ -36,6 +36,7 @@ function uncertainReceipt(workout: {
   return {
     id: fixtureId(800),
     localWorkoutId: workout.workoutId,
+    approvedRevisionId: fixtureId(299),
     publishRevision: 1,
     status: 'UNCERTAIN',
     operation: 'UPDATE',
@@ -85,6 +86,12 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 it('previews owned approved future workouts without queuing, provider reads or dispatch', async () => {
   const result = await previewRevisionPublication(owner, input)
+  expect(result.workouts[0]).toMatchObject({
+    workoutId: result.changes[0].workoutId,
+    status: null,
+    cancelled: false,
+    errorCode: null,
+  })
   expect(result.changes[0]).toMatchObject({
     operation: 'CREATE',
     before: null,
@@ -97,7 +104,59 @@ it('previews owned approved future workouts without queuing, provider reads or d
       where: { userId: owner.userId, planId: input.planId, revisionId: input.expectedRevisionId },
     }),
   )
+  expect(tx.workoutPublication.findMany).toHaveBeenCalledWith({
+    where: {
+      userId: owner.userId,
+      provider: 'INTERVALS',
+      localWorkoutId: { in: result.workouts.map((workout) => workout.workoutId) },
+    },
+  })
 })
+it('retains saved publication statuses after settled workouts leave the pending list', async () => {
+  const workout = (await tx.planRevisionWorkout.findMany())[0]
+  const receipt = uncertainReceipt(workout)
+  tx.workoutPublication.findMany.mockResolvedValue([
+    {
+      ...receipt,
+      status: 'PUBLISHED',
+      pendingWrite: null,
+      errorCode: null,
+      remoteAthleteId: 'private-provider-binding',
+    },
+  ])
+  const result = await previewRevisionPublication(owner, input)
+  expect(result.changes.some((change) => change.workoutId === workout.workoutId)).toBe(false)
+  expect(result.workouts.find((entry) => entry.workoutId === workout.workoutId)).toMatchObject({
+    name: workout.definition.name,
+    status: 'PUBLISHED',
+    fromEarlierRevision: true,
+  })
+  expect(JSON.stringify(result)).not.toContain('private-provider-binding')
+  expect(mocks.queue).not.toHaveBeenCalled()
+  expect(mocks.dispatch).not.toHaveBeenCalled()
+})
+it.each(['QUEUED', 'FAILED', 'RUNNING'] as const)(
+  'restores %s receipts without dispatching and presents expired leases as uncertain',
+  async (status) => {
+    const workout = (await tx.planRevisionWorkout.findMany())[0]
+    tx.workoutPublication.findMany.mockResolvedValue([
+      {
+        ...uncertainReceipt(workout),
+        status,
+        pendingWrite: null,
+        leaseToken: status === 'RUNNING' ? fixtureId(802) : null,
+        leaseExpiresAt: status === 'RUNNING' ? new Date(fixtureNow.getTime() - 1) : null,
+        errorCode: status === 'FAILED' ? 'PERMISSION_REQUIRED' : null,
+      },
+    ])
+    const result = await previewRevisionPublication(owner, input)
+    const expected = status === 'RUNNING' ? 'UNCERTAIN' : status
+    expect(result.workouts[0]).toMatchObject({ status: expected })
+    expect(result.changes[0]).toMatchObject({ status: expected })
+    expect(mocks.queue).not.toHaveBeenCalled()
+    expect(mocks.dispatch).not.toHaveBeenCalled()
+  },
+)
 it('shows the last confirmed schedule after a reschedule intent fails instead of comparing the intent with itself', async () => {
   const workout = (await tx.planRevisionWorkout.findMany())[0]
   const pending = uncertainReceipt(workout)

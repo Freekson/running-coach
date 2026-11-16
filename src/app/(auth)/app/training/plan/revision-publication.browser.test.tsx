@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RevisionPublication, type PublicationActions } from './revision-publication'
 import { publicationPreviewFixture as preview } from './revision-publication.fixtures'
 import type { RevisionPublicationPreview } from '@/lib/plan-publication'
+import { publicationStatusLabels, type PublicationStatus } from '@/lib/workout-publication'
 
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
 let host: HTMLDivElement, root: Root, actions: PublicationActions
@@ -66,6 +67,74 @@ it('makes no calls on mount and previews each remote change before individual co
   })
   expect(host.textContent).toContain('watch delivery unverified')
   expect(button('Confirm cancel in Intervals.icu').disabled).toBe(true)
+})
+it.each<PublicationStatus>([
+  'PUBLISHED',
+  'CANCELLED',
+  'QUEUED',
+  'FAILED',
+  'UNCERTAIN',
+  'RUNNING',
+  'SUPERSEDED',
+])('restores the durable %s status after reopening without sending workouts', async (status) => {
+  actions.onPreview = vi.fn().mockResolvedValue({
+    success: true,
+    value: {
+      ...preview,
+      changes: [],
+      workouts: [{ ...preview.workouts[0], status, errorCode: null }],
+    },
+  })
+  await render()
+  await click(button('Review Intervals.icu changes'))
+  await act(async () => root.unmount())
+  root = createRoot(host)
+  await render()
+  await click(button('Review Intervals.icu changes'))
+  const saved = host.querySelector('[aria-label="Saved publication status"]')!
+  expect(saved.textContent).toContain(preview.workouts[0].name)
+  expect(saved.textContent).toContain(publicationStatusLabels[status])
+  expect(saved.textContent).toContain('separate confirmation')
+  expect(host.textContent).toContain('No pending changes')
+  expect(actions.onSend).not.toHaveBeenCalled()
+  expect(host.textContent).toContain('API success does not confirm watch receipt')
+})
+it('distinguishes local approval and cancellation from provider publication', async () => {
+  actions.onPreview = vi.fn().mockResolvedValue({
+    success: true,
+    value: {
+      ...preview,
+      workouts: preview.workouts.slice(0, 2).map((workout, index) => ({
+        ...workout,
+        status: null,
+        fromEarlierRevision: false,
+        cancelled: index === 1,
+      })),
+    },
+  })
+  await render()
+  await click(button('Review Intervals.icu changes'))
+  const saved = host.querySelector('[aria-label="Saved publication status"]')!
+  expect(saved.textContent).toContain('Approved locally · no publication recorded')
+  expect(saved.textContent).toContain('Cancelled locally · no publication recorded')
+  expect(saved.textContent).not.toContain('Published to Intervals.icu')
+  expect(actions.onSend).not.toHaveBeenCalled()
+})
+it('does not present an earlier publication as confirmation of the current approved date', async () => {
+  actions.onPreview = vi.fn().mockResolvedValue({
+    success: true,
+    value: {
+      ...preview,
+      workouts: [{ ...preview.workouts[0], status: 'PUBLISHED', fromEarlierRevision: true }],
+    },
+  })
+  await render()
+  await click(button('Review Intervals.icu changes'))
+  const saved = host.querySelector('[aria-label="Saved publication status"]')!
+  expect(saved.textContent).toContain('Approved local date:')
+  expect(saved.textContent).toContain('belongs to an earlier approved revision')
+  expect(saved.textContent).toContain('does not confirm publication of the current revision')
+  expect(actions.onSend).not.toHaveBeenCalled()
 })
 it('labels unknown remote outcomes without presenting the pending intent as a confirmed before-state', async () => {
   const change = preview.changes[1]

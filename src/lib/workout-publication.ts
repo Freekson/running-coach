@@ -11,6 +11,17 @@ export const publicationStatusSchema = z.enum([
 ])
 export type PublicationStatus = z.infer<typeof publicationStatusSchema>
 
+export function publicationStatusAt(
+  row: { status: string; leaseExpiresAt: Date | null },
+  now = new Date(),
+): PublicationStatus {
+  return publicationStatusSchema.parse(
+    row.status === 'RUNNING' && row.leaseExpiresAt && row.leaseExpiresAt <= now
+      ? 'UNCERTAIN'
+      : row.status,
+  )
+}
+
 // Browser-safe copy for the RUN-33/38 publication controls. Provider acceptance
 // and prescription verification never establish downstream watch receipt.
 export const publicationStatusLabels: Record<PublicationStatus, string> = {
@@ -20,7 +31,7 @@ export const publicationStatusLabels: Record<PublicationStatus, string> = {
   CANCELLED: 'Cancelled in Intervals.icu · check Garmin Connect and your watch',
   FAILED: 'Publication failed · approved local workout preserved',
   UNCERTAIN: 'Publication outcome uncertain · retry to reconcile',
-  SUPERSEDED: 'Newer approval available · publish pending changes',
+  SUPERSEDED: 'Publication intent superseded · review the current approved plan',
 }
 
 export const intervalsDownstreamGuidance =

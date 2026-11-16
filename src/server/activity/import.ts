@@ -352,6 +352,19 @@ export async function importCanonicalActivity(
             },
             select: { id: true },
           })
+          if (existing) {
+            // Keep a confirmed match's current outcome aligned with accepted
+            // source corrections. Manual completion and history locks are independent.
+            await tx.plannedWorkout.updateMany({
+              where: {
+                userId,
+                completedActivityId: saved.id,
+                completionFromActivity: true,
+                completionAt: { not: comparison.startedAt },
+              },
+              data: { completionAt: comparison.startedAt },
+            })
+          }
           if (!retainLaps) {
             const laps = lapRows(activity, userId, saved.id)
             const previous = laps.length

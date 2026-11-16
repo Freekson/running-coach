@@ -35,7 +35,13 @@ function row(index: number, date: string, cancelled = false): StoredCommitment {
         },
       ],
     },
-    workout: { completedAt: null, lockedAt: null, completedActivityId: fixtureId(999) },
+    workout: {
+      completedAt: null,
+      lockedAt: null,
+      completedActivityId: fixtureId(999),
+      completionAt: null,
+      completionFromActivity: false,
+    },
   }
 }
 const window = { startDate: '2026-11-16', endDate: '2026-12-13' }
@@ -137,4 +143,20 @@ it('fails only when required validation context itself exceeds the contract comm
       fixtureNow,
     ),
   ).toThrow()
+})
+it('exports a retracted match as unknown while preserving its history lock', () => {
+  const corrected = row(401, '2026-11-17')
+  corrected.workout = {
+    completedAt: fixtureNow,
+    lockedAt: fixtureNow,
+    completedActivityId: null,
+    completionAt: null,
+    completionFromActivity: true,
+  }
+  expect(projectCommitment(corrected, true)).toMatchObject({
+    outcome: 'unknown',
+    completedAt: null,
+    lockedAt: fixtureNow.toISOString(),
+    activityId: null,
+  })
 })

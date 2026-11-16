@@ -5,6 +5,7 @@ import { addHealthDays, healthLocalDay } from '@/lib/health-history'
 import { macroPlanSchema } from '@/schemas/plan-content.v1'
 import { workoutDefinitionSchema, type WorkoutNode } from '@/schemas/workout-definition.v1'
 import { PlanStateError, RefreshGoalConflictError } from '../transaction'
+import { workoutCompletionAt, type WorkoutCompletion } from '../completion'
 
 /** Refresh preserves the approved macro horizon; a different goal needs a new plan. */
 export function assertRefreshGoalHorizon(approvedMacro: unknown, targetDate: string | null) {
@@ -16,7 +17,7 @@ export type StoredCommitment = Pick<
   PlanRevisionWorkout,
   'workoutId' | 'scheduledDate' | 'timezone' | 'definition' | 'cancelled'
 > & {
-  workout: Pick<PlannedWorkout, 'completedAt' | 'lockedAt' | 'completedActivityId'>
+  workout: WorkoutCompletion & Pick<PlannedWorkout, 'lockedAt'>
 }
 
 // Source narrative has no field-level consent provenance. Export structural facts
@@ -46,16 +47,17 @@ function projectNodes(nodes: WorkoutNode[]): WorkoutNode[] {
 
 export function projectCommitment(row: StoredCommitment, includeActivityLink: boolean) {
   const definition = workoutDefinitionSchema.parse(row.definition)
+  const completedAt = workoutCompletionAt(row.workout)
   return {
     workoutId: row.workoutId,
     scheduledDate: row.scheduledDate.toISOString().slice(0, 10),
     timezone: row.timezone,
     definition: { ...definition, name: 'Approved workout', steps: projectNodes(definition.steps) },
     cancelled: row.cancelled,
-    completedAt: row.workout.completedAt?.toISOString() ?? null,
+    completedAt: completedAt?.toISOString() ?? null,
     lockedAt: row.workout.lockedAt?.toISOString() ?? null,
     activityId: includeActivityLink ? row.workout.completedActivityId : null,
-    outcome: row.workout.completedAt ? ('completed' as const) : ('unknown' as const),
+    outcome: completedAt ? ('completed' as const) : ('unknown' as const),
   }
 }
 

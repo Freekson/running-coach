@@ -86,8 +86,9 @@ workout for its owner. A check requires completion and lock timestamps whenever
 a link exists. Existing monotonic lock triggers therefore also protect linked
 workouts during refresh. The deferred foreign key permits account deletion
 cascades while rejecting cross-owner links. Existing rows remain null; no
-backfill or personal-data deletion occurs. Automatic matching/link management
-remains RUN-42; this issue supplies persistence and calendar rendering for links.
+backfill or personal-data deletion occurs in this migration. [Activity matching
+(RUN-42)](activity-matching.md) adds explicit link management and pinned comparisons
+on top of this persistence and calendar rendering.
 
 Apply the additive migration before deploying the new application and generate
 Prisma Client. Follow the existing target assertions and runtime grants in

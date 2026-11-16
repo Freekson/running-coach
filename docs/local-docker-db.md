@@ -1,6 +1,6 @@
 # Local Docker database
 
-The local development database runs in PostgreSQL 18 from [compose.local-db.yml](../compose.local-db.yml). On 2026-11-16, `running_coach_local` was dropped and recreated from the checked-in migrations and marked `NON_PRODUCTION`. The former athlete/provider data was not restored. The local administrator is provisioned separately; login credentials are kept outside the repository. Later Neon changes do not sync automatically.
+The local development database runs in PostgreSQL 18 from [compose.local-db.yml](../compose.local-db.yml). On 2026-11-17, the `running_coach_local` schema was recreated from the checked-in migrations after consolidating RUN-42 into `20261116140000_run42_activity_matching`, and marked `NON_PRODUCTION`. The former athlete/provider data was not restored. The local administrator is provisioned separately; login credentials are kept outside the repository. Later Neon changes do not sync automatically.
 
 The gitignored `.env.local-db` contains the Docker password and both local connection URLs. The active gitignored `.env` uses those local URLs and retains the existing app authentication settings. The previous development Neon `.env` is saved in the gitignored `.env.neon.backup`. Do not commit or share these files or the Docker volume; they contain credentials and private athlete data.
 

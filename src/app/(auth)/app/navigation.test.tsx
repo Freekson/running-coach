@@ -28,6 +28,7 @@ describe('app navigation', () => {
     expect([...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual([
       '/app/dashboard',
       '/app/goals',
+      '/app/calendar',
       '/app/workouts',
       '/app/training',
       '/app/health',
@@ -46,6 +47,7 @@ describe('app navigation', () => {
     expect([...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual([
       '/app/dashboard',
       '/app/goals',
+      '/app/calendar',
       '/app/workouts',
       '/app/training',
       '/app/health',
@@ -138,4 +140,11 @@ describe('app navigation', () => {
     expect(markup).not.toContain('badge--admin')
     expect(markup).not.toContain('ADMIN')
   })
+})
+
+it('highlights Calendar and expands Training', () => {
+  usePathname.mockReturnValue('/app/calendar')
+  const markup = renderToStaticMarkup(<AppNavigation role="USER" />)
+  expect(markup).toMatch(/href="\/app\/calendar"[^>]*aria-current="page"/)
+  expect(markup).toContain('aria-expanded="true"')
 })

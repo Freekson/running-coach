@@ -321,16 +321,19 @@ model PlanRevision {
 }
 
 model PlannedWorkout {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  planId      String    @map("plan_id") @db.Uuid
-  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
-  lockedAt    DateTime? @map("locked_at") @db.Timestamptz(6)
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  planId              String    @map("plan_id") @db.Uuid
+  completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
+  lockedAt            DateTime? @map("locked_at") @db.Timestamptz(6)
+  completedActivityId String?   @map("completed_activity_id") @db.Uuid
 
-  plan      TrainingPlan          @relation(fields: [userId, planId], references: [userId, id], onDelete: Cascade)
-  revisions PlanRevisionWorkout[]
+  plan              TrainingPlan          @relation(fields: [userId, planId], references: [userId, id], onDelete: Cascade)
+  revisions         PlanRevisionWorkout[]
+  completedActivity Activity?             @relation(fields: [userId, completedActivityId], references: [userId, id], onDelete: NoAction, map: "planned_workouts_completed_activity_owner_fkey")
 
   @@unique([userId, planId, id])
+  @@unique([userId, completedActivityId])
   @@map("planned_workouts")
 }
 
@@ -553,6 +556,7 @@ model Activity {
   laps                        ActivityLap[]
   duplicateCandidatesAsFirst  ActivityDuplicateCandidate[] @relation("DuplicateFirst")
   duplicateCandidatesAsSecond ActivityDuplicateCandidate[] @relation("DuplicateSecond")
+  plannedWorkout              PlannedWorkout?
 
   @@unique([userId, id])
   @@unique([userId, sourceProvider, externalActivityId, garminAccountId], map: "activities_owner_provider_external_account_key")

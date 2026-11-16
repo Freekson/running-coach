@@ -73,6 +73,11 @@ revision of that owner's plan and copies constraints from its approved snapshot,
 not from current profile defaults. It reuses `PlanDraft`; it creates no second
 plan store. A refresh can extend the detail window and preserve logical workout
 UUIDs when rescheduling or changing an editable session.
+Existing identities retain their explicitly scheduled session timezone through
+refresh; the draft timezone supplies the zone for new identities. RUN-31 calendar
+moves explicitly change individual session zones without changing plan-level
+constraints. Unchanged protected sessions can be echoed without resetting their
+zones, and future-date checks use each resulting session's timezone.
 
 Sessions on or before their own timezone's current local date, completed sessions,
 and explicitly locked sessions cannot change date, zone, definition or cancellation

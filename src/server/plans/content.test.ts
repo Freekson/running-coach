@@ -180,6 +180,52 @@ describe('plan persistence content', () => {
     expect(localToday('America/Los_Angeles', now)).toBe('2090-01-01')
   })
 
+  it.each(['editable', 'completed', 'locked', 'past'])(
+    'preserves an existing session timezone when an unchanged %s session is echoed in refresh',
+    (state) => {
+      const content = contentFixture()
+      const old = { ...content.workouts[0], timezone: 'America/New_York' }
+      const locks = [
+        {
+          id: old.workoutId,
+          completedAt: state === 'completed' ? new Date() : null,
+          lockedAt: state === 'locked' ? new Date() : null,
+        },
+      ]
+      const now = new Date(state === 'past' ? '2090-01-10T12:00:00Z' : '2089-12-31T12:00:00Z')
+      expect(mergePlanWorkouts([old], content, constraintsFixture, locks, now)).toEqual([old])
+    },
+  )
+
+  it('uses the session timezone for future-date checks and draft timezone only for new sessions', () => {
+    const content = contentFixture()
+    const old = {
+      ...content.workouts[0],
+      scheduledDate: '2090-01-06',
+      timezone: 'America/New_York',
+    }
+    content.workouts[0].scheduledDate = '2090-01-05'
+    // Jan 5 UTC is still Jan 4 in the existing session zone.
+    expect(
+      mergePlanWorkouts(
+        [old],
+        content,
+        constraintsFixture,
+        [],
+        new Date('2090-01-05T01:00:00Z'),
+      )[0],
+    ).toMatchObject({ scheduledDate: '2090-01-05', timezone: 'America/New_York' })
+    const tokyo = { ...old, timezone: 'Asia/Tokyo' }
+    // Jan 5 is already today in Tokyo, although UTC is still Jan 4.
+    expect(() =>
+      mergePlanWorkouts([tokyo], content, constraintsFixture, [], new Date('2090-01-04T15:30:00Z')),
+    ).toThrow(PlanValidationError)
+    expect(
+      mergePlanWorkouts([], content, constraintsFixture, [], new Date('2089-12-31T12:00:00Z'))[0]
+        .timezone,
+    ).toBe('UTC')
+  })
+
   it('cannot unlock a past session by changing the draft timezone', () => {
     const c = contentFixture()
     c.workouts[0].scheduledDate = '2090-01-02'

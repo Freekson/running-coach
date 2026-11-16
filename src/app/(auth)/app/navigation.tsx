@@ -6,6 +6,7 @@ import type { UserRole } from '@prisma/client'
 import { useRef, useState } from 'react'
 import {
   ChevronDown,
+  CalendarDays,
   Dumbbell,
   Heart,
   History,
@@ -27,6 +28,8 @@ const sections = [
 
 function TrainingNavigation({ pathname }: { pathname: string }) {
   const active =
+    pathname === '/app/calendar' ||
+    pathname.startsWith('/app/calendar/') ||
     pathname === '/app/training' ||
     pathname.startsWith('/app/training/') ||
     pathname === '/app/goals' ||
@@ -78,6 +81,7 @@ function TrainingNavigation({ pathname }: { pathname: string }) {
           <div className={styles.trainingSubmenuLinks}>
             {[
               { label: 'Goals', href: '/app/goals', icon: Target },
+              { label: 'Calendar', href: '/app/calendar', icon: CalendarDays },
               { label: 'Workouts', href: '/app/workouts', icon: ListOrdered },
               { label: 'History', href: '/app/training', icon: History },
             ].map(({ label, href, icon: Icon }) => (

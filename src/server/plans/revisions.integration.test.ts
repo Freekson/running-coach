@@ -375,10 +375,12 @@ describe.skipIf(!enabled)('RUN-33 immutable plans and ownership in PostgreSQL', 
       planId: first.planId,
       baseRevisionId: first.id,
     })
-    const ready = await Promise.all([
-      validate(a.id, 0, contentFixture()),
-      validate(b.id, 0, contentFixture()),
-    ])
+    // Prepare sequentially so predicate-lock retries during setup do not mask
+    // the competing approvals that this test exercises below.
+    const ready = [
+      await validate(a.id, 0, contentFixture()),
+      await validate(b.id, 0, contentFixture()),
+    ]
     const results = await Promise.allSettled(
       ready.map((d) =>
         approvePlanDraft(owner, {

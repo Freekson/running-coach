@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { calendarToday as localToday } from '@/lib/training-calendar'
 import { planConstraintsSchema, type PlanConstraints } from '@/lib/plan-constraints'
 import { workoutDefinitionSchema } from '@/schemas/workout-definition.v1'
 import type { PlanContent, ScheduledPlanWorkout } from '@/schemas/plan-content.v1'
@@ -16,14 +17,7 @@ function dayNumber(date: string) {
   return Date.parse(`${date}T00:00:00Z`) / 86400000
 }
 
-export function localToday(timezone: string, now = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now)
-}
+export { localToday }
 
 export function constraintsFromDraft(draft: {
   sessionsPerWeek: number
@@ -97,7 +91,6 @@ export function mergePlanWorkouts(
   locks: WorkoutLock[],
   now: Date,
 ): HistoricalWorkout[] {
-  const today = localToday(constraints.timezone, now)
   const isPast = (workout: HistoricalWorkout) =>
     workout.scheduledDate <= localToday(workout.timezone, now)
   const fail = (): never => {
@@ -118,10 +111,12 @@ export function mergePlanWorkouts(
   }
   for (const w of incoming.workouts) {
     const old = prior.get(w.workoutId)
-    const next = { ...w, timezone: constraints.timezone }
+    // Existing identities keep their explicit session timezone through refresh.
+    // New sessions inherit the draft timezone; calendar moves change a session zone.
+    const next = { ...w, timezone: old?.timezone ?? constraints.timezone }
     if (old && (isPast(old) || lockIds.has(w.workoutId))) {
       if (!sameWorkout(old, next)) fail()
-    } else if (w.scheduledDate <= today) fail()
+    } else if (w.scheduledDate <= localToday(next.timezone, now)) fail()
     result.set(w.workoutId, next)
   }
   // Retained sessions also belong to the new snapshot. A shorter horizon must

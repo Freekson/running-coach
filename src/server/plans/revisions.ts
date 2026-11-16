@@ -1,6 +1,5 @@
 import 'server-only'
 
-import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { goalInputSchema } from '@/lib/goals'
@@ -21,6 +20,7 @@ import {
   scheduledPlanWorkoutSchema,
   validatePlanContent,
 } from './content'
+import { appendApprovedRevision } from './snapshots'
 import {
   planTransaction,
   requireDraft,
@@ -147,62 +147,21 @@ export async function approvePlanDraft(owner: OwnerContext, command: unknown) {
       throw new PlanConflictError()
     const plan =
       p.plan ?? (await tx.trainingPlan.create({ data: { userId, goalId: draft.goalId } }))
-    const revisionId = randomUUID()
-    // The deferred FK lets us claim the pointer before inserting the snapshot.
-    // This serializes competing approvals before revision-number uniqueness checks.
-    const changed = await tx.trainingPlan.updateMany({
-      where: ownedWhere(owner, { id: plan.id, currentRevisionId: parsed.expectedRevisionId }),
-      data: { currentRevisionId: revisionId },
-    })
-    if (changed.count !== 1) throw new PlanConflictError()
-    // Initial drafts join their new plan before the source-draft FK is checked.
-    if (!draft.planId)
-      await tx.planDraft.update({ where: { id: draft.id }, data: { planId: plan.id } })
-    const revision = await tx.planRevision.create({
-      data: {
-        id: revisionId,
-        userId,
-        goalId: draft.goalId,
-        planId: plan.id,
-        sourceDraftId: draft.id,
-        parentRevisionId: draft.baseRevisionId,
-        revisionNumber: (p.base?.revisionNumber ?? 0) + 1,
-        snapshot: {
-          schemaVersion: 1,
-          goal: p.goalSnapshot,
-          constraints: p.constraints,
-          macroPlan: p.content.macroPlan,
-          detailWindow: p.content.detailWindow,
-        },
+    return appendApprovedRevision(tx, owner, {
+      planId: plan.id,
+      goalId: draft.goalId,
+      draftId: draft.id,
+      parent: p.base,
+      snapshot: {
+        schemaVersion: 1,
+        goal: p.goalSnapshot,
+        constraints: p.constraints,
+        macroPlan: p.content.macroPlan,
+        detailWindow: p.content.detailWindow,
       },
+      workouts: p.workouts,
+      knownIds: p.knownIds,
     })
-    const newWorkouts = p.workouts.filter((w) => !p.knownIds.has(w.workoutId))
-    if (newWorkouts.length)
-      await tx.plannedWorkout.createMany({
-        data: newWorkouts.map((w) => ({ id: w.workoutId, userId, planId: plan.id })),
-      })
-    if (p.workouts.length)
-      await tx.planRevisionWorkout.createMany({
-        data: p.workouts.map((w) => ({
-          userId,
-          planId: plan.id,
-          revisionId,
-          workoutId: w.workoutId,
-          scheduledDate: new Date(`${w.scheduledDate}T00:00:00Z`),
-          timezone: w.timezone,
-          definition: w.definition,
-          cancelled: w.cancelled,
-        })),
-      })
-    await tx.planDraft.update({
-      where: { id: draft.id },
-      data: {
-        state: 'APPROVED',
-        planId: plan.id,
-        version: { increment: 1 },
-      },
-    })
-    return revision
   })
 }
 

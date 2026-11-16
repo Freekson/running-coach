@@ -1,5 +1,6 @@
 import 'server-only'
 
+import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { goalInputSchema } from '@/lib/goals'
 import { healthLocalDay } from '@/lib/health-history'
@@ -23,13 +24,14 @@ export async function previewPlanImport(
   owner: OwnerContext,
   command: unknown,
   text: string,
+  transaction?: Prisma.TransactionClient,
 ): Promise<PlanImportResult> {
   ownerId(owner)
   const parsed = planImportCommandSchema.safeParse(command)
   if (!parsed.success) return invalidImport(schemaImportErrors(parsed.error), false)
   const input = parsed.data
   try {
-    return await planTransaction(async (tx) => {
+    const inspect = async (tx: Prisma.TransactionClient): Promise<PlanImportResult> => {
       const issued = await tx.planExchangeRequest.findFirst({
         where: ownedWhere(owner, {
           id: input.requestId,
@@ -224,7 +226,8 @@ export async function previewPlanImport(
         now,
       )
       return result
-    })
+    }
+    return await (transaction ? inspect(transaction) : planTransaction(inspect))
   } catch (error) {
     if (error instanceof OwnedResourceNotFoundError)
       return invalidImport(

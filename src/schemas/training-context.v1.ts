@@ -42,6 +42,12 @@ export const coverageSchema = z.strictObject({
   failedWindows: z.array(dateWindowSchema).max(100),
   unfetchedWindows: z.array(dateWindowSchema).max(100),
   label: z.literal('recorded history only'),
+  historicalImport: z
+    .strictObject({
+      status: z.enum(['complete', 'partial', 'unknown']),
+      window: dateWindowSchema.nullable(),
+    })
+    .optional(),
 })
 export const lapSampleSchema = z.strictObject({
   lapIndex: z.number().int().nonnegative(),
@@ -118,6 +124,7 @@ export const trainingEvidenceSchema = z.strictObject({
           distance: metricIn('m'),
           completedSessions: metricIn('sessions'),
           duration: metricIn('s'),
+          movingDuration: metricIn('s').optional(),
           longestRun: metricIn('m'),
           daysWithoutRecordedRuns: metricIn('days'),
         }),
@@ -131,6 +138,7 @@ export const trainingEvidenceSchema = z.strictObject({
           distance: metricIn('m'),
           completedSessions: metricIn('sessions'),
           duration: metricIn('s'),
+          movingDuration: metricIn('s').optional(),
         }),
       )
       .length(3),
@@ -206,6 +214,7 @@ export const trainingContextSchema = trainingEvidenceSchema
         week.distance,
         week.completedSessions,
         week.duration,
+        ...(week.movingDuration ? [week.movingDuration] : []),
         week.longestRun,
         week.daysWithoutRecordedRuns,
       ]
@@ -261,6 +270,21 @@ export const trainingContextSchema = trainingEvidenceSchema
           issue(
             ['recentTrainingSummary', 'rollingTotals', index, key],
             'Totals must agree with covered weekly observations',
+          )
+      }
+      if (total.movingDuration) {
+        const values = weeks.map((week) => week.movingDuration?.value ?? null)
+        const sum = values.every((value) => value !== null)
+          ? values.reduce<number>((n, value) => n + value!, 0)
+          : null
+        if (
+          total.movingDuration.value === null
+            ? sum !== null
+            : sum === null || Math.abs(total.movingDuration.value - sum) > 0.001
+        )
+          issue(
+            ['recentTrainingSummary', 'rollingTotals', index, 'movingDuration'],
+            'Moving totals must agree with covered weekly observations',
           )
       }
     })

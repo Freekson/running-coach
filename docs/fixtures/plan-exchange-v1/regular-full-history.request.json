@@ -88,6 +88,16 @@
               "quality": "derived"
             }
           },
+          "movingDuration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+              "quality": "derived"
+            }
+          },
           "longestRun": {
             "value": null,
             "unit": "m",
@@ -133,6 +143,16 @@
             }
           },
           "duration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+              "quality": "derived"
+            }
+          },
+          "movingDuration": {
             "value": 0,
             "unit": "s",
             "provenance": {
@@ -196,6 +216,16 @@
               "quality": "derived"
             }
           },
+          "movingDuration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+              "quality": "derived"
+            }
+          },
           "longestRun": {
             "value": null,
             "unit": "m",
@@ -241,6 +271,16 @@
             }
           },
           "duration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+              "quality": "derived"
+            }
+          },
+          "movingDuration": {
             "value": 0,
             "unit": "s",
             "provenance": {
@@ -304,6 +344,16 @@
               "quality": "derived"
             }
           },
+          "movingDuration": {
+            "value": 0,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+              "quality": "derived"
+            }
+          },
           "longestRun": {
             "value": null,
             "unit": "m",
@@ -350,6 +400,16 @@
           },
           "duration": {
             "value": 5700,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+              "quality": "derived"
+            }
+          },
+          "movingDuration": {
+            "value": 5400,
             "unit": "s",
             "provenance": {
               "source": "DERIVED",
@@ -412,6 +472,16 @@
               "quality": "derived"
             }
           },
+          "movingDuration": {
+            "value": 5400,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+              "quality": "derived"
+            }
+          },
           "longestRun": {
             "value": 5000,
             "unit": "m",
@@ -458,6 +528,16 @@
           },
           "duration": {
             "value": 7600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+              "quality": "derived"
+            }
+          },
+          "movingDuration": {
+            "value": 7200,
             "unit": "s",
             "provenance": {
               "source": "DERIVED",
@@ -520,6 +600,16 @@
               "quality": "derived"
             }
           },
+          "movingDuration": {
+            "value": 5400,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+              "quality": "derived"
+            }
+          },
           "longestRun": {
             "value": 5000,
             "unit": "m",
@@ -566,6 +656,16 @@
           },
           "duration": {
             "value": 7600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+              "quality": "derived"
+            }
+          },
+          "movingDuration": {
+            "value": 7200,
             "unit": "s",
             "provenance": {
               "source": "DERIVED",
@@ -628,6 +728,16 @@
               "quality": "derived"
             }
           },
+          "movingDuration": {
+            "value": 5400,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+              "quality": "derived"
+            }
+          },
           "longestRun": {
             "value": 5000,
             "unit": "m",
@@ -674,6 +784,16 @@
           },
           "duration": {
             "value": 7600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "movingDuration": {
+            "value": 7200,
             "unit": "s",
             "provenance": {
               "source": "DERIVED",
@@ -737,6 +857,16 @@
               "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
               "quality": "derived"
             }
+          },
+          "movingDuration": {
+            "value": 25200,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
           }
         },
         {
@@ -771,6 +901,16 @@
               "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
               "quality": "derived"
             }
+          },
+          "movingDuration": {
+            "value": 43200,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
           }
         },
         {
@@ -798,6 +938,16 @@
           },
           "duration": {
             "value": 45600,
+            "unit": "s",
+            "provenance": {
+              "source": "DERIVED",
+              "observedAt": "2026-11-15T03:00:00.000Z",
+              "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+              "quality": "derived"
+            }
+          },
+          "movingDuration": {
+            "value": 43200,
             "unit": "s",
             "provenance": {
               "source": "DERIVED",

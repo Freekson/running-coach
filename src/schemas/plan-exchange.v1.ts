@@ -34,6 +34,8 @@ export const approvedRevisionSchema = z.strictObject({
   detailWindow: dateWindowSchema,
   workouts: z.array(approvedCommitmentSchema).max(200),
   commitmentsCoverage: z.enum(['complete', 'partial']),
+  omittedHistoricalCommitments: z.number().int().nonnegative().optional(),
+  narrativePolicy: z.literal('withheld').optional(),
 })
 const requestFields = {
   schemaVersion: z.literal(EXCHANGE_SCHEMA_VERSION),
@@ -42,6 +44,7 @@ const requestFields = {
   athleteLocalDate: localDateSchema,
   timezone: timezoneSchema,
   goal: goalInputSchema,
+  measurementSystem: z.enum(['METRIC', 'IMPERIAL']).optional(),
   draft: z.strictObject({
     draftId: planUuidSchema,
     version: z.number().int().nonnegative(),
@@ -100,14 +103,18 @@ export const exchangeRequestSchema = z
             week.distance,
             week.completedSessions,
             week.duration,
+            ...(week.movingDuration ? [week.movingDuration] : []),
             week.longestRun,
             week.daysWithoutRecordedRuns,
           ].some((metric) => metric.value !== null),
         ) ||
         context.recentTrainingSummary.rollingTotals.some((total) =>
-          [total.distance, total.completedSessions, total.duration].some(
-            (metric) => metric.value !== null,
-          ),
+          [
+            total.distance,
+            total.completedSessions,
+            total.duration,
+            ...(total.movingDuration ? [total.movingDuration] : []),
+          ].some((metric) => metric.value !== null),
         ) ||
         context.recentTrainingSummary.recentToOlderDistanceRatio.value !== null)
     )

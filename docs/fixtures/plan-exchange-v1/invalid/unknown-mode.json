@@ -91,6 +91,16 @@
                 "quality": "unavailable"
               }
             },
+            "movingDuration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-08-23", "endDate": "2026-08-29" },
+                "quality": "unavailable"
+              }
+            },
             "longestRun": {
               "value": null,
               "unit": "m",
@@ -136,6 +146,16 @@
               }
             },
             "duration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-08-30", "endDate": "2026-09-05" },
+                "quality": "unavailable"
+              }
+            },
+            "movingDuration": {
               "value": null,
               "unit": "s",
               "provenance": {
@@ -199,6 +219,16 @@
                 "quality": "unavailable"
               }
             },
+            "movingDuration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-09-06", "endDate": "2026-09-12" },
+                "quality": "unavailable"
+              }
+            },
             "longestRun": {
               "value": null,
               "unit": "m",
@@ -244,6 +274,16 @@
               }
             },
             "duration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-09-13", "endDate": "2026-09-19" },
+                "quality": "unavailable"
+              }
+            },
+            "movingDuration": {
               "value": null,
               "unit": "s",
               "provenance": {
@@ -307,6 +347,16 @@
                 "quality": "unavailable"
               }
             },
+            "movingDuration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-09-20", "endDate": "2026-09-26" },
+                "quality": "unavailable"
+              }
+            },
             "longestRun": {
               "value": null,
               "unit": "m",
@@ -352,6 +402,16 @@
               }
             },
             "duration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-09-27", "endDate": "2026-10-03" },
+                "quality": "unavailable"
+              }
+            },
+            "movingDuration": {
               "value": null,
               "unit": "s",
               "provenance": {
@@ -415,6 +475,16 @@
                 "quality": "unavailable"
               }
             },
+            "movingDuration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-10-04", "endDate": "2026-10-10" },
+                "quality": "unavailable"
+              }
+            },
             "longestRun": {
               "value": null,
               "unit": "m",
@@ -460,6 +530,16 @@
               }
             },
             "duration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-10-11", "endDate": "2026-10-17" },
+                "quality": "unavailable"
+              }
+            },
+            "movingDuration": {
               "value": null,
               "unit": "s",
               "provenance": {
@@ -523,6 +603,16 @@
                 "quality": "unavailable"
               }
             },
+            "movingDuration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-10-18", "endDate": "2026-10-24" },
+                "quality": "unavailable"
+              }
+            },
             "longestRun": {
               "value": null,
               "unit": "m",
@@ -568,6 +658,16 @@
               }
             },
             "duration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-10-25", "endDate": "2026-10-31" },
+                "quality": "unavailable"
+              }
+            },
+            "movingDuration": {
               "value": null,
               "unit": "s",
               "provenance": {
@@ -631,6 +731,16 @@
                 "quality": "unavailable"
               }
             },
+            "movingDuration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-11-01", "endDate": "2026-11-07" },
+                "quality": "unavailable"
+              }
+            },
             "longestRun": {
               "value": null,
               "unit": "m",
@@ -676,6 +786,16 @@
               }
             },
             "duration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-11-08", "endDate": "2026-11-14" },
+                "quality": "unavailable"
+              }
+            },
+            "movingDuration": {
               "value": null,
               "unit": "s",
               "provenance": {
@@ -740,6 +860,16 @@
                 "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
                 "quality": "unavailable"
               }
+            },
+            "movingDuration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-10-18", "endDate": "2026-11-14" },
+                "quality": "unavailable"
+              }
             }
           },
           {
@@ -774,6 +904,16 @@
                 "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
                 "quality": "unavailable"
               }
+            },
+            "movingDuration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-09-20", "endDate": "2026-11-14" },
+                "quality": "unavailable"
+              }
             }
           },
           {
@@ -800,6 +940,16 @@
               }
             },
             "duration": {
+              "value": null,
+              "unit": "s",
+              "provenance": {
+                "source": "DERIVED",
+                "observedAt": "2026-11-15T03:00:00.000Z",
+                "period": { "startDate": "2026-08-23", "endDate": "2026-11-14" },
+                "quality": "unavailable"
+              }
+            },
+            "movingDuration": {
               "value": null,
               "unit": "s",
               "provenance": {

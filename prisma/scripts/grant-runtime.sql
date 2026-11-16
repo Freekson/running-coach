@@ -31,10 +31,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
 TO running_coach_runtime;
 
 -- Approved snapshots are append-only; account deletion cascades still work.
-GRANT SELECT, INSERT ON TABLE public.plan_revisions, public.plan_revision_workouts
+GRANT SELECT, INSERT ON TABLE public.plan_revisions, public.plan_revision_workouts, public.plan_exchange_requests
 TO running_coach_runtime;
-REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.plan_revisions, public.plan_revision_workouts
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.plan_revisions, public.plan_revision_workouts, public.plan_exchange_requests
 FROM running_coach_runtime;
+
+GRANT USAGE ON SEQUENCE public.plan_exchange_requests_issuance_sequence_seq
+TO running_coach_runtime;
 
 REVOKE ALL ON TABLE public.database_identity FROM running_coach_runtime;
 GRANT SELECT ON TABLE public.database_identity TO running_coach_runtime;

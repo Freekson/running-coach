@@ -196,6 +196,10 @@ export function buildTrainingEvidence(
       const m = measures(row)
       return m.inconsistent ? null : m.elapsed
     })
+    const movingDurations = selected.map((row) => {
+      const m = measures(row)
+      return m.inconsistent ? null : m.moving
+    })
     const sessionDays = new Set(selected.map((row) => datesById.get(row.id)!))
     return {
       window: period,
@@ -204,6 +208,7 @@ export function buildTrainingEvidence(
       completedSessions: metric(complete ? selected.length : null, 'sessions', period),
       // Duration is elapsed time throughout; moving time is kept separately per run.
       duration: metric(sum(durations), 's', period),
+      movingDuration: metric(sum(movingDurations), 's', period),
       longestRun: metric(
         complete && selected.length > 0 && distances.every((d) => d !== null)
           ? Math.max(...distances.map((d) => d!))
@@ -232,6 +237,7 @@ export function buildTrainingEvidence(
       distance: summary.distance,
       completedSessions: summary.completedSessions,
       duration: summary.duration,
+      movingDuration: summary.movingDuration,
     }
   })
   const recent = rollingTotals[0].distance.value
@@ -304,7 +310,7 @@ export function buildTrainingEvidence(
       paceBasis: m.basis,
       flags: [
         ...(m.inconsistent ? ['inconsistent_times' as const] : []),
-        ...(row.avgHrBpm === null ? ['missing_hr' as const] : []),
+        ...(options.includeHeartRate && row.avgHrBpm === null ? ['missing_hr' as const] : []),
         ...(m.basis === 'recorded_average_speed' ? ['average_speed_only' as const] : []),
       ],
       lapSamples:
@@ -401,11 +407,12 @@ const select = {
 export async function readTrainingEvidence(
   owner: OwnerContext,
   options: EvidenceOptions,
+  client?: Prisma.TransactionClient,
 ): Promise<TrainingEvidence> {
   const userId = ownerId(owner)
   const timezone = timezoneSchema.parse(options.timezone)
   coverageSchema.parse(options.coverage)
-  const prisma = await getPrismaClient()
+  const prisma = client ?? (await getPrismaClient())
   const scope = await activityReadScope(owner, prisma)
   const today = healthLocalDay(options.now.toISOString(), timezone)
   const where = { AND: [scope, { sportType: 'RUNNING', startedAt: { lte: options.now } }] }

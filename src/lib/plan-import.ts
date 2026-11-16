@@ -2,6 +2,21 @@ import { z } from 'zod'
 import { planUuidSchema } from '@/schemas/plan-content.v1'
 import type { ExchangeResponse } from '@/schemas/plan-exchange.v1'
 import type { WorkoutEstimate } from './workout-estimate'
+import type { PlanContent, ScheduledPlanWorkout } from '@/schemas/plan-content.v1'
+
+export type RefreshWorkout = ScheduledPlanWorkout & { timezone: string }
+export type RefreshDiff = {
+  workoutId: string
+  kind: 'created' | 'changed' | 'canceled' | 'unchanged'
+  before: RefreshWorkout | null
+  after: RefreshWorkout
+}
+export type PlanRefreshPreview = {
+  macroPlan: PlanContent['macroPlan']
+  changes: RefreshDiff[]
+  schedule: RefreshWorkout[]
+  retainedOutsideWindow: number
+}
 
 export const planImportCommandSchema = z.strictObject({
   goalId: planUuidSchema,
@@ -57,6 +72,7 @@ export type PlanImportResult =
         draftVersion: number
         baseRevisionId: string | null
         response: ExchangeResponse
+        refresh?: PlanRefreshPreview
         sessions: PreviewSession[]
         weeks: {
           startDate: string

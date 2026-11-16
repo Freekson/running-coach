@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/Select'
 import { LoadingState } from '@/components/ui/States'
 import type { GoalRecord } from '@/lib/goals'
 import type { PlanImportResult } from '@/lib/plan-import'
+import type { ApprovedPlanChoice } from '@/lib/plan-refresh'
 import { useClientReady } from '@/lib/use-client-ready'
 import { EXCHANGE_LIMITS } from '@/schemas/plan-exchange.v1'
 import { PlanExportScreen } from '../../../goals/[id]/export/plan-export'
@@ -17,6 +18,7 @@ import type { GoalFields } from '../../../goals/goal-view'
 import { PlanReview } from './plan-review'
 import { emptyWizard, readWizard, wizardStorageKey, type WizardState } from './wizard-state'
 import styles from './plan-wizard.module.scss'
+import { RevisionPublication, type PublicationActions } from '../revision-publication'
 
 type Result<T> = { success: true; value: T } | { success: false; error: string }
 type ExportProps = ComponentProps<typeof PlanExportScreen>
@@ -34,6 +36,8 @@ type ReviewedResponse = Pick<ImportCommand, 'goalId' | 'draftId' | 'requestId'> 
 export type PlanWizardProps = {
   ownerId: string
   goals: GoalRecord[]
+  refresh?: ApprovedPlanChoice
+  publication?: PublicationActions
   onOpen: ExportProps['onOpen']
   onExport: ExportProps['onPreview']
   onSchedule: ExportProps['onSchedule']
@@ -53,7 +57,7 @@ export type PlanWizardProps = {
 export function PlanWizard(props: PlanWizardProps) {
   const ready = useClientReady()
   return ready ? (
-    <Wizard key={props.ownerId} {...props} />
+    <Wizard key={`${props.ownerId}:${props.refresh?.id ?? 'initial'}`} {...props} />
   ) : (
     <LoadingState label="Loading your plan draft" />
   )
@@ -68,13 +72,16 @@ function Wizard({
   onPreview,
   onApprove,
   onCreateGoal,
+  refresh,
+  publication,
 }: PlanWizardProps) {
-  const key = wizardStorageKey(ownerId)
+  const key = wizardStorageKey(ownerId, refresh?.id)
   const [state, setState] = useState<WizardState>(() => {
     try {
-      return readWizard(window.localStorage, key)
+      const saved = readWizard(window.localStorage, key)
+      return refresh ? { ...saved, goalId: refresh.goalId } : saved
     } catch {
-      return { ...emptyWizard }
+      return { ...emptyWizard, goalId: refresh?.goalId ?? '' }
     }
   })
   const [goals, setGoals] = useState(initialGoals)
@@ -93,7 +100,11 @@ function Wizard({
   const [acknowledged, setAcknowledged] = useState<string[]>([])
   const [rationale, setRationale] = useState('')
   const [confirm, setConfirm] = useState(false)
-  const [approved, setApproved] = useState<number>()
+  const [approved, setApproved] = useState<{
+    planId: string
+    revisionId: string
+    revisionNumber: number
+  }>()
   const heading = useRef<HTMLHeadingElement>(null)
   const goal = goals.find((g) => g.id === state.goalId)
   const artifact = state.exportState?.result
@@ -205,7 +216,7 @@ function Wizard({
           )
           return
         }
-        setApproved(result.value.revisionNumber)
+        setApproved(result.value)
         try {
           window.localStorage.removeItem(key)
         } catch {
@@ -271,13 +282,26 @@ function Wizard({
       <main className={styles.screen}>
         <Card>
           <h1>Plan approved locally</h1>
-          <p>Revision {approved} is saved. Nothing has been sent to Intervals.icu or Garmin.</p>
+          <p>
+            Revision {approved.revisionNumber} is saved. Nothing has been sent to Intervals.icu or
+            Garmin.
+          </p>
           <p>Publication requires a separate explicit Publish to Intervals.icu action.</p>
           <ButtonLink href="/app/calendar">View training calendar</ButtonLink>
+          <ButtonLink href={`/app/training/plan/${approved.planId}`} variant="secondary">
+            Inspect saved revisions
+          </ButtonLink>
           <ButtonLink href="/app/training" variant="secondary">
             Back to Training
           </ButtonLink>
         </Card>
+        {refresh && publication && (
+          <RevisionPublication
+            {...publication}
+            planId={approved.planId}
+            revisionId={approved.revisionId}
+          />
+        )}
       </main>
     )
 
@@ -287,10 +311,10 @@ function Wizard({
         Save and exit to Training
       </ButtonLink>
       <header>
-        <h1>Create training plan</h1>
+        <h1>{refresh ? 'Refresh training plan' : 'Create training plan'}</h1>
         <p>
-          Your work is kept in this browser for your account. Approved plans remain safe while you
-          create a new one.
+          Your work is kept in this browser for your account. Approved plans remain safe while you{' '}
+          {refresh ? 'refresh near-term detail.' : 'create a new one.'}
         </p>
       </header>
       {storageFailed && (
@@ -300,17 +324,27 @@ function Wizard({
         </p>
       )}
       <ol className={styles.steps} aria-label="Plan creation steps">
-        {(['Goal & Constraints', 'Export / Chat / Import', 'Preview / Approve'] as const).map(
-          (label, index) => (
-            <li key={label} aria-current={state.step === index + 1 ? 'step' : undefined}>
-              {index + 1}. {label}
-            </li>
-          ),
-        )}
+        {(
+          [
+            refresh ? 'Approved plan & window' : 'Goal & Constraints',
+            'Export / Chat / Import',
+            'Preview / Approve',
+          ] as const
+        ).map((label, index) => (
+          <li key={label} aria-current={state.step === index + 1 ? 'step' : undefined}>
+            {index + 1}. {label}
+          </li>
+        ))}
       </ol>
       <h2 ref={heading} tabIndex={-1}>
         Step {state.step}:{' '}
-        {['Goal & Constraints', 'Export / Chat / Import', 'Preview / Approve'][state.step - 1]}
+        {
+          [
+            refresh ? 'Approved plan & window' : 'Goal & Constraints',
+            'Export / Chat / Import',
+            'Preview / Approve',
+          ][state.step - 1]
+        }
       </h2>
       {error && (
         <p role="alert" className={styles.error}>
@@ -320,29 +354,50 @@ function Wizard({
       {state.step === 1 && (
         <Card className={styles.stack}>
           <p>
-            Choose an existing goal or create your first goal, then set when and how often you can
-            train. The full strategy can extend to your goal date; the first request covers 14–28
-            detailed days.
+            {refresh
+              ? `Refresh ${refresh.goalName}, revision ${refresh.revisionNumber}. Keep your goal, saved constraints and macro strategy; choose the next 14–28 detailed days.`
+              : 'Choose an existing goal or create your first goal, then set when and how often you can train. The full strategy can extend to your goal date; the first request covers 14–28 detailed days.'}
           </p>
-          <Select
-            id="wizard-goal"
-            label="Training goal"
-            value={goal?.id ?? ''}
-            disabled={pending}
-            options={[
-              { value: '', label: 'Choose a goal' },
-              ...goals.map((g) => ({ value: g.id, label: g.name })),
-            ]}
-            onChange={(goalId) => {
-              if (goalId === state.goalId) return
-              invalidate()
-              setState({ ...emptyWizard, goalId })
-              setError('')
-            }}
-          />
-          <Button variant="secondary" onClick={() => setCreatingGoal(true)} disabled={pending}>
-            Create goal
-          </Button>
+          {refresh && (
+            <>
+              <ButtonLink href="/app/training/plan/refresh" variant="secondary" disabled={pending}>
+                Reload approved plans
+              </ButtonLink>
+              <ButtonLink href="/app/training/plan/new" variant="secondary" disabled={pending}>
+                Create a new plan for an updated goal
+              </ButtonLink>
+              <ButtonLink
+                href={`/app/training/plan/${refresh.id}`}
+                variant="secondary"
+                disabled={pending}
+              >
+                Inspect saved revisions
+              </ButtonLink>
+            </>
+          )}
+          {!refresh && (
+            <>
+              <Select
+                id="wizard-goal"
+                label="Training goal"
+                value={goal?.id ?? ''}
+                disabled={pending}
+                options={[
+                  { value: '', label: 'Choose a goal' },
+                  ...goals.map((g) => ({ value: g.id, label: g.name })),
+                ]}
+                onChange={(goalId) => {
+                  if (goalId === state.goalId) return
+                  invalidate()
+                  setState({ ...emptyWizard, goalId })
+                  setError('')
+                }}
+              />
+              <Button variant="secondary" onClick={() => setCreatingGoal(true)} disabled={pending}>
+                Create goal
+              </Button>
+            </>
+          )}
           {goal && (
             <>
               <p>
@@ -390,6 +445,7 @@ function Wizard({
             initialSetup={state.setup}
             initialState={state.exportState}
             stage={state.step === 1 ? 'constraints' : 'exchange'}
+            preserveConstraints={!!refresh}
             onOpen={open}
             onPreview={onExport}
             onSchedule={onSchedule}
@@ -445,6 +501,11 @@ function Wizard({
       {validation && !validation.valid && (
         <Card className={styles.stack}>
           <h3>Response needs changes</h3>
+          {validation.errors.some((issue) => issue.code === 'goal_horizon_changed') && (
+            <ButtonLink href="/app/training/plan/new" variant="secondary">
+              Create a new plan for the updated goal
+            </ButtonLink>
+          )}
           <ul>
             {validation.errors.map((issue, index) => (
               <li key={index}>
@@ -485,8 +546,9 @@ function Wizard({
             </>
           ) : (
             <p>
-              Return to step 1 and reopen the draft, then export a fresh request. Your current
-              response and approved plans remain preserved.
+              {validation.errors.some((issue) => issue.code === 'goal_horizon_changed')
+                ? 'Create a new plan for the updated goal. Your current response and approved revisions remain preserved.'
+                : 'Return to step 1 and reopen the draft, then export a fresh request. Your current response and approved plans remain preserved.'}
             </p>
           )}
         </Card>
@@ -551,7 +613,8 @@ function Wizard({
                 disabled={
                   !confirm ||
                   !reviewMatches ||
-                  validation.preview.response.mode !== 'initial' ||
+                  validation.preview.response.mode !== (refresh ? 'refresh' : 'initial') ||
+                  (refresh && !validation.preview.refresh) ||
                   validation.preview.warnings.some((warning) => !acknowledged.includes(warning.id))
                 }
                 onClick={() => void inspect(true)}

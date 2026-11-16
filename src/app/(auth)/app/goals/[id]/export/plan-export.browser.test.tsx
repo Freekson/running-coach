@@ -98,6 +98,30 @@ it('starts with explicit opt-outs and prepares unknown background without mandat
   expect(onPreview.mock.calls[0][0].background).toBeUndefined()
   expect(container.textContent).toContain('Missing Garmin records do not prove inactivity')
 })
+it('preserves approved constraints when the legacy goal export opens a refresh', async () => {
+  await act(async () =>
+    root.render(
+      <PlanExportScreen
+        key="refresh"
+        goalId="synthetic-goal"
+        goalName={setup.goalName}
+        initialSetup={{ ...setup, mode: 'refresh' }}
+        onOpen={onOpen}
+        onPreview={onPreview}
+        onSchedule={onSchedule}
+      />,
+    ),
+  )
+  expect(container.querySelector('#sessions')).toBeNull()
+  expect(container.querySelector('#plan-start')).toBeNull()
+  expect(container.querySelector('#detail-start')).not.toBeNull()
+  expect(container.textContent).toContain('Saved constraints: 3 sessions per week')
+  await preview()
+  expect(onSchedule).not.toHaveBeenCalled()
+  expect(onPreview).toHaveBeenCalledWith(
+    expect.objectContaining({ draftId: setup.draftId, expectedVersion: setup.version }),
+  )
+})
 it('invalidates the previous export immediately when consent changes', async () => {
   await preview()
   expect(button('Copy Prompt')).toBeDefined()

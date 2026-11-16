@@ -9,6 +9,7 @@ export const wizardStateSchema = z.object({
   step: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   setup: z
     .object({
+      mode: z.enum(['initial', 'refresh']).optional(),
       goalName: z.string().max(160),
       goalDate: z.string().nullable(),
       draftId: z.uuid(),
@@ -23,7 +24,8 @@ export const wizardStateSchema = z.object({
 })
 export type WizardState = z.infer<typeof wizardStateSchema>
 export const emptyWizard: WizardState = { version: 1, goalId: '', step: 1, text: '' }
-export const wizardStorageKey = (ownerId: string) => `running-coach:plan-wizard:v1:${ownerId}`
+export const wizardStorageKey = (ownerId: string, planId?: string) =>
+  `running-coach:plan-wizard:v1:${ownerId}${planId ? `:refresh:${planId}` : ''}`
 
 export function readWizard(storage: Pick<Storage, 'getItem'>, key: string): WizardState {
   try {

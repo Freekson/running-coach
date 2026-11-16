@@ -17,6 +17,7 @@ import {
 import { preflightIntervalsPace } from './pace-preflight'
 import { assertIntervalsWorkoutExport } from './workout-export'
 import { intervalsPublicationClient, sameRemotePublication } from './publication-client'
+import { confirmedPublicationPayload, publicationOperation } from './publication-baseline'
 import {
   approvedWorkoutSchema,
   publicationCommandSchema,
@@ -73,8 +74,8 @@ function approvedPayload(raw: unknown, userId: string, workoutId: string): Publi
   return publicationPayloadSchema.parse(payload)
 }
 
-/** No production instance exists until RUN-33 provides a persisted approval reader.
- * queue and dispatch are separate explicit actions; neither approval nor reads drain it. */
+/** RUN-38 supplies the persisted approval reader from server/plans/publication.
+ * Queue and dispatch require explicit actions; neither approval nor reads drain it. */
 export function createIntervalsPublicationService(
   readApproved: ApprovedWorkoutReader,
   options: { fetcher?: typeof fetch; now?: () => Date; timeoutMs?: number } = {},
@@ -115,15 +116,8 @@ export function createIntervalsPublicationService(
           (prior?.pendingWrite !== null && prior?.pendingWrite !== undefined)
         )
           throw new PublicationError('RECOVERY_REQUIRED')
-        const previousPayload = prior ? publicationPayloadSchema.parse(prior.payload) : null
-        const operation = payload.cancelled
-          ? 'CANCEL'
-          : !prior || prior.status === 'CANCELLED'
-            ? 'CREATE'
-            : previousPayload?.schedule.localDate !== payload.schedule.localDate ||
-                previousPayload?.schedule.timeZone !== payload.schedule.timeZone
-              ? 'RESCHEDULE'
-              : 'UPDATE'
+        const baseline = prior ? confirmedPublicationPayload(prior) : null
+        const operation = publicationOperation(payload, baseline, prior)
         const data = {
           approvedRevisionId: expectedRevisionId,
           publishRevision: expectedPublishRevision + 1,
@@ -135,7 +129,10 @@ export function createIntervalsPublicationService(
           publishedAt: null,
         }
         const saved = prior
-          ? await tx.workoutPublication.update({ where: { id: prior.id }, data })
+          ? await tx.workoutPublication.update({
+              where: { id: prior.id },
+              data: { ...data, ...(baseline ? { lastConfirmedPayload: { ...baseline } } : {}) },
+            })
           : await tx.workoutPublication.create({
               data: { ...data, userId, provider: 'INTERVALS', localWorkoutId, externalId },
             })
@@ -288,7 +285,15 @@ export function createIntervalsPublicationService(
         })
         if (!isCurrent)
           return checkpoint(
-            { status: 'SUPERSEDED', errorCode: 'STALE_REVISION' },
+            {
+              status: 'SUPERSEDED',
+              errorCode: 'STALE_REVISION',
+              ...((
+                mapping ? remote && sameRemotePublication(remote, mapping.event) : remote === null
+              )
+                ? { lastConfirmedPayload: { ...payload } }
+                : {}),
+            },
             { status: 'SUPERSEDED', errorCode: 'STALE_REVISION' },
           )
 
@@ -363,7 +368,13 @@ export function createIntervalsPublicationService(
         }
         const status = payload.cancelled ? 'CANCELLED' : 'PUBLISHED'
         return await checkpoint(
-          { status, remoteEventId, publishedAt: now(), errorCode: null },
+          {
+            status,
+            remoteEventId,
+            publishedAt: now(),
+            errorCode: null,
+            lastConfirmedPayload: { ...payload },
+          },
           { status, errorCode: null },
           async (tx) => {
             await lockWorkout(tx, userId, row.localWorkoutId)

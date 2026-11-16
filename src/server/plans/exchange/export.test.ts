@@ -40,6 +40,7 @@ import {
   runFixture,
 } from './fixtures'
 import { exportArtifact, getIssuedPlanExport, issuePlanExport } from './export'
+import { RefreshWindowError } from '../transaction'
 
 const owner = getOwnerContext({ id: fixtureId(900), role: 'USER', email: null })
 const other = getOwnerContext({ id: fixtureId(901), role: 'ADMIN', email: null })
@@ -103,7 +104,7 @@ function request(artifact: { json: string }) {
 function mockRefresh() {
   const fixture = refreshFixture(owner)
   if (fixture.mode !== 'refresh') throw new Error('Wrong fixture')
-  const base = fixture.currentApprovedRevision
+  const base = { ...fixture.currentApprovedRevision, constraints: fixture.draft.constraints }
   const rows = base.workouts.map((w) => ({
     ...w,
     scheduledDate: new Date(w.scheduledDate),
@@ -133,6 +134,50 @@ function mockRefresh() {
 afterEach(() => vi.useRealTimers())
 
 describe('RUN-35 issued owner-bound request snapshots', () => {
+  it.each([
+    { label: 'after the macro end', startDate: '2027-02-01', endDate: '2027-02-14' },
+    { label: 'overlapping the macro end', startDate: '2027-01-25', endDate: '2027-02-07' },
+    { label: 'before the macro start', startDate: '2026-11-16', endDate: '2026-11-29' },
+  ])('rejects an undated-goal refresh $label before issuing a request', async (window) => {
+    const { base } = mockRefresh()
+    tx.goal.findFirst.mockResolvedValue({
+      ...initial.goal,
+      id: draft.goalId,
+      distanceMeters: new Prisma.Decimal(initial.goal.distanceMeters!),
+      targetDate: null,
+    })
+    if (window.label === 'before the macro start') {
+      base.constraints.startDate = null
+      base.macroPlan.startDate = '2026-11-20'
+      base.macroPlan.phases[0].startDate = '2026-11-20'
+      tx.planDraft.findFirst.mockResolvedValue({
+        ...draft,
+        startDate: null,
+        planId: base.planId,
+        baseRevisionId: base.revisionId,
+      })
+      tx.planRevisionWorkout.findMany.mockResolvedValue([])
+    }
+    const { startDate, endDate } = window
+    await expect(
+      issuePlanExport(owner, { ...command, allowedDetailWindow: { startDate, endDate } }),
+    ).rejects.toBeInstanceOf(RefreshWindowError)
+    expect(tx.planExchangeRequest.create).not.toHaveBeenCalled()
+  })
+  it.each([
+    { startDate: '2026-11-16', endDate: '2026-12-13' },
+    { startDate: '2027-01-18', endDate: '2027-01-31' },
+  ])(
+    'accepts refresh windows touching the approved macro boundaries: $startDate',
+    async (window) => {
+      mockRefresh()
+      const result = request(
+        await issuePlanExport(owner, { ...command, allowedDetailWindow: window }),
+      )
+      expect(result.allowedDetailWindow).toEqual(window)
+      expect(tx.planExchangeRequest.create).toHaveBeenCalledTimes(1)
+    },
+  )
   it('requires a legacy unfiltered refresh snapshot to be reissued before downstream use', async () => {
     const legacy = refreshFixture(owner)
     tx.planExchangeRequest.findFirst.mockResolvedValue({
@@ -450,7 +495,7 @@ describe('RUN-35 issued owner-bound request snapshots', () => {
   it('refresh preserves actual completion/locks and never labels unlinked activities as completed plans', async () => {
     const refresh = refreshFixture(owner)
     if (refresh.mode !== 'refresh') throw new Error('Wrong fixture')
-    const base = refresh.currentApprovedRevision
+    const base = { ...refresh.currentApprovedRevision, constraints: refresh.draft.constraints }
     tx.planDraft.findFirst.mockResolvedValue({
       ...draft,
       baseRevisionId: base.revisionId,
@@ -535,7 +580,7 @@ describe('RUN-35 issued owner-bound request snapshots', () => {
   it('rejects an oversized required-future package before writing a snapshot', async () => {
     const refresh = refreshFixture(owner)
     if (refresh.mode !== 'refresh') throw new Error('Wrong fixture')
-    const base = refresh.currentApprovedRevision
+    const base = { ...refresh.currentApprovedRevision, constraints: refresh.draft.constraints }
     tx.planDraft.findFirst.mockResolvedValue({
       ...draft,
       baseRevisionId: base.revisionId,

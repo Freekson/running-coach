@@ -391,6 +391,8 @@ model WorkoutPublication {
   remoteAthleteId    String?             @map("remote_athlete_id") @db.VarChar(64)
   payloadHash        String              @map("payload_hash") @db.Char(64)
   payload            Json
+  // Last provider-confirmed prescription, retained independently of queued intent.
+  lastConfirmedPayload Json?            @map("last_confirmed_payload")
   pendingWrite       Json?               @map("pending_write")
   leaseToken         String?             @map("lease_token") @db.Uuid
   leaseExpiresAt     DateTime?           @map("lease_expires_at") @db.Timestamptz(6)

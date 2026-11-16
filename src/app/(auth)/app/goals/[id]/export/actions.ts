@@ -10,7 +10,12 @@ import {
 } from '@/server/authorization/ownership'
 import { issuePlanExport, openPlanExport } from '@/server/plans/exchange/export'
 import { updatePlanDraftConstraints } from '@/server/plans/drafts'
-import { PlanConflictError, PlanStateError } from '@/server/plans/transaction'
+import {
+  PlanConflictError,
+  PlanStateError,
+  RefreshGoalConflictError,
+  RefreshWindowError,
+} from '@/server/plans/transaction'
 
 async function run<T>(operation: (owner: OwnerContext) => Promise<T>) {
   try {
@@ -22,6 +27,8 @@ async function run<T>(operation: (owner: OwnerContext) => Promise<T>) {
       return { success: false as const, error: 'This account is unavailable.' }
     if (error instanceof OwnedResourceNotFoundError)
       return { success: false as const, error: 'Goal or draft not found.' }
+    if (error instanceof RefreshGoalConflictError || error instanceof RefreshWindowError)
+      return { success: false as const, error: error.message }
     if (error instanceof PlanConflictError)
       return {
         success: false as const,

@@ -27,6 +27,7 @@ type Props = {
   goalName: string
   initialSetup?: ExportSetup
   stage?: 'all' | 'constraints' | 'exchange'
+  preserveConstraints?: boolean
   initialState?: ExportFormState
   onStateChange?: (state: ExportFormState) => void
   onPendingChange?: (pending: boolean) => void
@@ -58,6 +59,7 @@ export function PlanExportScreen({
   onPreview,
   onSchedule,
   stage = 'all',
+  preserveConstraints = false,
   initialState,
   onStateChange,
   onPendingChange,
@@ -65,8 +67,11 @@ export function PlanExportScreen({
   onInvalidate,
 }: Props) {
   const [setup, setSetup] = useState(initialSetup)
+  const keepConstraints = preserveConstraints || setup?.mode === 'refresh'
   const [constraints, setConstraints] = useState(
-    initialState?.constraints ?? initialSetup?.constraints,
+    preserveConstraints || initialSetup?.mode === 'refresh'
+      ? initialSetup?.constraints
+      : (initialState?.constraints ?? initialSetup?.constraints),
   )
   const [consent, setConsent] = useState<ExportConsent>(
     initialState?.consent ?? { ...defaultExportConsent },
@@ -129,7 +134,8 @@ export function PlanExportScreen({
   }
   async function preview() {
     if (!setup || !constraints) return
-    const constraintsChanged = JSON.stringify(constraints) !== JSON.stringify(setup.constraints)
+    const constraintsChanged =
+      !keepConstraints && JSON.stringify(constraints) !== JSON.stringify(setup.constraints)
     setPending(true)
     if (stage !== 'constraints' || constraintsChanged) invalidate()
     else setError('')
@@ -267,46 +273,61 @@ export function PlanExportScreen({
                   Goal date: {setup.goalDate ?? 'No fixed date'}. The detail window must fit before
                   the goal date.
                 </p>
+                {keepConstraints && (
+                  <p>
+                    Saved constraints: {constraints.sessionsPerWeek} sessions per week,{' '}
+                    {constraints.maxSessionMinutes ?? 'no maximum'} minutes per session. Available
+                    weekdays: {constraints.availableWeekdays.map((day) => weekdays[day]).join(', ')}
+                    . The goal, constraints and approved macro strategy are preserved.
+                  </p>
+                )}
                 <div className={styles.grid}>
-                  <FormField
-                    id="sessions"
-                    label="Sessions per week"
-                    type="number"
-                    min={1}
-                    max={7}
-                    required
-                    value={constraints.sessionsPerWeek}
-                    onChange={(e) => {
-                      invalidate()
-                      setConstraints({ ...constraints, sessionsPerWeek: Number(e.target.value) })
-                    }}
-                  />
-                  <FormField
-                    id="duration"
-                    label="Maximum session minutes"
-                    type="number"
-                    min={5}
-                    max={1440}
-                    optional
-                    value={constraints.maxSessionMinutes ?? ''}
-                    onChange={(e) => {
-                      invalidate()
-                      setConstraints({
-                        ...constraints,
-                        maxSessionMinutes: e.target.value ? Number(e.target.value) : null,
-                      })
-                    }}
-                  />
-                  <DateField
-                    id="plan-start"
-                    label="Plan start date"
-                    optional
-                    value={constraints.startDate ?? ''}
-                    onChange={(value) => {
-                      invalidate()
-                      setConstraints({ ...constraints, startDate: value || null })
-                    }}
-                  />
+                  {!keepConstraints && (
+                    <>
+                      <FormField
+                        id="sessions"
+                        label="Sessions per week"
+                        type="number"
+                        min={1}
+                        max={7}
+                        required
+                        value={constraints.sessionsPerWeek}
+                        onChange={(e) => {
+                          invalidate()
+                          setConstraints({
+                            ...constraints,
+                            sessionsPerWeek: Number(e.target.value),
+                          })
+                        }}
+                      />
+                      <FormField
+                        id="duration"
+                        label="Maximum session minutes"
+                        type="number"
+                        min={5}
+                        max={1440}
+                        optional
+                        value={constraints.maxSessionMinutes ?? ''}
+                        onChange={(e) => {
+                          invalidate()
+                          setConstraints({
+                            ...constraints,
+                            maxSessionMinutes: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }}
+                      />
+                      <DateField
+                        id="plan-start"
+                        label="Plan start date"
+                        optional
+                        value={constraints.startDate ?? ''}
+                        onChange={(value) => {
+                          invalidate()
+                          setConstraints({ ...constraints, startDate: value || null })
+                        }}
+                      />
+                    </>
+                  )}
                   <DateField
                     id="detail-start"
                     label="First detailed day"
@@ -333,27 +354,29 @@ export function PlanExportScreen({
                     }}
                   />
                 </div>
-                <fieldset className={styles.weekdays}>
-                  <legend>Available weekdays</legend>
-                  {weekdays.map((day, index) => (
-                    <label key={day}>
-                      <input
-                        type="checkbox"
-                        checked={constraints.availableWeekdays.includes(index)}
-                        onChange={(e) => {
-                          invalidate()
-                          setConstraints({
-                            ...constraints,
-                            availableWeekdays: e.target.checked
-                              ? [...constraints.availableWeekdays, index].sort()
-                              : constraints.availableWeekdays.filter((d) => d !== index),
-                          })
-                        }}
-                      />
-                      {day}
-                    </label>
-                  ))}
-                </fieldset>
+                {!keepConstraints && (
+                  <fieldset className={styles.weekdays}>
+                    <legend>Available weekdays</legend>
+                    {weekdays.map((day, index) => (
+                      <label key={day}>
+                        <input
+                          type="checkbox"
+                          checked={constraints.availableWeekdays.includes(index)}
+                          onChange={(e) => {
+                            invalidate()
+                            setConstraints({
+                              ...constraints,
+                              availableWeekdays: e.target.checked
+                                ? [...constraints.availableWeekdays, index].sort()
+                                : constraints.availableWeekdays.filter((d) => d !== index),
+                            })
+                          }}
+                        />
+                        {day}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
               </fieldset>
             )}
             {stage !== 'constraints' && (

@@ -37,7 +37,11 @@ import { createPlanExchangePackage } from './package'
 import { readStoredActivityCoverage, readStoredRecovery } from './stored-context'
 import { projectCommitment, projectMacroPlan, selectRefreshCommitments } from './refresh-context'
 
-export async function openPlanExport(owner: OwnerContext, input: unknown): Promise<ExportSetup> {
+export async function openPlanExport(
+  owner: OwnerContext,
+  input: unknown,
+  options?: { initialOnly: true },
+): Promise<ExportSetup> {
   const userId = ownerId(owner)
   const { goalId } = openExportSchema.parse(input)
   return planTransaction(async (tx) => {
@@ -46,10 +50,12 @@ export async function openPlanExport(owner: OwnerContext, input: unknown): Promi
     })
     if (!goal) throw new OwnedResourceNotFoundError()
     const profile = await tx.athleteProfile.findUnique({ where: { userId } })
-    const plan = await tx.trainingPlan.findFirst({
-      where: ownedWhere(owner, { goalId }),
-      orderBy: { updatedAt: 'desc' },
-    })
+    const plan = options?.initialOnly
+      ? null
+      : await tx.trainingPlan.findFirst({
+          where: ownedWhere(owner, { goalId }),
+          orderBy: { updatedAt: 'desc' },
+        })
     const base = plan?.currentRevisionId
       ? await tx.planRevision.findFirst({
           where: ownedWhere(owner, { id: plan.currentRevisionId, planId: plan.id, goalId }),
@@ -60,6 +66,7 @@ export async function openPlanExport(owner: OwnerContext, input: unknown): Promi
         goalId,
         state: { not: 'APPROVED' },
         baseRevisionId: base?.id ?? null,
+        ...(options?.initialOnly ? { planId: null } : {}),
       }),
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
     })

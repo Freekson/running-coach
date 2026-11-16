@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Copy, Download, FileJson } from 'lucide-react'
 import { Button, ButtonLink } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -19,12 +19,19 @@ import {
 } from '@/lib/plan-export'
 import styles from './plan-export.module.scss'
 import { ContextPreview } from './context-preview'
+import type { ExportFormState } from './plan-export-state'
 
 type Result<T> = { success: true; value: T } | { success: false; error: string }
 type Props = {
   goalId: string
   goalName: string
   initialSetup?: ExportSetup
+  stage?: 'all' | 'constraints' | 'exchange'
+  initialState?: ExportFormState
+  onStateChange?: (state: ExportFormState) => void
+  onPendingChange?: (pending: boolean) => void
+  onContinue?: (setup: ExportSetup) => void
+  onInvalidate?: () => void
   onOpen: (input: { goalId: string }) => Promise<Result<ExportSetup>>
   onPreview: (input: ExportSelection) => Promise<Result<ExportArtifact>>
   onSchedule: (input: {
@@ -50,28 +57,53 @@ export function PlanExportScreen({
   onOpen,
   onPreview,
   onSchedule,
+  stage = 'all',
+  initialState,
+  onStateChange,
+  onPendingChange,
+  onContinue,
+  onInvalidate,
 }: Props) {
   const [setup, setSetup] = useState(initialSetup)
-  const [constraints, setConstraints] = useState(initialSetup?.constraints)
-  const [consent, setConsent] = useState<ExportConsent>({ ...defaultExportConsent })
-  const [background, setBackground] = useState<ExportBackground>({
-    experience: 'unknown',
-    firstWorkoutEver: null,
-  })
-  const [start, setStart] = useState(initialSetup ? laterStart(initialSetup) : '')
-  const [length, setLength] = useState('28')
-  const [result, setResult] = useState<ExportArtifact>()
+  const [constraints, setConstraints] = useState(
+    initialState?.constraints ?? initialSetup?.constraints,
+  )
+  const [consent, setConsent] = useState<ExportConsent>(
+    initialState?.consent ?? { ...defaultExportConsent },
+  )
+  const [background, setBackground] = useState<ExportBackground>(
+    initialState?.background ?? {
+      experience: 'unknown',
+      firstWorkoutEver: null,
+    },
+  )
+  const [start, setStart] = useState(
+    initialState?.start ?? (initialSetup ? laterStart(initialSetup) : ''),
+  )
+  const [length, setLength] = useState<'14' | '21' | '28'>(initialState?.length ?? '28')
+  const [result, setResult] = useState<ExportArtifact | undefined>(initialState?.result)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const [race, setRace] = useState({
-    date: '',
-    distance: '',
-    seconds: '',
-    kind: 'race' as 'race' | 'test' | 'historical_pb',
-  })
+  const [race, setRace] = useState(
+    initialState?.race ?? {
+      date: '',
+      distance: '',
+      seconds: '',
+      kind: 'race' as 'race' | 'test' | 'historical_pb',
+    },
+  )
+  const Container = stage === 'all' ? 'main' : 'section'
+
+  useEffect(() => {
+    onStateChange?.({ constraints, consent, background, start, length, result, race })
+  }, [constraints, consent, background, start, length, result, race, onStateChange])
+  useEffect(() => {
+    onPendingChange?.(pending)
+  }, [pending, onPendingChange])
 
   function invalidate() {
+    onInvalidate?.()
     setResult(undefined)
     setNotice('')
     setError('')
@@ -97,11 +129,14 @@ export function PlanExportScreen({
   }
   async function preview() {
     if (!setup || !constraints) return
+    const constraintsChanged = JSON.stringify(constraints) !== JSON.stringify(setup.constraints)
     setPending(true)
-    invalidate()
+    if (stage !== 'constraints' || constraintsChanged) invalidate()
+    else setError('')
     try {
       let version = setup.version
-      if (JSON.stringify(constraints) !== JSON.stringify(setup.constraints)) {
+      let currentSetup = setup
+      if (constraintsChanged) {
         const saved = await onSchedule({
           draftId: setup.draftId,
           expectedVersion: version,
@@ -112,7 +147,12 @@ export function PlanExportScreen({
           return
         }
         version = saved.value.version
-        setSetup({ ...setup, version, constraints: saved.value.constraints })
+        currentSetup = { ...setup, version, constraints: saved.value.constraints }
+        setSetup(currentSetup)
+      }
+      if (stage === 'constraints') {
+        onContinue?.(currentSetup)
+        return
       }
       const response = await onPreview({
         draftId: setup.draftId,
@@ -175,18 +215,22 @@ export function PlanExportScreen({
   }
 
   return (
-    <main className={styles.screen}>
-      <ButtonLink href="/app/goals" variant="secondary">
-        Back to goals
-      </ButtonLink>
-      <header>
-        <h1>Plan request</h1>
-        <p>{goalName}</p>
-        <p>
-          Prepare a request to take into ChatGPT. Review its suggestions before importing and
-          approving a plan. No API key is needed.
-        </p>
-      </header>
+    <Container className={styles.screen}>
+      {stage === 'all' && (
+        <>
+          <ButtonLink href="/app/goals" variant="secondary">
+            Back to goals
+          </ButtonLink>
+          <header>
+            <h1>Plan request</h1>
+            <p>{goalName}</p>
+            <p>
+              Prepare a request to take into ChatGPT. Review its suggestions before importing and
+              approving a plan. No API key is needed.
+            </p>
+          </header>
+        </>
+      )}
       {error && (
         <p role="alert" className={styles.error}>
           {error}
@@ -212,285 +256,294 @@ export function PlanExportScreen({
             }}
             onChange={invalidate}
           >
-            <fieldset disabled={pending} className={styles.group}>
-              <legend>Schedule and request window</legend>
-              <p>
-                {setup.measurementSystem === 'METRIC' ? 'Metric' : 'Imperial'} display preference ·{' '}
-                {constraints.timezone}. Exported measurements state their canonical units.
-              </p>
-              <p>
-                Goal date: {setup.goalDate ?? 'No fixed date'}. The detail window must fit before
-                the goal date.
-              </p>
-              <div className={styles.grid}>
-                <FormField
-                  id="sessions"
-                  label="Sessions per week"
-                  type="number"
-                  min={1}
-                  max={7}
-                  required
-                  value={constraints.sessionsPerWeek}
-                  onChange={(e) => {
-                    invalidate()
-                    setConstraints({ ...constraints, sessionsPerWeek: Number(e.target.value) })
-                  }}
-                />
-                <FormField
-                  id="duration"
-                  label="Maximum session minutes"
-                  type="number"
-                  min={5}
-                  max={1440}
-                  optional
-                  value={constraints.maxSessionMinutes ?? ''}
-                  onChange={(e) => {
-                    invalidate()
-                    setConstraints({
-                      ...constraints,
-                      maxSessionMinutes: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }}
-                />
-                <DateField
-                  id="plan-start"
-                  label="Plan start date"
-                  optional
-                  value={constraints.startDate ?? ''}
-                  onChange={(value) => {
-                    invalidate()
-                    setConstraints({ ...constraints, startDate: value || null })
-                  }}
-                />
-                <DateField
-                  id="detail-start"
-                  label="First detailed day"
-                  min={addHealthDays(setup.today, 1)}
-                  max={setup.goalDate ?? undefined}
-                  value={start}
-                  onChange={(value) => {
-                    invalidate()
-                    setStart(value)
-                  }}
-                />
-                <Select
-                  id="window-length"
-                  label="Detailed days"
-                  value={length}
-                  options={[
-                    { value: '14', label: '14 days' },
-                    { value: '21', label: '21 days' },
-                    { value: '28', label: '28 days' },
-                  ]}
-                  onChange={(value) => {
-                    invalidate()
-                    setLength(value)
-                  }}
-                />
-              </div>
-              <fieldset className={styles.weekdays}>
-                <legend>Available weekdays</legend>
-                {weekdays.map((day, index) => (
-                  <label key={day}>
-                    <input
-                      type="checkbox"
-                      checked={constraints.availableWeekdays.includes(index)}
-                      onChange={(e) => {
-                        invalidate()
-                        setConstraints({
-                          ...constraints,
-                          availableWeekdays: e.target.checked
-                            ? [...constraints.availableWeekdays, index].sort()
-                            : constraints.availableWeekdays.filter((d) => d !== index),
-                        })
-                      }}
-                    />
-                    {day}
-                  </label>
-                ))}
-              </fieldset>
-            </fieldset>
-            <fieldset disabled={pending} className={styles.group}>
-              <legend>Privacy choices</legend>
-              <p>
-                All choices are optional and start off. Only selected data appears in the preview,
-                JSON and prompt. Private account IDs, credentials and GPS files are excluded; review
-                your goal title and any text you choose to share.
-              </p>
-              {Object.entries(consentLabels).map(([key, label]) => {
-                const field = key as keyof ExportConsent
-                const disabled =
-                  ((field === 'activityHeartRate' || field === 'recordedLaps') &&
-                    !consent.recordedActivityMetrics) ||
-                  (field === 'limitationsOrFatigue' && !consent.athleteReport)
-                return (
-                  <label key={field} className={styles.choice}>
-                    <input
-                      type="checkbox"
-                      checked={consent[field]}
-                      disabled={disabled}
-                      onChange={(e) => {
-                        invalidate()
-                        setConsent({
-                          ...consent,
-                          [field]: e.target.checked,
-                          ...(field === 'recordedActivityMetrics' && !e.target.checked
-                            ? { activityHeartRate: false, recordedLaps: false }
-                            : {}),
-                          ...(field === 'athleteReport' && !e.target.checked
-                            ? { limitationsOrFatigue: false }
-                            : {}),
-                        })
-                      }}
-                    />
-                    {label}
-                  </label>
-                )
-              })}
-            </fieldset>
-            {consent.athleteReport && (
+            {stage !== 'exchange' && (
               <fieldset disabled={pending} className={styles.group}>
-                <legend>Optional training background</legend>
+                <legend>Schedule and request window</legend>
                 <p>
-                  Skip anything, or choose Unknown. Your first session in this plan does not imply
-                  your first run ever.
+                  {setup.measurementSystem === 'METRIC' ? 'Metric' : 'Imperial'} display preference
+                  · {constraints.timezone}. Exported measurements state their canonical units.
+                </p>
+                <p>
+                  Goal date: {setup.goalDate ?? 'No fixed date'}. The detail window must fit before
+                  the goal date.
                 </p>
                 <div className={styles.grid}>
-                  <Select
-                    id="experience"
-                    label="Current running background"
-                    value={background.experience}
-                    options={[
-                      { value: 'unknown', label: 'Unknown / not sure' },
-                      { value: 'new_runner', label: 'New runner' },
-                      { value: 'returning_runner', label: 'Returning after a break' },
-                      { value: 'currently_training', label: 'Currently training' },
-                    ]}
-                    onChange={(value) => {
+                  <FormField
+                    id="sessions"
+                    label="Sessions per week"
+                    type="number"
+                    min={1}
+                    max={7}
+                    required
+                    value={constraints.sessionsPerWeek}
+                    onChange={(e) => {
                       invalidate()
-                      setBackground({ ...background, experience: value })
+                      setConstraints({ ...constraints, sessionsPerWeek: Number(e.target.value) })
                     }}
                   />
-                  <Select
-                    id="first-ever"
-                    label="Will this be your first workout ever?"
-                    value={
-                      background.firstWorkoutEver === null
-                        ? 'unknown'
-                        : String(background.firstWorkoutEver)
-                    }
-                    options={[
-                      { value: 'unknown', label: 'Unknown / skip' },
-                      { value: 'true', label: 'Yes' },
-                      { value: 'false', label: 'No' },
-                    ]}
-                    onChange={(value) => {
+                  <FormField
+                    id="duration"
+                    label="Maximum session minutes"
+                    type="number"
+                    min={5}
+                    max={1440}
+                    optional
+                    value={constraints.maxSessionMinutes ?? ''}
+                    onChange={(e) => {
                       invalidate()
-                      setBackground({
-                        ...background,
-                        firstWorkoutEver: value === 'unknown' ? null : value === 'true',
+                      setConstraints({
+                        ...constraints,
+                        maxSessionMinutes: e.target.value ? Number(e.target.value) : null,
                       })
                     }}
                   />
-                  {(
-                    [
-                      'previousExperience',
-                      'easyEffort',
-                      'crossTraining',
-                      'preferredWorkoutTypes',
-                      ...(consent.limitationsOrFatigue ? ['limitationsOrFatigue' as const] : []),
-                    ] as const
-                  ).map((key) => (
-                    <FormField
-                      key={key}
-                      id={key}
-                      label={
-                        {
-                          previousExperience: 'Previous experience, breaks, travel or availability',
-                          easyEffort: 'Perceived easy effort or pace (include units)',
-                          crossTraining: 'Cross-training and other workload',
-                          preferredWorkoutTypes: 'Workout preferences',
-                          limitationsOrFatigue: 'Pain, fatigue or recovery limits',
-                        }[key]
-                      }
-                      optional
-                      maxLength={1000}
-                      value={background[key] ?? ''}
-                      onChange={(e) => {
-                        invalidate()
-                        setBackground({ ...background, [key]: e.target.value })
-                      }}
-                    />
-                  ))}
+                  <DateField
+                    id="plan-start"
+                    label="Plan start date"
+                    optional
+                    value={constraints.startDate ?? ''}
+                    onChange={(value) => {
+                      invalidate()
+                      setConstraints({ ...constraints, startDate: value || null })
+                    }}
+                  />
+                  <DateField
+                    id="detail-start"
+                    label="First detailed day"
+                    min={addHealthDays(setup.today, 1)}
+                    max={setup.goalDate ?? undefined}
+                    value={start}
+                    onChange={(value) => {
+                      invalidate()
+                      setStart(value)
+                    }}
+                  />
+                  <Select
+                    id="window-length"
+                    label="Detailed days"
+                    value={length}
+                    options={[
+                      { value: '14', label: '14 days' },
+                      { value: '21', label: '21 days' },
+                      { value: '28', label: '28 days' },
+                    ]}
+                    onChange={(value) => {
+                      invalidate()
+                      setLength(value)
+                    }}
+                  />
                 </div>
-                <fieldset className={styles.group}>
-                  <legend>Dated race or test result (optional)</legend>
-                  <p>
-                    Leave all fields blank to skip. Historical personal bests are background, not
-                    proof of current form.
-                  </p>
-                  <div className={styles.grid}>
-                    <DateField
-                      id="race-date"
-                      label="Result date"
-                      optional
-                      max={setup.today}
-                      value={race.date}
-                      onChange={(date) => {
-                        invalidate()
-                        setRace({ ...race, date })
-                      }}
-                    />
-                    <FormField
-                      id="race-distance"
-                      label="Result distance (meters)"
-                      type="number"
-                      min={1}
-                      optional
-                      value={race.distance}
-                      onChange={(e) => {
-                        invalidate()
-                        setRace({ ...race, distance: e.target.value })
-                      }}
-                    />
-                    <FormField
-                      id="race-seconds"
-                      label="Result time (seconds)"
-                      type="number"
-                      min={1}
-                      optional
-                      value={race.seconds}
-                      onChange={(e) => {
-                        invalidate()
-                        setRace({ ...race, seconds: e.target.value })
-                      }}
-                    />
-                    <Select
-                      id="result-kind"
-                      label="Result type"
-                      value={race.kind}
-                      options={[
-                        { value: 'race', label: 'Race' },
-                        { value: 'test', label: 'Test' },
-                        { value: 'historical_pb', label: 'Historical personal best' },
-                      ]}
-                      onChange={(kind) => {
-                        invalidate()
-                        setRace({ ...race, kind })
-                      }}
-                    />
-                  </div>
+                <fieldset className={styles.weekdays}>
+                  <legend>Available weekdays</legend>
+                  {weekdays.map((day, index) => (
+                    <label key={day}>
+                      <input
+                        type="checkbox"
+                        checked={constraints.availableWeekdays.includes(index)}
+                        onChange={(e) => {
+                          invalidate()
+                          setConstraints({
+                            ...constraints,
+                            availableWeekdays: e.target.checked
+                              ? [...constraints.availableWeekdays, index].sort()
+                              : constraints.availableWeekdays.filter((d) => d !== index),
+                          })
+                        }}
+                      />
+                      {day}
+                    </label>
+                  ))}
                 </fieldset>
               </fieldset>
             )}
+            {stage !== 'constraints' && (
+              <>
+                <fieldset disabled={pending} className={styles.group}>
+                  <legend>Privacy choices</legend>
+                  <p>
+                    All choices are optional and start off. Only selected data appears in the
+                    preview, JSON and prompt. Private account IDs, credentials and GPS files are
+                    excluded; review your goal title and any text you choose to share.
+                  </p>
+                  {Object.entries(consentLabels).map(([key, label]) => {
+                    const field = key as keyof ExportConsent
+                    const disabled =
+                      ((field === 'activityHeartRate' || field === 'recordedLaps') &&
+                        !consent.recordedActivityMetrics) ||
+                      (field === 'limitationsOrFatigue' && !consent.athleteReport)
+                    return (
+                      <label key={field} className={styles.choice}>
+                        <input
+                          type="checkbox"
+                          checked={consent[field]}
+                          disabled={disabled}
+                          onChange={(e) => {
+                            invalidate()
+                            setConsent({
+                              ...consent,
+                              [field]: e.target.checked,
+                              ...(field === 'recordedActivityMetrics' && !e.target.checked
+                                ? { activityHeartRate: false, recordedLaps: false }
+                                : {}),
+                              ...(field === 'athleteReport' && !e.target.checked
+                                ? { limitationsOrFatigue: false }
+                                : {}),
+                            })
+                          }}
+                        />
+                        {label}
+                      </label>
+                    )
+                  })}
+                </fieldset>
+                {consent.athleteReport && (
+                  <fieldset disabled={pending} className={styles.group}>
+                    <legend>Optional training background</legend>
+                    <p>
+                      Skip anything, or choose Unknown. Your first session in this plan does not
+                      imply your first run ever.
+                    </p>
+                    <div className={styles.grid}>
+                      <Select
+                        id="experience"
+                        label="Current running background"
+                        value={background.experience}
+                        options={[
+                          { value: 'unknown', label: 'Unknown / not sure' },
+                          { value: 'new_runner', label: 'New runner' },
+                          { value: 'returning_runner', label: 'Returning after a break' },
+                          { value: 'currently_training', label: 'Currently training' },
+                        ]}
+                        onChange={(value) => {
+                          invalidate()
+                          setBackground({ ...background, experience: value })
+                        }}
+                      />
+                      <Select
+                        id="first-ever"
+                        label="Will this be your first workout ever?"
+                        value={
+                          background.firstWorkoutEver === null
+                            ? 'unknown'
+                            : String(background.firstWorkoutEver)
+                        }
+                        options={[
+                          { value: 'unknown', label: 'Unknown / skip' },
+                          { value: 'true', label: 'Yes' },
+                          { value: 'false', label: 'No' },
+                        ]}
+                        onChange={(value) => {
+                          invalidate()
+                          setBackground({
+                            ...background,
+                            firstWorkoutEver: value === 'unknown' ? null : value === 'true',
+                          })
+                        }}
+                      />
+                      {(
+                        [
+                          'previousExperience',
+                          'easyEffort',
+                          'crossTraining',
+                          'preferredWorkoutTypes',
+                          ...(consent.limitationsOrFatigue
+                            ? ['limitationsOrFatigue' as const]
+                            : []),
+                        ] as const
+                      ).map((key) => (
+                        <FormField
+                          key={key}
+                          id={key}
+                          label={
+                            {
+                              previousExperience:
+                                'Previous experience, breaks, travel or availability',
+                              easyEffort: 'Perceived easy effort or pace (include units)',
+                              crossTraining: 'Cross-training and other workload',
+                              preferredWorkoutTypes: 'Workout preferences',
+                              limitationsOrFatigue: 'Pain, fatigue or recovery limits',
+                            }[key]
+                          }
+                          optional
+                          maxLength={1000}
+                          value={background[key] ?? ''}
+                          onChange={(e) => {
+                            invalidate()
+                            setBackground({ ...background, [key]: e.target.value })
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <fieldset className={styles.group}>
+                      <legend>Dated race or test result (optional)</legend>
+                      <p>
+                        Leave all fields blank to skip. Historical personal bests are background,
+                        not proof of current form.
+                      </p>
+                      <div className={styles.grid}>
+                        <DateField
+                          id="race-date"
+                          label="Result date"
+                          optional
+                          max={setup.today}
+                          value={race.date}
+                          onChange={(date) => {
+                            invalidate()
+                            setRace({ ...race, date })
+                          }}
+                        />
+                        <FormField
+                          id="race-distance"
+                          label="Result distance (meters)"
+                          type="number"
+                          min={1}
+                          optional
+                          value={race.distance}
+                          onChange={(e) => {
+                            invalidate()
+                            setRace({ ...race, distance: e.target.value })
+                          }}
+                        />
+                        <FormField
+                          id="race-seconds"
+                          label="Result time (seconds)"
+                          type="number"
+                          min={1}
+                          optional
+                          value={race.seconds}
+                          onChange={(e) => {
+                            invalidate()
+                            setRace({ ...race, seconds: e.target.value })
+                          }}
+                        />
+                        <Select
+                          id="result-kind"
+                          label="Result type"
+                          value={race.kind}
+                          options={[
+                            { value: 'race', label: 'Race' },
+                            { value: 'test', label: 'Test' },
+                            { value: 'historical_pb', label: 'Historical personal best' },
+                          ]}
+                          onChange={(kind) => {
+                            invalidate()
+                            setRace({ ...race, kind })
+                          }}
+                        />
+                      </div>
+                    </fieldset>
+                  </fieldset>
+                )}
+              </>
+            )}
             <Button type="submit" loading={pending}>
-              Prepare export preview
+              {stage === 'constraints' ? 'Save constraints and continue' : 'Prepare export preview'}
             </Button>
             <Button variant="secondary" disabled={pending} onClick={() => void open()}>
               Reopen current draft
             </Button>
           </form>
-          {result && (
+          {result && stage !== 'constraints' && (
             <Card className={styles.preview}>
               <SectionHeading icon={FileJson} title="Training context and export preview" />
               <p>
@@ -540,7 +593,7 @@ export function PlanExportScreen({
           )}
         </>
       )}
-    </main>
+    </Container>
   )
 }
 

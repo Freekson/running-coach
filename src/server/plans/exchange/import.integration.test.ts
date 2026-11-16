@@ -22,8 +22,9 @@ import {
   validateGeneratedPlan,
 } from '../revisions'
 import { definitionFixture } from '../fixtures'
-import { issuePlanExport } from './export'
+import { issuePlanExport, openPlanExport } from './export'
 import { previewPlanImport } from './import'
+import { approvePlanImport } from './approve'
 
 const requested = process.env.npm_lifecycle_event === 'test:db'
 if (requested) config()
@@ -35,7 +36,7 @@ const enabled =
   !process.env.VERCEL_ENV
 if (requested && !enabled) throw new Error('Isolated development/test database required')
 
-describe.skipIf(!enabled)('RUN-36 PostgreSQL owner isolation and read-only import', () => {
+describe.skipIf(!enabled)('RUN-36/37 PostgreSQL import, approval and owner isolation', () => {
   let prisma: PrismaClient
   let owner: OwnerContext, other: OwnerContext
   const prefix = 'run36-' + randomUUID()
@@ -379,5 +380,145 @@ describe.skipIf(!enabled)('RUN-36 PostgreSQL owner isolation and read-only impor
         include: { workouts: true },
       }),
     ).toEqual(approvedBefore)
+  })
+
+  async function approvalCommand(s: Awaited<ReturnType<typeof scenario>>) {
+    const preview = await previewPlanImport(owner, s.command, JSON.stringify(s.response))
+    if (!preview.valid) throw new Error(JSON.stringify(preview.errors))
+    return {
+      ...s.command,
+      approve: true,
+      acknowledgedWarningIds: preview.preview.warnings.map((warning) => warning.id),
+    }
+  }
+  it('RUN-37 requires explicit approval and all warning acknowledgements without writes', async () => {
+    const s = await scenario()
+    const before = await state(s.draft.id)
+    await expect(approvePlanImport(owner, s.command, JSON.stringify(s.response))).rejects.toThrow()
+    await expect(
+      approvePlanImport({ userId: owner.userId }, { ...s.command, approve: true }, '{}'),
+    ).rejects.toThrow('Verified owner')
+    const result = await approvePlanImport(
+      owner,
+      { ...s.command, approve: true },
+      JSON.stringify(s.response),
+    )
+    expect(result.approved).toBe(false)
+    expect(await state(s.draft.id)).toEqual(before)
+  })
+  it('RUN-37 atomically approves an immutable revision with no publication and rejects replay', async () => {
+    const s = await scenario()
+    const command = await approvalCommand(s)
+    const publications = await prisma.workoutPublication.count()
+    const result = await approvePlanImport(owner, command, JSON.stringify(s.response))
+    expect(result.approved).toBe(true)
+    if (!result.approved) throw new Error('Approval failed')
+    const draft = await prisma.planDraft.findUniqueOrThrow({ where: { id: s.draft.id } })
+    expect(draft.state).toBe('APPROVED')
+    const revision = await prisma.planRevision.findUniqueOrThrow({
+      where: { id: result.revisionId },
+      include: { workouts: true },
+    })
+    expect(revision.workouts).toHaveLength(1)
+    expect(revision.sourceDraftId).toBe(s.draft.id)
+    expect(await prisma.workoutPublication.count()).toBe(publications)
+    expect((await approvePlanImport(owner, command, JSON.stringify(s.response))).approved).toBe(
+      false,
+    )
+    expect(await prisma.planRevision.count({ where: { sourceDraftId: s.draft.id } })).toBe(1)
+  })
+  it('RUN-37 rejects another owner including ADMIN, wrong nested selection and malformed responses', async () => {
+    const s = await scenario()
+    const command = await approvalCommand(s)
+    const before = await state(s.draft.id)
+    for (const [who, input, text] of [
+      [other, command, JSON.stringify(s.response)],
+      [owner, { ...command, goalId: randomUUID() }, JSON.stringify(s.response)],
+      [owner, { ...command, draftId: randomUUID() }, JSON.stringify(s.response)],
+      [owner, command, '{broken'],
+    ] as const)
+      expect((await approvePlanImport(who, input, text)).approved).toBe(false)
+    expect(await state(s.draft.id)).toEqual(before)
+  })
+  it('RUN-37 rejects superseded exports and constraints edited after preview', async () => {
+    const s = await scenario()
+    const command = await approvalCommand(s)
+    await issue(s.draft.id, s.draft.version)
+    expect((await approvePlanImport(owner, command, JSON.stringify(s.response))).approved).toBe(
+      false,
+    )
+    const next = await scenario()
+    const nextCommand = await approvalCommand(next)
+    await updatePlanDraftConstraints(
+      owner,
+      next.draft.id,
+      { ...next.request.draft.constraints, maxSessionMinutes: 90 },
+      next.draft.version,
+    )
+    const before = await state(next.draft.id)
+    expect(
+      (await approvePlanImport(owner, nextCommand, JSON.stringify(next.response))).approved,
+    ).toBe(false)
+    expect(await state(next.draft.id)).toEqual(before)
+  })
+  it('RUN-37 initial wizard preserves approved history on failure and resumes its own draft', async () => {
+    const s = await refreshScenario()
+    const before = await prisma.planRevision.findUniqueOrThrow({
+      where: { id: s.revision.id },
+      include: { workouts: true },
+    })
+    const setup = await openPlanExport(owner, { goalId: s.goal.id }, { initialOnly: true })
+    expect(setup.draftId).not.toBe(s.draft.id)
+    expect(
+      (await openPlanExport(owner, { goalId: s.goal.id }, { initialOnly: true })).draftId,
+    ).toBe(setup.draftId)
+    const request = await issue(setup.draftId, setup.version)
+    expect(request.mode).toBe('initial')
+    expect(
+      (
+        await approvePlanImport(
+          owner,
+          {
+            goalId: s.goal.id,
+            draftId: setup.draftId,
+            requestId: request.requestId,
+            approve: true,
+          },
+          '{broken',
+        )
+      ).approved,
+    ).toBe(false)
+    expect(
+      await prisma.planRevision.findUniqueOrThrow({
+        where: { id: s.revision.id },
+        include: { workouts: true },
+      }),
+    ).toEqual(before)
+    expect(
+      (await prisma.trainingPlan.findUniqueOrThrow({ where: { id: s.revision.planId } }))
+        .currentRevisionId,
+    ).toBe(s.revision.id)
+    await expect(
+      approvePlanImport(
+        owner,
+        { ...s.command, approve: true, acknowledgedWarningIds: [] },
+        JSON.stringify(s.response),
+      ),
+    ).rejects.toThrow()
+  })
+  it('RUN-37 concurrent approvals create exactly one revision and keep the committed draft immutable', async () => {
+    const s = await scenario()
+    const command = await approvalCommand(s)
+    const results = await Promise.allSettled([
+      approvePlanImport(owner, command, JSON.stringify(s.response)),
+      approvePlanImport(owner, command, JSON.stringify(s.response)),
+    ])
+    expect(
+      results.filter((result) => result.status === 'fulfilled' && result.value.approved),
+    ).toHaveLength(1)
+    expect(await prisma.planRevision.count({ where: { sourceDraftId: s.draft.id } })).toBe(1)
+    expect((await prisma.planDraft.findUniqueOrThrow({ where: { id: s.draft.id } })).state).toBe(
+      'APPROVED',
+    )
   })
 })

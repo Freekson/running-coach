@@ -134,10 +134,14 @@ export async function validateGeneratedPlan(owner: OwnerContext, command: unknow
   })
 }
 
-export async function approvePlanDraft(owner: OwnerContext, command: unknown) {
+export async function approvePlanDraft(
+  owner: OwnerContext,
+  command: unknown,
+  transaction?: Prisma.TransactionClient,
+) {
   const userId = ownerId(owner)
   const parsed = approvalSchema.parse(command)
-  return planTransaction(async (tx) => {
+  const approve = async (tx: Prisma.TransactionClient) => {
     const draft = await requireDraft(tx, owner, parsed.draftId)
     requireDraftVersion(draft, parsed.expectedVersion)
     if (draft.state !== 'VALIDATED') throw new PlanStateError()
@@ -162,7 +166,8 @@ export async function approvePlanDraft(owner: OwnerContext, command: unknown) {
       workouts: p.workouts,
       knownIds: p.knownIds,
     })
-  })
+  }
+  return transaction ? approve(transaction) : planTransaction(approve)
 }
 
 export async function createPlanRefreshDraft(owner: OwnerContext, input: unknown) {

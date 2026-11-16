@@ -62,6 +62,7 @@ export default async function TrainingPage({
           <div>
             <h1>Activity History</h1>
             <p>Browse and filter your imported workouts.</p>
+            <ButtonLink href="/app/training/plan/new">Create training plan</ButtonLink>
           </div>
           <ActivitySyncPanel
             initial={sync.status === 'fulfilled' ? sync.value : unavailable}

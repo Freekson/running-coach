@@ -122,6 +122,12 @@ client-returned preview or reuse a preview after a lock/version change. RUN-33's
 explicit approval repeats identity/history checks. Publication remains a separate
 user-confirmed RUN-41 action.
 
+RUN-37's [plan creation wizard](plan-creation-wizard.md) now composes this preview
+with the manual exchange UX. Its initial-plan approval reruns preview and warning
+acknowledgements in the same serializable transaction as immutable revision
+persistence. Import alone remains read-only, and refresh/diff approval remains
+separate RUN-38 work.
+
 ## Verification
 
 `pnpm test` includes synthetic novice, returning runner, established runner,

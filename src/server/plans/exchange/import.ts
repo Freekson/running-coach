@@ -13,6 +13,7 @@ import {
   type OwnerContext,
 } from '@/server/authorization/ownership'
 import { constraintsFromDraft, PlanValidationError } from '../content'
+import { workoutCompletionAt } from '../completion'
 import {
   planTransaction,
   requireDraft,
@@ -140,7 +141,7 @@ export async function previewPlanImport(
           const current = prior.get(snapshot.workoutId)
           return (
             !current ||
-            (current.workout.completedAt?.getTime() ?? null) !==
+            (workoutCompletionAt(current.workout)?.getTime() ?? null) !==
               (snapshot.completedAt ? Date.parse(snapshot.completedAt) : null)
           )
         })

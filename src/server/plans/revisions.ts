@@ -255,11 +255,17 @@ export async function lockPlannedWorkout(owner: OwnerContext, input: unknown) {
       where: ownedIdWhere(owner, parsed.workoutId),
     })
     if (!workout) throw new OwnedResourceNotFoundError()
+    const manualCompletionAt =
+      (!workout.completionFromActivity ? (workout.completionAt ?? workout.completedAt) : null) ??
+      new Date()
     return tx.plannedWorkout.update({
       where: { id: workout.id },
       data: {
         lockedAt: workout.lockedAt ?? new Date(),
-        completedAt: workout.completedAt ?? (parsed.completed ? new Date() : null),
+        completedAt: workout.completedAt ?? (parsed.completed ? manualCompletionAt : null),
+        ...(parsed.completed
+          ? { completionAt: manualCompletionAt, completionFromActivity: false }
+          : {}),
       },
     })
   })

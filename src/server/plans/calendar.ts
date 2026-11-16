@@ -22,6 +22,7 @@ import { activityReadScope } from '@/server/activity/visibility'
 import { planContentSchema, scheduledPlanWorkoutSchema } from './content'
 import { appendApprovedRevision } from './snapshots'
 import { planTransaction, PlanConflictError } from './transaction'
+import { workoutCompletionAt } from './completion'
 
 const scheduleSnapshotSchema = planContentSchema.omit({ workouts: true }).extend({
   constraints: planConstraintsSchema,
@@ -128,7 +129,7 @@ export async function getTrainingCalendar(
           cancelled: member.cancelled,
         })
         const localToday = calendarToday(member.timezone, now)
-        const completed = !!member.workout.completedAt
+        const completed = !!workoutCompletionAt(member.workout)
         const previous = history.find(
           (w) =>
             w.workoutId === member.workoutId &&

@@ -228,6 +228,11 @@ export function ActivityDetailView({
           <h1>Activity details</h1>
         </div>
         <div className={styles.headerActions} aria-busy={fit.pending || undefined}>
+          {activity.provider === 'GARMIN' && (
+            <ButtonLink variant="secondary" href={`/app/training/${activity.id}/match`}>
+              Match planned session
+            </ButtonLink>
+          )}
           {canLoad && (
             <Button
               variant="secondary"

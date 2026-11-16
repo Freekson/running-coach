@@ -17,6 +17,8 @@ function scenario() {
       completedAt: w.completedAt ? new Date(w.completedAt) : null,
       lockedAt: w.lockedAt ? new Date(w.lockedAt) : null,
       completedActivityId: null,
+      completionAt: null,
+      completionFromActivity: false,
     },
   }))
   const macro = request.currentApprovedRevision.macroPlan

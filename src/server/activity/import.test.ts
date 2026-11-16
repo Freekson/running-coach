@@ -15,6 +15,7 @@ const {
   upsertCandidate,
   findOne,
   findMany,
+  updateCompletion,
 } = vi.hoisted(() => ({
   getPrismaClient: vi.fn(),
   isVerifiedCurrentUser: vi.fn(() => true),
@@ -29,6 +30,7 @@ const {
   upsertCandidate: vi.fn(),
   findOne: vi.fn(),
   findMany: vi.fn(),
+  updateCompletion: vi.fn(),
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@/server/auth/current-user', () => ({ isVerifiedCurrentUser }))
@@ -122,10 +124,12 @@ beforeEach(() => {
   upsertCandidate.mockResolvedValue({ id: 'candidate-id' })
   findOne.mockResolvedValue(null)
   findMany.mockResolvedValue([])
+  updateCompletion.mockResolvedValue({ count: 0 })
   const tx = {
     activity: { findUnique: findExisting, upsert, findMany: findNear },
     activityLap: { findMany: findLaps, deleteMany: deleteLaps, createMany: createLaps },
     activityDuplicateCandidate: { deleteMany: deleteCandidates, upsert: upsertCandidate },
+    plannedWorkout: { updateMany: updateCompletion },
   }
   transaction.mockImplementation(async (callback: (client: typeof tx) => Promise<unknown>) =>
     callback(tx),

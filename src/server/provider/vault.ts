@@ -421,6 +421,18 @@ export async function deleteAllImportedGarminData(owner: OwnerContext): Promise<
       WHERE user_id = ${userId}::uuid AND provider = 'GARMIN'
       FOR UPDATE
     `
+    await tx.plannedWorkout.updateMany({
+      where: {
+        userId,
+        completionFromActivity: true,
+        completedActivity: { sourceProvider: 'GARMIN' },
+      },
+      data: { completedActivityId: null, completedRevisionId: null, completionAt: null },
+    })
+    await tx.plannedWorkout.updateMany({
+      where: { userId, completedActivity: { sourceProvider: 'GARMIN' } },
+      data: { completedActivityId: null, completedRevisionId: null },
+    })
     await tx.activity.deleteMany({ where: { userId, sourceProvider: 'GARMIN' } })
     await tx.dailyHealthMetric.deleteMany({ where: { userId, sourceProvider: 'GARMIN' } })
     await tx.garminImportRateLimit.deleteMany({ where: { userId } })

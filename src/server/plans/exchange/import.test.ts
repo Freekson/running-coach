@@ -118,6 +118,9 @@ function setupRefresh() {
     workout: {
       completedAt: w.completedAt ? new Date(w.completedAt) : null,
       lockedAt: w.lockedAt ? new Date(w.lockedAt) : null,
+      completedActivityId: null,
+      completionAt: null,
+      completionFromActivity: false,
     },
   }))
   tx.planRevisionWorkout.findMany.mockResolvedValue(rows)
@@ -256,6 +259,19 @@ describe('RUN-36 live owner-bound preview', () => {
     )
     expect(!result.valid && result.errors[0].code).toBe('stale_request')
     expect(!result.valid && result.repairPrompt).toBeNull()
+  })
+  it('rejects a response whose previously completed match was unlinked after export', async () => {
+    const { request, rows } = setupRefresh()
+    if (request.mode !== 'refresh') throw new Error('Wrong fixture')
+    const completed = request.currentApprovedRevision.workouts.find((w) => w.completedAt !== null)
+    if (!completed) throw new Error('Fixture completion missing')
+    const current = rows.find((w) => w.workoutId === completed.workoutId)
+    if (!current) throw new Error('Fixture membership missing')
+    current.workout.completionFromActivity = true
+    current.workout.completionAt = null
+    current.workout.completedActivityId = null
+    const result = await previewPlanImport(owner, command, JSON.stringify(refreshResponseFixture()))
+    expect(!result.valid && result.errors[0].code).toBe('stale_request')
   })
   it('preserves omitted protected original narrative during refresh validation', async () => {
     const { rows } = setupRefresh()

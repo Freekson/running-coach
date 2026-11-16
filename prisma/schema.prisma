@@ -326,13 +326,14 @@ model PlanRevision {
   snapshot         Json
   approvedAt       DateTime @default(now()) @map("approved_at") @db.Timestamptz(6)
 
-  plan          TrainingPlan          @relation("PlanRevisions", fields: [userId, goalId, planId], references: [userId, goalId, id], onDelete: Cascade)
-  sourceDraft   PlanDraft             @relation("RevisionSource", fields: [userId, planId, sourceDraftId], references: [userId, planId, id], onDelete: NoAction)
-  parent        PlanRevision?         @relation("RevisionParent", fields: [userId, planId, parentRevisionId], references: [userId, planId, id], onDelete: NoAction)
-  children      PlanRevision[]        @relation("RevisionParent")
-  currentFor    TrainingPlan[]        @relation("CurrentRevision")
-  refreshDrafts PlanDraft[]           @relation("DraftBase")
-  workouts      PlanRevisionWorkout[]
+  plan            TrainingPlan          @relation("PlanRevisions", fields: [userId, goalId, planId], references: [userId, goalId, id], onDelete: Cascade)
+  sourceDraft     PlanDraft             @relation("RevisionSource", fields: [userId, planId, sourceDraftId], references: [userId, planId, id], onDelete: NoAction)
+  parent          PlanRevision?         @relation("RevisionParent", fields: [userId, planId, parentRevisionId], references: [userId, planId, id], onDelete: NoAction)
+  children        PlanRevision[]        @relation("RevisionParent")
+  currentFor      TrainingPlan[]        @relation("CurrentRevision")
+  refreshDrafts   PlanDraft[]           @relation("DraftBase")
+  workouts        PlanRevisionWorkout[]
+  matchedWorkouts PlannedWorkout[]      @relation("MatchedRevision")
 
   @@unique([userId, planId, id])
   @@unique([userId, planId, sourceDraftId])
@@ -347,10 +348,14 @@ model PlannedWorkout {
   completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
   lockedAt            DateTime? @map("locked_at") @db.Timestamptz(6)
   completedActivityId String?   @map("completed_activity_id") @db.Uuid
+  completedRevisionId String?   @map("completed_revision_id") @db.Uuid
+  completionAt        DateTime? @map("completion_at") @db.Timestamptz(6)
+  completionFromActivity Boolean @default(false) @map("completion_from_activity")
 
   plan              TrainingPlan          @relation(fields: [userId, planId], references: [userId, id], onDelete: Cascade)
   revisions         PlanRevisionWorkout[]
   completedActivity Activity?             @relation(fields: [userId, completedActivityId], references: [userId, id], onDelete: NoAction, map: "planned_workouts_completed_activity_owner_fkey")
+  completedRevision PlanRevision?         @relation("MatchedRevision", fields: [userId, planId, completedRevisionId], references: [userId, planId, id], onDelete: NoAction, map: "planned_workouts_completed_revision_owner_fkey")
 
   @@unique([userId, planId, id])
   @@unique([userId, completedActivityId])

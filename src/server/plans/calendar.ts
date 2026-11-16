@@ -277,16 +277,14 @@ export async function rescheduleCalendarWorkout(
     }))
     // A calendar move is explicit human approval of one date/zone change. It
     // preserves the approved strategy and every other membership row exactly.
+    // The source draft records only this edit; retained history belongs in the
+    // full revision membership below, outside the bounded proposal payload.
     const content = planContentSchema.parse({
       schemaVersion: 1,
       macroPlan: snapshot.macroPlan,
       detailWindow: snapshot.detailWindow,
       workouts: workouts
-        .filter(
-          (w) =>
-            w.scheduledDate >= snapshot.detailWindow.startDate &&
-            w.scheduledDate <= snapshot.detailWindow.endDate,
-        )
+        .filter((w) => w.workoutId === command.workoutId)
         .map((w) => ({
           workoutId: w.workoutId,
           scheduledDate: w.scheduledDate,

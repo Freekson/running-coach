@@ -57,6 +57,10 @@ existing plan refresh workflow.
 The move transaction copies the approved strategy and constraints into an
 existing-model source draft, appends a full immutable revision, changes only
 the selected membership's date/timezone and advances the current pointer.
+Its approved source draft contains only the moved session as the edit proposal.
+The revision retains the full membership, including canceled history and all
+completed/locked sessions. Historical membership therefore does not consume
+the source draft's 200-workout proposal limit, even after repeated refreshes.
 Membership rows remain the source of truth for each session's timezone;
 the source draft retains the plan-level constraints. Definitions, unrelated
 sessions, operational locks and all older approved snapshots stay unchanged.
@@ -110,6 +114,8 @@ identical pinned engine. No generator configuration change is committed.
   another owner including ADMIN, nested resource mismatches, provider disconnect,
   DST activity dates and SQL link constraints. Regressions cover custom session
   zones through refresh and linked activities performed on another day/week.
+  Repeated replacement refreshes exceeding 200 retained memberships are followed
+  by a move that preserves every unrelated membership, older snapshot and lock.
   Fixtures are synthetic.
 - Page/action tests cover session-derived ownership, unauthenticated and
   unavailable accounts, safe read failures and invalid navigation queries.

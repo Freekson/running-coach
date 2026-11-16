@@ -19,6 +19,8 @@ import {
   validateGeneratedPlan,
 } from './revisions'
 import { PlanConflictError } from './transaction'
+import { planContentSchema } from './content'
+import { addCalendarDays } from '@/lib/training-calendar'
 import { constraintsFixture, contentFixture } from './fixtures'
 import { CalendarEditError, getTrainingCalendar, rescheduleCalendarWorkout } from './calendar'
 
@@ -63,8 +65,8 @@ describe.skipIf(!enabled)('RUN-31 calendar on PostgreSQL', () => {
     await prisma.$disconnect()
   })
 
-  async function approve(content = contentFixture()) {
-    const draft = await createPlanDraft(owner, { goalId, constraints: constraintsFixture })
+  async function approve(content = contentFixture(), constraints = constraintsFixture) {
+    const draft = await createPlanDraft(owner, { goalId, constraints })
     const saved = await saveGeneratedPlan(owner, { draftId: draft.id, expectedVersion: 0 }, content)
     const valid = await validateGeneratedPlan(owner, {
       draftId: draft.id,
@@ -144,6 +146,99 @@ describe.skipIf(!enabled)('RUN-31 calendar on PostgreSQL', () => {
     const data = await read()
     expect(data.days.flatMap((d) => d.workouts).find((w) => w.id === b)?.movedFrom).toBe(
       '2090-01-05',
+    )
+  })
+
+  it('moves one session after repeated replacement refreshes exceed the source-draft limit', async () => {
+    const content = contentFixture()
+    const template = content.workouts[0]
+    content.workouts = Array.from({ length: 28 }, (_, index) => ({
+      ...template,
+      workoutId: randomUUID(),
+      scheduledDate: addCalendarDays('2090-01-01', index),
+    }))
+    let revision = await approve(content, { ...constraintsFixture, sessionsPerWeek: 7 })
+    const original = await getPlanRevision(owner, revision.planId, revision.id)
+    for (let refresh = 0; refresh < 7; refresh++) {
+      content.workouts = content.workouts.map((w) => ({ ...w, workoutId: randomUUID() }))
+      const draft = await createPlanRefreshDraft(owner, {
+        planId: revision.planId,
+        baseRevisionId: revision.id,
+      })
+      const saved = await saveGeneratedPlan(
+        owner,
+        { draftId: draft.id, expectedVersion: 0 },
+        content,
+      )
+      const validated = await validateGeneratedPlan(owner, {
+        draftId: draft.id,
+        expectedVersion: saved.version,
+      })
+      revision = await approvePlanDraft(owner, {
+        draftId: draft.id,
+        expectedVersion: validated.version,
+        expectedRevisionId: revision.id,
+        approve: true,
+      })
+    }
+    for (const [index, completed] of [true, false].entries()) {
+      await lockPlannedWorkout(owner, {
+        planId: revision.planId,
+        expectedRevisionId: revision.id,
+        workoutId: content.workouts[index].workoutId,
+        completed,
+      })
+    }
+    const before = await getPlanRevision(owner, revision.planId, revision.id)
+    expect(before.workouts).toHaveLength(224)
+    expect(before.workouts.filter((w) => !w.cancelled)).toHaveLength(28)
+    const factsBefore = await prisma.plannedWorkout.findMany({
+      where: { userId: owner.userId, planId: revision.planId },
+      orderBy: { id: 'asc' },
+    })
+    const target = content.workouts
+      .slice(2)
+      .find((w) => new Date(`${w.scheduledDate}T00:00:00Z`).getUTCDay() === 2)!
+    const destination = addCalendarDays(target.scheduledDate, 1)
+    const move = command(revision, target.workoutId, destination)
+    await expect(rescheduleCalendarWorkout(other, move, now)).rejects.toBeInstanceOf(
+      OwnedResourceNotFoundError,
+    )
+    const nextId = await rescheduleCalendarWorkout(owner, move, now)
+    const next = await getPlanRevision(owner, revision.planId, nextId)
+    const byId = (a: { workoutId: string }, b: { workoutId: string }) =>
+      a.workoutId.localeCompare(b.workoutId)
+    expect([...next.workouts].sort(byId)).toEqual(
+      before.workouts
+        .map((w) => ({
+          ...w,
+          revisionId: next.id,
+          scheduledDate:
+            w.workoutId === target.workoutId
+              ? new Date(`${destination}T00:00:00Z`)
+              : w.scheduledDate,
+        }))
+        .sort(byId),
+    )
+    expect(next.snapshot).toEqual(before.snapshot)
+    expect(await getPlanRevision(owner, revision.planId, revision.id)).toEqual(before)
+    expect(await getPlanRevision(owner, original.planId, original.id)).toEqual(original)
+    expect(
+      await prisma.plannedWorkout.findMany({
+        where: { userId: owner.userId, planId: revision.planId },
+        orderBy: { id: 'asc' },
+      }),
+    ).toEqual(factsBefore)
+    const source = await prisma.planDraft.findFirstOrThrow({
+      where: { userId: owner.userId, id: next.sourceDraftId },
+    })
+    expect(source.state).toBe('APPROVED')
+    expect(source.baseRevisionId).toBe(revision.id)
+    expect(planContentSchema.parse(source.content).workouts).toEqual([
+      { ...target, scheduledDate: destination },
+    ])
+    await expect(rescheduleCalendarWorkout(owner, move, now)).rejects.toBeInstanceOf(
+      PlanConflictError,
     )
   })
 

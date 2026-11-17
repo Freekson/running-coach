@@ -18,7 +18,7 @@ vi.mock('next/link', () => ({
 vi.mock('../sign-out-button', () => ({ SignOutButton: () => <button>Sign out</button> }))
 
 import { AppNavigation } from './navigation'
-import { AppShell } from './app-shell'
+import { AppShellView as AppShell } from './app-shell-view'
 
 beforeEach(() => usePathname.mockReturnValue('/app/dashboard'))
 

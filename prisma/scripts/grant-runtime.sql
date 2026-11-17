@@ -9,6 +9,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     public.goals,
     public.plan_drafts,
     public.training_plans,
+    public.plan_reminder_states,
     public.planned_workouts,
     public.workout_publications,
     public.workout_publication_attempts,

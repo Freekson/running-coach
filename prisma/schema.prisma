@@ -301,17 +301,33 @@ model TrainingPlan {
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  goal            Goal             @relation(fields: [userId, goalId], references: [userId, id], onDelete: NoAction)
-  currentRevision PlanRevision?    @relation("CurrentRevision", fields: [userId, id, currentRevisionId], references: [userId, planId, id], onDelete: NoAction)
-  revisions       PlanRevision[]   @relation("PlanRevisions")
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal            Goal                @relation(fields: [userId, goalId], references: [userId, id], onDelete: NoAction)
+  currentRevision PlanRevision?       @relation("CurrentRevision", fields: [userId, id, currentRevisionId], references: [userId, planId, id], onDelete: NoAction)
+  revisions       PlanRevision[]      @relation("PlanRevisions")
   drafts          PlanDraft[]
   workouts        PlannedWorkout[]
+  reminderStates  PlanReminderState[]
 
   @@unique([userId, goalId, id])
   @@unique([userId, id])
   @@index([userId, updatedAt(sort: Desc)])
   @@map("training_plans")
+}
+
+// Suppression belongs to an owner and an immutable approved-plan event.
+model PlanReminderState {
+  userId       String    @map("user_id") @db.Uuid
+  planId       String    @map("plan_id") @db.Uuid
+  fingerprint  String    @db.VarChar(64)
+  dismissedAt  DateTime? @map("dismissed_at") @db.Timestamptz(6)
+  snoozedUntil DateTime? @map("snoozed_until") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  plan TrainingPlan @relation(fields: [userId, planId], references: [userId, id], onDelete: Cascade)
+
+  @@id([userId, planId, fingerprint])
+  @@map("plan_reminder_states")
 }
 
 // Full revision membership is stored, including retained history, never inferred from pointers.

@@ -1,0 +1,40 @@
+.banner {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  margin-bottom: 24px;
+  overflow-wrap: anywhere;
+}
+
+.banner p {
+  margin: 0;
+}
+
+.banner p,
+.unavailable {
+  color: var(--color-text-muted);
+  font-size: var(--type-size-label);
+  line-height: var(--type-leading-body);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions > * {
+  min-width: 0;
+  white-space: normal;
+}
+
+.banner [role='alert'] {
+  color: var(--color-error);
+}
+
+@media (max-width: 480px) {
+  .actions > * {
+    flex: 1 1 100%;
+  }
+}

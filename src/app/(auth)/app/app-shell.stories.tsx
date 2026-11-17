@@ -3,7 +3,7 @@ import { fn } from 'storybook/test'
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { PathnameContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime'
 import { ToastProvider } from '@/components/ui/Toast'
-import { AppShell } from './app-shell'
+import { AppShellView as AppShell } from './app-shell-view'
 import { AthleteSettings } from './settings/athlete-settings'
 
 const router = {

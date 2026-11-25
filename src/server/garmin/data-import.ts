@@ -1,4 +1,5 @@
 import 'server-only'
+import { reportOperationalFailure } from '@/server/observability/events'
 
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
@@ -709,6 +710,7 @@ async function runGarminHealthImport(
     checkpoint = batch.checkpoint
     processed = batch.processed
     written = batch.written
+    const partialError = checkpoint.failedDates.length ? 'PARTIAL_IMPORT' : null
     await prisma.syncRun.update({
       where: { id: runId },
       data: {
@@ -716,14 +718,17 @@ async function runGarminHealthImport(
         finishedAt: clock(),
         recordsSeen: processed,
         recordsWritten: written,
+        errorCode: partialError,
       },
     })
+    if (partialError) reportOperationalFailure('garmin_import', partialError)
   } catch (error) {
     if (!runId) throw error
     const code =
       error instanceof GarminHealthImportError || error instanceof GarminDataImportError
         ? error.code
         : 'UNAVAILABLE'
+    reportOperationalFailure('garmin_import', code)
     const terminal = isTerminalGarminImportError(code)
     const current = await prisma.syncCursor.findUnique({
       where: { connectionId_dataType: cursorKey },

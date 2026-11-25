@@ -1,4 +1,5 @@
 import 'server-only'
+import { reportOperationalFailure } from '@/server/observability/events'
 
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
@@ -746,6 +747,7 @@ export async function runGarminHealthSync(
   } catch (error) {
     if (!run) throw error
     const code = error instanceof GarminHealthImportError ? error.code : 'UNAVAILABLE'
+    reportOperationalFailure('garmin_health', code)
     const current = await prisma.syncCursor.findUniqueOrThrow({
       where: { connectionId_dataType: cursorKey },
     })

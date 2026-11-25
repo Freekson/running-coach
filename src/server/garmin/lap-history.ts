@@ -6,6 +6,7 @@ import type { GarminLapImportState } from '@/lib/garmin-import-state'
 import { ownerId, type OwnerContext } from '@/server/authorization/ownership'
 import { replaceGarminActivityLaps, InvalidActivityImportError } from '@/server/activity/import'
 import { getPrismaClient } from '@/server/db/client'
+import { reportOperationalFailure } from '@/server/observability/events'
 import { CredentialUnavailableError } from '@/server/provider/credential-crypto'
 import { assertProviderApiKeySnapshotCurrent } from '@/server/provider/vault'
 import {
@@ -431,15 +432,19 @@ export async function runActivityLapHistory(
       },
       shouldStop: () => clock().getTime() >= deadline - 2_000,
     })
-    await prisma.syncRun.updateMany({
+    const failed = await prisma.activity.count({ where: { ...where, fitImportState: 'FAILED' } })
+    const partialError = failed ? 'PARTIAL_IMPORT' : null
+    const finished = await prisma.syncRun.updateMany({
       where: { userId, id: runId, status: 'RUNNING' },
       data: {
         status: 'SUCCEEDED',
         finishedAt: clock(),
         recordsSeen: processed,
         recordsWritten: written,
+        errorCode: partialError,
       },
     })
+    if (finished.count && partialError) reportOperationalFailure('garmin_laps', partialError)
 
     async function finishUnavailable(code: string) {
       await prisma.$transaction(async (tx) => {
@@ -464,6 +469,7 @@ export async function runActivityLapHistory(
   } catch (error) {
     if (!runId) throw error
     const code = safeCode(error)
+    reportOperationalFailure('garmin_laps', code)
     const block = terminal(code) ? null : await getGarminImportBlock(owner)
     const retryAt = terminal(code)
       ? null

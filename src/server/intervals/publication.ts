@@ -1,4 +1,5 @@
 import 'server-only'
+import { reportOperationalFailure } from '@/server/observability/events'
 
 import { randomUUID } from 'node:crypto'
 import { Prisma, type WorkoutPublication } from '@prisma/client'
@@ -401,6 +402,7 @@ export function createIntervalsPublicationService(
           mutationStarted = false
         }
         const code = error instanceof PublicationError ? error.code : 'PROVIDER_UNAVAILABLE'
+        reportOperationalFailure('intervals_publish', code)
         // An expired/interrupted runner is always uncertain, even before local code
         // observed an HTTP result. Keep the intent and remote ID for manual recovery.
         const status =

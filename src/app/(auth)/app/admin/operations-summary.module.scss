@@ -1,0 +1,38 @@
+.panel {
+  display: grid;
+  gap: 12px;
+  padding: clamp(16px, 2.5vw, 20px);
+  margin-top: 20px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.panel p,
+.panel h3 {
+  margin: 0;
+}
+.panel p {
+  color: var(--color-text-muted);
+}
+.panel h3 {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: var(--type-size-body);
+}
+.panel ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+.counts {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.counts div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+.counts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

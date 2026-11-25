@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { config } from 'dotenv'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PrismaClient } from '@prisma/client'
 import { testGarminAccountId } from '@/server/garmin/test-identity'
 
@@ -88,6 +88,7 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
     delete process.env.CREDENTIAL_ENCRYPTION_KEY_V1
   })
 
+  afterEach(() => vi.restoreAllMocks())
   beforeEach(async () => {
     await prisma.garminImportRateLimit.updateMany({
       where: { userId: { in: [owner.userId, retryOwner.userId] } },
@@ -177,6 +178,7 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
   })
 
   it('persists a failed date reason and counts it after a successful retry', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const failFirstDate: typeof importGarminHealthDate = async (_owner, date, zone) => {
       if (date === '2026-11-09')
         throw new GarminHealthImportError('SUMMARY_INVALID_RESPONSE', 'SUMMARY_EMPTY_BODY')
@@ -195,9 +197,15 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
     const firstRun = await prisma.syncRun.findFirst({
       where: { userId: retryOwner.userId, jobType: 'GARMIN_IMPORT_DAILY_SUMMARY' },
       orderBy: { startedAt: 'desc' },
-      select: { recordsSeen: true, recordsWritten: true },
+      select: { recordsSeen: true, recordsWritten: true, status: true, errorCode: true },
     })
-    expect(firstRun).toMatchObject({ recordsSeen: 2, recordsWritten: 1 })
+    expect(firstRun).toMatchObject({
+      recordsSeen: 2,
+      recordsWritten: 1,
+      status: 'SUCCEEDED',
+      errorCode: 'PARTIAL_IMPORT',
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"code":"PARTIAL_IMPORT"'))
     const retried = await runGarminDataImport(
       retryOwner,
       { streamId: 'daily_summary', action: 'retry', browserTimezone: 'UTC' },
@@ -208,6 +216,12 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
       failedDateCount: 0,
       errorCode: null,
     })
+    expect(
+      await prisma.syncRun.findFirst({
+        where: { userId: retryOwner.userId, jobType: 'GARMIN_IMPORT_DAILY_SUMMARY' },
+        orderBy: { startedAt: 'desc' },
+      }),
+    ).toMatchObject({ status: 'SUCCEEDED', errorCode: null })
   })
 
   it('retries a failed Sleep date through its dated one-day range', async () => {
@@ -221,6 +235,12 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
       { ...dependencies, importDay: failFirstSleep },
     )
     expect(first.find((stream) => stream.streamId === 'sleep')?.failedDateCount).toBe(1)
+    expect(
+      await prisma.syncRun.findFirst({
+        where: { userId: retryOwner.userId, jobType: 'GARMIN_IMPORT_SLEEP' },
+        orderBy: { startedAt: 'desc' },
+      }),
+    ).toMatchObject({ status: 'SUCCEEDED', errorCode: 'PARTIAL_IMPORT' })
     const retriedDates: string[] = []
     const retrySleep: typeof importGarminHealthDate = async (_owner, date, zone, options) => {
       expect(options?.batchStartDate).toBe(date)
@@ -235,6 +255,12 @@ describe.skipIf(!enabled)('Garmin stream import on isolated PostgreSQL', () => {
     )
     expect(retriedDates).toEqual(['2026-11-09'])
     expect(retried.find((stream) => stream.streamId === 'sleep')?.failedDateCount).toBe(0)
+    expect(
+      await prisma.syncRun.findFirst({
+        where: { userId: retryOwner.userId, jobType: 'GARMIN_IMPORT_SLEEP' },
+        orderBy: { startedAt: 'desc' },
+      }),
+    ).toMatchObject({ status: 'SUCCEEDED', errorCode: null })
   })
 
   it('persists all-sport summaries, resumes and reimports sparsely without changing health or another owner', async () => {

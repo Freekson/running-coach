@@ -342,6 +342,7 @@ describe.skipIf(!enabled)('durable FIT backfill on isolated PostgreSQL', () => {
   })
 
   it('continues past corrupt/404 FITs and retries only the failed activity after its cooldown', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     await seed('1001')
     await seed('1002')
     await seed('1003')
@@ -353,6 +354,14 @@ describe.skipIf(!enabled)('durable FIT backfill on isolated PostgreSQL', () => {
       summaryStatus: 'completed',
       laps: { processed: 3, complete: 1, failed: 1, unavailable: 1, retryable: 0 },
     })
+    expect(
+      await prisma.syncRun.findFirst({
+        where: { userId: owner.userId, jobType: ACTIVITY_LAPS_CURSOR },
+        orderBy: { startedAt: 'desc' },
+      }),
+    ).toMatchObject({ status: 'SUCCEEDED', errorCode: 'PARTIAL_IMPORT' })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"operation":"garmin_laps"'))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"code":"PARTIAL_IMPORT"'))
     expect(await prisma.activity.count({ where: { userId: owner.userId } })).toBe(3)
     const failed = await prisma.activity.findFirstOrThrow({
       where: { userId: owner.userId, externalActivityId: '1001' },
@@ -363,6 +372,12 @@ describe.skipIf(!enabled)('durable FIT backfill on isolated PostgreSQL', () => {
     now = new Date(failed.fitNextAttemptAt!.getTime() + 1)
     corruptId = undefined
     expect((await run('retry')).status).toBe('completed_with_warnings')
+    expect(
+      await prisma.syncRun.findFirst({
+        where: { userId: owner.userId, jobType: ACTIVITY_LAPS_CURSOR },
+        orderBy: { startedAt: 'desc' },
+      }),
+    ).toMatchObject({ status: 'SUCCEEDED', errorCode: null })
     expect(downloaded.filter((id) => id === '1001')).toHaveLength(2)
     expect(downloaded.filter((id) => id === '1002')).toHaveLength(1)
     expect(await prisma.activityLap.count({ where: { userId: owner.userId } })).toBe(8)

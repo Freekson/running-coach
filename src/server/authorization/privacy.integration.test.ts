@@ -65,6 +65,7 @@ import { DELETE as revokeInvite } from '@/app/api/admin/invitations/[id]/route'
 import { POST as regenerateInvite } from '@/app/api/admin/invitations/[id]/regenerate/route'
 import { POST as checkInvite } from '@/app/api/admin/invitations/[id]/status/route'
 import { GET as getUsers } from '@/app/api/admin/users/route'
+import { GET as getOperations } from '@/app/api/admin/operations/route'
 import { archiveGoalAction, deleteGoalAction, saveGoalAction } from '@/app/(auth)/app/goals/actions'
 import {
   openPlanExportAction,
@@ -413,6 +414,62 @@ describe.skipIf(!enabled)('RUN-50 real-session privacy regression', () => {
       expect(await prisma.authInvitation.count()).toBe(count)
     },
   )
+
+  it('RUN-53 exposes only aggregate operational failures to an active ADMIN', async () => {
+    requestContext.cookie = ''
+    expect((await getOperations()).status).toBe(401)
+    await session('other')
+    expect((await getOperations()).status).toBe(403)
+    const victim = actors.get('owner')!
+    const run = await prisma.syncRun.create({
+      data: {
+        userId: victim.owner.userId,
+        connectionId: victim.connection.id,
+        jobType: 'synthetic-private-job',
+        status: 'FAILED',
+        errorCode: 'synthetic-secret-health-record',
+        errorSafeMessage: 'synthetic-provider-key',
+        checkpointSummary: { privateHealth: 123 },
+      },
+    })
+    const partialRun = await prisma.syncRun.create({
+      data: {
+        userId: victim.owner.userId,
+        connectionId: victim.connection.id,
+        jobType: 'synthetic-partial-import',
+        status: 'SUCCEEDED',
+        errorCode: 'PARTIAL_IMPORT',
+      },
+    })
+    try {
+      const admin = await session('admin')
+      const response = await getOperations()
+      expect(response.status).toBe(200)
+      expect(response.headers.get('cache-control')).toContain('no-store')
+      const body = await response.json()
+      expect(body.syncFailures).toContainEqual({ code: 'UNKNOWN_ERROR', count: expect.any(Number) })
+      expect(body.syncFailures).toContainEqual({
+        code: 'PARTIAL_IMPORT',
+        count: expect.any(Number),
+      })
+      for (const privateValue of [
+        victim.owner.userId,
+        victim.connection.id,
+        'privateHealth',
+        'synthetic-provider-key',
+        'synthetic-secret-health-record',
+      ])
+        expect(JSON.stringify(body)).not.toContain(privateValue)
+      await prisma.user.update({ where: { id: admin.userId }, data: { role: 'USER' } })
+      try {
+        expect((await getOperations()).status).toBe(403)
+      } finally {
+        await prisma.user.update({ where: { id: admin.userId }, data: { role: 'ADMIN' } })
+      }
+    } finally {
+      await prisma.syncRun.deleteMany({ where: { id: { in: [run.id, partialRun.id] } } })
+    }
+  })
 
   it('allows ADMIN invitations, rechecks demotion with the same session, and exposes no health fields in users', async () => {
     const owner = await session('admin')

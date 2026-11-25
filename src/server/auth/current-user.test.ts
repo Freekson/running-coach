@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
 
-const { getSession, getAuth, getPrismaClient, findUnique, findFirst, upsert } = vi.hoisted(() => ({
-  getSession: vi.fn(),
-  getAuth: vi.fn(),
-  getPrismaClient: vi.fn(),
-  findUnique: vi.fn(),
-  findFirst: vi.fn(),
-  upsert: vi.fn(),
-}))
+const { getSession, getAuth, getPrismaClient, findUnique, findFirst, upsert, queryRaw } =
+  vi.hoisted(() => ({
+    getSession: vi.fn(),
+    getAuth: vi.fn(),
+    getPrismaClient: vi.fn(),
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    upsert: vi.fn(),
+    queryRaw: vi.fn(),
+  }))
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }))
@@ -20,12 +22,26 @@ import { AccountUnavailableError, getCurrentUser, isVerifiedCurrentUser } from '
 beforeEach(() => {
   vi.clearAllMocks()
   getAuth.mockResolvedValue({ api: { getSession } })
-  getPrismaClient.mockResolvedValue({ user: { findUnique, findFirst, upsert } })
+  getPrismaClient.mockResolvedValue({
+    user: { findUnique, findFirst, upsert },
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ user: { upsert }, $queryRaw: queryRaw }),
+  })
+  queryRaw.mockResolvedValue([{ id: 'auth-user' }])
   findUnique.mockResolvedValue(null)
   findFirst.mockResolvedValue(null)
 })
 
 describe('getCurrentUser', () => {
+  it('does not recreate an identity from a session loaded before account deletion', async () => {
+    getSession.mockResolvedValue({
+      session: { id: 'old' },
+      user: { id: 'deleted', email: 'deleted@example.test' },
+    })
+    queryRaw.mockResolvedValue([])
+    await expect(getCurrentUser()).rejects.toBeInstanceOf(AccountUnavailableError)
+    expect(upsert).not.toHaveBeenCalled()
+  })
   it('rejects a missing or expired session', async () => {
     getSession.mockResolvedValue(null)
     await expect(getCurrentUser()).resolves.toBeNull()

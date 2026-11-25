@@ -182,6 +182,18 @@ model AuthRateLimit {
   @@map("auth_rate_limits")
 }
 
+// Minimal, pseudonymous deletion evidence for replay after a backup restore.
+// Deliberately has no FK: it must survive deletion of both account identities.
+model AccountDeletionReceipt {
+  userId          String   @id @map("user_id") @db.Uuid
+  authSubjectHash String   @map("auth_subject_hash") @db.Char(64)
+  deletedAt       DateTime @default(now()) @map("deleted_at") @db.Timestamptz(6)
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@index([expiresAt])
+  @@map("account_deletion_receipts")
+}
+
 model GarminImportRateLimit {
   userId                String    @id @map("user_id") @db.Uuid
   count                 Int

@@ -80,12 +80,18 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   )
     throw new AccountUnavailableError()
 
-  const user = await prisma.user
-    .upsert({
-      where: { authSubject: userId },
-      create: { authSubject: userId, email: session.user.email, role: 'USER' },
-      update: {},
-      select: userSelect,
+  const user = await prisma
+    .$transaction(async (tx) => {
+      const authIdentity = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM auth_users WHERE id = ${userId} FOR UPDATE
+      `
+      if (authIdentity.length !== 1) throw new AccountUnavailableError()
+      return tx.user.upsert({
+        where: { authSubject: userId },
+        create: { authSubject: userId, email: session.user.email, role: 'USER' },
+        update: {},
+        select: userSelect,
+      })
     })
     .catch(async (error: unknown) => {
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')

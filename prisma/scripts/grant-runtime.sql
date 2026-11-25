@@ -40,6 +40,10 @@ FROM running_coach_runtime;
 GRANT USAGE ON SEQUENCE public.plan_exchange_requests_issuance_sequence_seq
 TO running_coach_runtime;
 
+-- Retention cleanup is an operator task; the app can only append/read evidence.
+GRANT SELECT, INSERT ON TABLE public.account_deletion_receipts TO running_coach_runtime;
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.account_deletion_receipts FROM running_coach_runtime;
+
 REVOKE ALL ON TABLE public.database_identity FROM running_coach_runtime;
 GRANT SELECT ON TABLE public.database_identity TO running_coach_runtime;
 

@@ -35,18 +35,21 @@ export function approvedPublicationFixture(userId: string): ApprovedPublicationW
   }
 }
 
-export function publicationFitFixture(pace = false) {
+export function publicationFitFixture(
+  pace = false,
+  { stepCount = 1, durationSeconds = 600 }: { stepCount?: number; durationSeconds?: number } = {},
+) {
   const encoder = new Encoder()
   const fileId: FileIdMesg = {
     type: 'workout',
     manufacturer: 'development',
     product: 1,
   }
-  const workout: WorkoutMesg = { sport: 'running', numValidSteps: 1 }
+  const workout: WorkoutMesg = { sport: 'running', numValidSteps: stepCount }
   const step: WorkoutStepMesg = {
     messageIndex: 0,
     durationType: 'time',
-    durationValue: 600000,
+    durationValue: durationSeconds * 1000,
     targetType: pace ? 'speed' : 'open',
     ...(pace
       ? {
@@ -58,7 +61,10 @@ export function publicationFitFixture(pace = false) {
   }
   encoder.onMesg(Profile.MesgNum.FILE_ID, fileId)
   encoder.onMesg(Profile.MesgNum.WORKOUT, workout)
-  encoder.onMesg(Profile.MesgNum.WORKOUT_STEP, step)
+  for (let index = 0; index < stepCount; index++) {
+    const indexedStep: WorkoutStepMesg = { ...step, messageIndex: index }
+    encoder.onMesg(Profile.MesgNum.WORKOUT_STEP, indexedStep)
+  }
   return encoder.close()
 }
 
@@ -73,6 +79,7 @@ export async function publicationProviderFixture() {
     failReads: false,
     hangReads: false,
     invalidExport: false,
+    fitExport: undefined as Uint8Array | undefined,
     paceExport: false,
     rateLimit: false,
     rejectNextWrite: false,
@@ -146,7 +153,7 @@ export async function publicationProviderFixture() {
           res.end(
             control.invalidExport
               ? Buffer.from('invalid FIT')
-              : publicationFitFixture(control.paceExport),
+              : Buffer.from(control.fitExport ?? publicationFitFixture(control.paceExport)),
           )
           return
         }

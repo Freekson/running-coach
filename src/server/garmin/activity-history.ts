@@ -1,4 +1,5 @@
 import 'server-only'
+import { reportOperationalFailure } from '@/server/observability/events'
 
 import { randomUUID } from 'node:crypto'
 import type { Prisma, SyncCursor } from '@prisma/client'
@@ -477,6 +478,7 @@ export async function runActivityHistory(
         : error instanceof CredentialUnavailableError
           ? 'NOT_CONNECTED'
           : 'UNAVAILABLE'
+    reportOperationalFailure('garmin_history', code)
     const terminal = [
       'NOT_CONNECTED',
       'INVALID_KEY',

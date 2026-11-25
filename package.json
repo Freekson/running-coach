@@ -29,6 +29,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:status": "prisma migrate status",
+    "db:test:recovery": "node scripts/migrations/test-recovery.mjs",
+    "release:smoke": "node scripts/vercel/check-release-smoke.mjs",
     "db:assert:development": "prisma db execute --schema prisma/scripts/direct.prisma --file prisma/scripts/assert-development-target.sql",
     "db:assert:production": "prisma db execute --schema prisma/scripts/direct.prisma --file prisma/scripts/assert-production-target.sql",
     "db:prepare:run70": "node scripts/migrations/prepare-run70-migrations.mjs",

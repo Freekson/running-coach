@@ -29,6 +29,18 @@ jobs:
       - run: pnpm build
       - run: pnpm build-storybook
 
+  recovery-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:test:recovery
+
   privacy-regression:
     runs-on: ubuntu-latest
     services:
@@ -71,7 +83,7 @@ jobs:
 
   migrate-development:
     if: github.event_name == 'push' && github.ref == 'refs/heads/development'
-    needs: [validate, privacy-regression]
+    needs: [validate, privacy-regression, recovery-smoke]
     runs-on: ubuntu-latest
     environment: development-migrations
     steps:
@@ -137,7 +149,7 @@ jobs:
 
   migrate-production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [validate, privacy-regression]
+    needs: [validate, privacy-regression, recovery-smoke]
     runs-on: ubuntu-latest
     environment: production-migrations
     steps:

@@ -37,6 +37,9 @@ vi.mock('@/server/auth/invitation/invitation-management', () => ({
   })),
   listRegisteredUsers: vi.fn(async () => ({ users: [], page: 1, total: 0 })),
 }))
+vi.mock('@/server/observability/summary', () => ({
+  getOperationalSummary: vi.fn(async () => null),
+}))
 vi.mock('@/server/athlete/profile', () => ({
   getMeasurementSystem: vi.fn(async () => 'METRIC'),
   getAthleteProfile: vi.fn(async () => ({ measurementSystem: 'METRIC' })),
@@ -394,8 +397,10 @@ describe('authenticated /app routes', () => {
     getCurrentUser.mockResolvedValue({ id: 'admin-a', role: 'ADMIN', email: 'admin@example.test' })
     const result = await AdminPage()
     expect(result.type).toBe(AppShell)
-    expect(result.props.children.props.invitations).toEqual([])
-    expect(result.props.children.props.users).toEqual([])
+    const [management, operations] = result.props.children
+    expect(management.props.invitations).toEqual([])
+    expect(management.props.users).toEqual([])
+    expect(operations.props.summary).toBeNull()
   })
 
   it('rechecks the session when rendering the dashboard again', async () => {

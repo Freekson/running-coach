@@ -5,6 +5,12 @@ app. [Database operations](database-operations.md) covers Neon roles, database
 identity, and the private read-only connection check. RUN-60 owns the existing
 `validate` lint, formatting, typecheck, test, and build job.
 
+RUN-53 adds [operational failure reporting](observability.md), a
+[backup/restore drill and Neon recovery procedure](database-recovery.md), and the
+[production release checklist](production-release-checklist.md). CI's
+`privacy-regression` and `recovery-smoke` jobs are also prerequisites for both
+trusted migration jobs; configure them as required merge checks where supported.
+
 ## Release path and safety boundary
 
 The Preview alias and deployment-domain preflight scripts, with their tests,

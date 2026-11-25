@@ -56,6 +56,12 @@ Open http://localhost:3000.
 
 The `/status` route provides a deployment smoke test.
 
+For release preparation, use the [production release checklist](docs/production-release-checklist.md),
+[observability guide](docs/observability.md), and [database recovery runbook](docs/database-recovery.md).
+`pnpm db:test:recovery` runs a disposable synthetic backup/restore drill;
+`pnpm release:smoke <origin>` verifies a deployed environment with a private
+verification token supplied through process environment.
+
 The current public application shell does not query the database. Database-backed
 server features require the environment variables in `.env.example`.
 

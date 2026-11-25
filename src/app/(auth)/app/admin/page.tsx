@@ -9,16 +9,19 @@ import {
 import { AdminManagement } from './admin-management'
 import { getMeasurementSystem } from '@/server/athlete/profile'
 import { getOwnerContext } from '@/server/authorization/ownership'
+import { getOperationalSummary } from '@/server/observability/summary'
+import { OperationsSummary } from './operations-summary'
 
 export default async function AdminPage() {
   const user = await getAppUser()
   if (!user) return <AccountUnavailable />
   if (user.role !== 'ADMIN') notFound()
   const owner = getOwnerContext(user)
-  const [invitations, users, measurementSystem] = await Promise.all([
+  const [invitations, users, measurementSystem, operations] = await Promise.all([
     listInvitations(1),
     listRegisteredUsers(1),
     getMeasurementSystem(owner),
+    getOperationalSummary(),
   ])
   return (
     <AppShell user={user} measurementSystem={measurementSystem}>
@@ -38,6 +41,7 @@ export default async function AdminPage() {
         userPage={users.page}
         userTotal={users.total}
       />
+      <OperationsSummary summary={operations} />
     </AppShell>
   )
 }

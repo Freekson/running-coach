@@ -1,4 +1,5 @@
 import 'server-only'
+import { reportOperationalFailure } from '@/server/observability/events'
 
 import { randomUUID } from 'node:crypto'
 import { type Prisma } from '@prisma/client'
@@ -427,6 +428,7 @@ export async function runGarminSync(
     if (!run || error instanceof GarminSyncUnavailableError) throw error
     if (error instanceof GarminImportError) processed += error.persistedCount
     const code = error instanceof GarminImportError ? error.code : 'UNAVAILABLE'
+    reportOperationalFailure('garmin_sync', code)
     const actionRequired =
       code === 'INVALID_KEY' ||
       code === 'ACCESS_DENIED' ||

@@ -21,6 +21,7 @@ import { TrainingExperienceSelect, type TrainingExperience } from './training-ex
 import { useClientReady } from '@/lib/use-client-ready'
 import { ProviderCredentials } from './provider-credentials'
 import { IntervalsConnection } from './intervals-connection'
+import { AccountData } from './account-data'
 import styles from './athlete-settings.module.scss'
 
 type Profile = {
@@ -476,6 +477,7 @@ export function AthleteSettings({
         garminImportPreferenceKey={garminImportPreferenceKey}
       />
       <IntervalsConnection initial={intervalsConnection} deliveryInitial={intervalsDelivery} />
+      <AccountData />
 
       <Dialog
         open={unsavedOpen}

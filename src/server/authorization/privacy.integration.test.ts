@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { config } from 'dotenv'
 import type { PrismaClient } from '@prisma/client'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,6 +46,8 @@ import { defaultExportConsent } from '@/lib/plan-export'
 import { addHealthDays, healthLocalDay } from '@/lib/health-history'
 import { exchangeRequestSchema, type ExchangeResponse } from '@/schemas/plan-exchange.v1'
 import { GET as getMe } from '@/app/api/me/route'
+import { GET as exportAccount } from '@/app/api/account/export/route'
+import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { POST as signup } from '@/app/api/auth/[...all]/route'
 import { GET as listActivities } from '@/app/api/activities/route'
 import { GET as getActivity } from '@/app/api/activities/[id]/route'
@@ -131,16 +134,17 @@ describe.skipIf(!enabled)('RUN-50 real-session privacy regression', () => {
       },
     })
     invitationIds.push(invitation.id)
-    const response = await signup(
-      request('/api/auth/sign-up/email', 'POST', {
-        email: `${prefix}-${name}@example.test`,
-        name: `Synthetic ${name}`,
-        password: `Synthetic-${randomUUID()}-passphrase`,
-        invitationToken: token,
-        role: 'ADMIN',
-        userId: randomUUID(),
-      }),
-    )
+    const signupRequest = request('/api/auth/sign-up/email', 'POST', {
+      email: `${prefix}-${name}@example.test`,
+      name: `Synthetic ${name}`,
+      password: `Synthetic-${randomUUID()}-passphrase`,
+      invitationToken: token,
+      role: 'ADMIN',
+      userId: randomUUID(),
+    })
+    // Independent synthetic clients keep signup throttling enabled as the suite grows.
+    signupRequest.headers.set('x-forwarded-for', `198.51.100.${authIds.length + 20}`)
+    const response = await signup(signupRequest)
     expect(response.status).toBe(200)
     const signedUp = await response.json()
     const authId: string = signedUp.user.id
@@ -306,8 +310,8 @@ describe.skipIf(!enabled)('RUN-50 real-session privacy regression', () => {
     }
   }
 
-  async function victimState() {
-    const victim = actors.get('owner')!
+  async function victimState(name = 'owner') {
+    const victim = actors.get(name)!
     const where = { userId: victim.owner.userId }
     return Promise.all([
       prisma.goal.findMany({ where, orderBy: { id: 'asc' } }),
@@ -372,6 +376,9 @@ describe.skipIf(!enabled)('RUN-50 real-session privacy regression', () => {
       await prisma.authUser.deleteMany({ where: { id: { in: authIds } } })
       await prisma.authInvitation.deleteMany({
         where: { OR: [{ id: { in: invitationIds } }, { label: prefix }] },
+      })
+      await prisma.accountDeletionReceipt.deleteMany({
+        where: { userId: { in: [...actors.values()].map((actor) => actor.owner.userId) } },
       })
       await prisma.$disconnect()
     }
@@ -912,6 +919,17 @@ describe.skipIf(!enabled)('RUN-50 real-session privacy regression', () => {
       try {
         const status = state === 'forged' || state === 'expired' ? 401 : 403
         expect((await getMe()).status).toBe(status)
+        expect((await exportAccount()).status).toBe(status)
+        expect(
+          (
+            await deleteAccount(
+              request('/api/account', 'DELETE', {
+                confirmation: 'DELETE',
+                providerAccessRevoked: true,
+              }),
+            )
+          ).status,
+        ).toBe(status)
         expect((await getGarmin()).status).toBe(status)
         expect(
           (
@@ -963,4 +981,183 @@ describe.skipIf(!enabled)('RUN-50 real-session privacy regression', () => {
     expect(await publication.list(owner)).toEqual(outbox)
     expect(fetcher).not.toHaveBeenCalled()
   })
+
+  it.each(['USER', 'ADMIN'] as const)(
+    'RUN-51 exports and deletes only the %s owner, including immutable history and auth tokens',
+    async (role) => {
+      const name = `deletion-${role}`
+      const actor = await createActor(name, role)
+      actors.set(name, actor)
+      await saveProviderApiKey(actor.owner, 'INTERVALS', `${actor.key}-intervals`)
+      await saveProviderApiKey(actor.owner, 'OPENAI', `${actor.key}-openai`)
+      await prisma.dailyHealthMetric.update({
+        where: { id: actor.health.id },
+        data: {
+          rawMetadata: {
+            garminDailySummaryV1: { schemaVersion: 1, steps: 10000, accessToken: 'PRIVATE' },
+            unexpected: 'PRIVATE',
+          },
+        },
+      })
+      const otherBefore = await victimState()
+      const ownBefore = await victimState(name)
+      const { userId } = actor.owner
+      await session(name)
+      const archiveResponse = await exportAccount()
+      expect(archiveResponse.status).toBe(200)
+      const archive = await archiveResponse.json()
+      expect(archive.account.id).toBe(userId)
+      expect(archive.revisions).toHaveLength(1)
+      expect(archive.revisionWorkouts).toHaveLength(1)
+      expect(archive.health[0].sleepDurationMs).toBe('32400000')
+      expect(archive.activities[0].distanceMeters).toBe('9000')
+      expect(archive.connections).toHaveLength(3)
+      expect(archive.health[0].providerMetrics.dailySummary.steps).toBe(10000)
+      const text = JSON.stringify(archive)
+      for (const field of [
+        'password',
+        'token',
+        'ciphertext',
+        'nonce',
+        'authTag',
+        'credentialNonce',
+        'authSubject',
+        'rawObjectRef',
+        'gpsAssetRef',
+      ])
+        expect(text).not.toContain(`"${field}"`)
+      expect(text).not.toContain(actor.key)
+      expect(text).not.toContain('PRIVATE')
+      expect(text).not.toContain(actors.get('owner')!.goal.id)
+
+      // Neither role can submit a different tenant in the deletion body.
+      expect(
+        (
+          await deleteAccount(
+            request('/api/account', 'DELETE', {
+              confirmation: 'DELETE',
+              providerAccessRevoked: true,
+              userId: actors.get('owner')!.owner.userId,
+            }),
+          )
+        ).status,
+      ).toBe(400)
+      const command = { confirmation: 'DELETE', providerAccessRevoked: true }
+      await prisma.syncCursor.create({
+        data: {
+          userId,
+          connectionId: actor.connection.id,
+          dataType: 'run51-test',
+          cursorOrCheckpoint: {},
+          leaseToken: randomUUID(),
+          leaseExpiresAt: new Date(Date.now() + 60_000),
+        },
+      })
+      expect((await deleteAccount(request('/api/account', 'DELETE', command))).status).toBe(409)
+      expect(await prisma.accountDeletionReceipt.count({ where: { userId } })).toBe(0)
+      expect(await victimState(name)).toEqual(ownBefore)
+      await prisma.syncCursor.updateMany({ where: { userId }, data: { leaseExpiresAt: null } })
+      await prisma.workoutPublication.update({
+        where: { id: actor.receipt.id },
+        data: {
+          status: 'RUNNING',
+          leaseToken: randomUUID(),
+          leaseExpiresAt: new Date(Date.now() + 60_000),
+        },
+      })
+      expect((await deleteAccount(request('/api/account', 'DELETE', command))).status).toBe(409)
+      await prisma.workoutPublication.update({
+        where: { id: actor.receipt.id },
+        data: {
+          status: 'QUEUED',
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      })
+
+      const settledBefore = await victimState(name)
+
+      // Failure after marking DELETING rolls back credentials, sessions and status.
+      await prisma.accountDeletionReceipt.create({
+        data: {
+          userId,
+          authSubjectHash: createHash('sha256').update(actor.authId).digest('hex'),
+          expiresAt: new Date(Date.now() + 86_400_000),
+        },
+      })
+      expect((await deleteAccount(request('/api/account', 'DELETE', command))).status).toBe(503)
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).status).toBe('ACTIVE')
+      expect(await victimState(name)).toEqual(settledBefore)
+      await prisma.accountDeletionReceipt.delete({ where: { userId } })
+
+      expect((await deleteAccount(request('/api/account', 'DELETE', command))).status).toBe(204)
+      expect(await prisma.user.findUnique({ where: { id: userId } })).toBeNull()
+      expect(await prisma.authUser.findUnique({ where: { id: actor.authId } })).toBeNull()
+      expect(await prisma.authSession.count({ where: { userId: actor.authId } })).toBe(0)
+      expect(await prisma.authAccount.count({ where: { userId: actor.authId } })).toBe(0)
+      expect(await victimState(name)).toEqual(ownBefore.map(() => []))
+      for (const count of await Promise.all([
+        prisma.syncCursor.count({ where: { userId } }),
+        prisma.garminImportRateLimit.count({ where: { userId } }),
+        prisma.integrationCredential.count({ where: { userId } }),
+        prisma.activityDuplicateCandidate.count({ where: { userId } }),
+      ]))
+        expect(count).toBe(0)
+      const receipt = await prisma.accountDeletionReceipt.findUniqueOrThrow({ where: { userId } })
+      expect(receipt.authSubjectHash).toBe(createHash('sha256').update(actor.authId).digest('hex'))
+      expect(receipt.expiresAt.getTime() - receipt.deletedAt.getTime()).toBe(90 * 86_400_000)
+      expect((await getMe()).status).toBe(401)
+      expect((await exportAccount()).status).toBe(401)
+      expect(await victimState()).toEqual(otherBefore)
+      expect(fetcher).not.toHaveBeenCalled()
+    },
+    30_000,
+  )
+
+  it('RUN-51 replays current deletion receipts on restored rows and purges only expired evidence', async () => {
+    const actor = await createActor('restored-deletion', 'USER')
+    actors.set('restored-deletion', actor)
+    const { userId } = actor.owner
+    const before = await victimState()
+    await prisma.accountDeletionReceipt.create({
+      data: {
+        userId,
+        authSubjectHash: createHash('sha256').update(actor.authId).digest('hex'),
+        expiresAt: new Date(Date.now() + 90 * 86_400_000),
+      },
+    })
+    const statements = readFileSync('prisma/scripts/replay-account-deletions.sql', 'utf8')
+      .replace(/^--.*$/gm, '')
+      .split(';')
+      .map((statement) => statement.trim())
+      .filter((statement) => statement && !['BEGIN', 'COMMIT'].includes(statement))
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await prisma.$transaction(async (tx) => {
+        for (const statement of statements) await tx.$executeRawUnsafe(statement)
+      })
+      expect(await victimState('restored-deletion')).toEqual(before.map(() => []))
+      expect(await prisma.authUser.count({ where: { id: actor.authId } })).toBe(0)
+      expect(await victimState()).toEqual(before)
+    }
+    await prisma.accountDeletionReceipt.update({
+      where: { userId },
+      data: {
+        deletedAt: new Date(Date.now() - 91 * 86_400_000),
+        expiresAt: new Date(Date.now() - 86_400_000),
+      },
+    })
+    await prisma.$executeRawUnsafe(
+      readFileSync('prisma/scripts/prune-account-deletion-receipts.sql', 'utf8'),
+    )
+    expect(await prisma.accountDeletionReceipt.findUnique({ where: { userId } })).toBeNull()
+    expect(
+      await prisma.accountDeletionReceipt.count({
+        where: {
+          userId: {
+            in: ['deletion-USER', 'deletion-ADMIN'].map((name) => actors.get(name)!.owner.userId),
+          },
+        },
+      }),
+    ).toBe(2)
+  }, 30_000)
 })

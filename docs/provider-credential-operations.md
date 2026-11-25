@@ -2,6 +2,8 @@
 
 The vault stores one connection per user and provider in `integration_connections` and one encrypted credential per connection in `integration_credentials`. `OPENAI` and `INTERVALS` API keys use the same server-only service. The OpenAI settings control stores a key for future automatic plan generation; it does not call OpenAI or enable that feature. Manual ChatGPT file exchange requires no key.
 
+Account export, manual provider-key revocation, atomic account deletion, 90-day safe audit retention and backup recovery are defined in [account data lifecycle (RUN-51)](account-data-lifecycle.md). Account deletion removes all encrypted connection credentials and authentication sessions; it does not remotely revoke personal API keys or erase provider calendar/watch data.
+
 ## Secret configuration
 
 Intervals.icu account setup, connection checks, personal-key revocation and the outbound-only delivery boundary are documented in [Intervals.icu workout delivery (RUN-39)](intervals-workout-delivery.md).
